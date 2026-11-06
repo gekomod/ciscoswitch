@@ -328,7 +328,7 @@ func BuildPortSettingsCommands(name,mode string,access int,allowed string,native
   if access<1||access>4094{return nil,fmt.Errorf("access VLAN musi być z zakresu 1–4094")}
   cmds=append(cmds,"switchport mode access",fmt.Sprintf("switchport access vlan %d",access))
  } else {
-  vlans,e:=parseVLANList(allowed);if e!=nil{return "",e}
+  vlans,e:=parseVLANList(allowed);if e!=nil{return nil,e}
   if native<1||native>4094{return nil,fmt.Errorf("native VLAN musi być z zakresu 1–4094")}
   found:=false;for _,v:=range vlans{if v==native{found=true}}
   if !found{return nil,fmt.Errorf("native VLAN musi znajdować się na liście dozwolonych VLAN-ów")}

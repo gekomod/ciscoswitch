@@ -179,7 +179,7 @@ func (s *Service) SystemInfo() map[string]string {
 }
 
 func (s *Service) RunReadOnly(cmd string)(string,error) {
- ok:=false;for _,v:=range allowed{if cmd==v{ok=true;break}}
+ ok:=false;for _,v:=range allowed{if cmd==v{ok=true;break}};if strings.HasPrefix(cmd,"show vlan "){id,err:=strconv.Atoi(strings.TrimPrefix(cmd,"show vlan "));if err==nil&&id>=1&&id<=4094{ok=true}}
  if !ok{return "",fmt.Errorf("polecenie niedozwolone")}
  if s.cfg.Host==""||s.cfg.SSHUser==""||s.cfg.SSHPassword==""{return "",fmt.Errorf("brak SWITCH_HOST lub danych SSH w .env")}
  c,e:=ssh.Dial("tcp",net.JoinHostPort(s.cfg.Host,s.cfg.SSHPort),&ssh.ClientConfig{User:s.cfg.SSHUser,Auth:[]ssh.AuthMethod{ssh.Password(s.cfg.SSHPassword)},HostKeyCallback:ssh.InsecureIgnoreHostKey(),HostKeyAlgorithms:[]string{ssh.KeyAlgoRSA},Timeout:s.cfg.Timeout})

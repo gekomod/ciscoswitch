@@ -227,7 +227,7 @@ func writeBackupDigest(dir, id, digest string) error {
  tmpName := tmp.Name()
  defer os.Remove(tmpName)
  if err := tmp.Chmod(0600); err != nil { _ = tmp.Close(); return err }
- if _, err := tmp.WriteString(digest+"\\n"); err != nil { _ = tmp.Close(); return err }
+ if _, err := tmp.WriteString(digest+"\n"); err != nil { _ = tmp.Close(); return err }
  if err := tmp.Sync(); err != nil { _ = tmp.Close(); return err }
  if err := tmp.Close(); err != nil { return err }
  return os.Rename(tmpName, path)

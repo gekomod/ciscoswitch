@@ -2,6 +2,13 @@ package server
 
 import (
  "encoding/json"
+ "crypto/sha256"
+ "encoding/hex"
+ "fmt"
+ "os"
+ "path/filepath"
+ "sort"
+ "time"
  "net/http"
  "strings"
  "gs948mx-manager/internal/device"
@@ -11,6 +18,10 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/",http.FileServer(http.Dir("web")))
  m.Handle("/api/config/export", configExportHandler(svc.RunReadOnly))
  m.Handle("/api/config/compare", configCompareHandler(svc.RunReadOnly))
+ backupDir := os.Getenv("CONFIG_BACKUP_DIR")
+ if backupDir == "" { backupDir = filepath.Join("data", "config-backups") }
+ m.Handle("/api/config/backups", configBackupsHandler(svc.RunReadOnly, backupDir))
+ m.Handle("/api/config/backups/download", configBackupDownloadHandler(backupDir))
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
  m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,2048);var q struct{Port string `json:"port"`;Action string `json:"action"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=svc.ConfigurePort(q.Port,q.Action);write(w,v,e)})
  m.HandleFunc("/api/management-dhcp",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,1024);var q struct{Enabled bool `json:"enabled"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=svc.SetManagementDHCP(q.Enabled);write(w,v,e)})
@@ -119,4 +130,100 @@ func nonEmptyConfigLines(raw string) []string {
   if line != "" { out = append(out, line) }
  }
  return out
+}
+
+
+type configBackup struct {
+ ID string `json:"id"`
+ CreatedAt time.Time `json:"createdAt"`
+ Size int64 `json:"size"`
+ SHA256 string `json:"sha256"`
+}
+
+func configBackupsHandler(run func(string) (string, error), dir string) http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+  switch r.Method {
+  case http.MethodGet:
+   entries, err := listConfigBackups(dir)
+   if err != nil { http.Error(w, "backup listing failed", http.StatusInternalServerError); return }
+   w.Header().Set("Content-Type", "application/json; charset=utf-8")
+   w.Header().Set("Cache-Control", "no-store")
+   _ = json.NewEncoder(w).Encode(entries)
+  case http.MethodPost:
+   output, err := run("show running-config")
+   if err != nil { http.Error(w, "running configuration backup failed", http.StatusBadGateway); return }
+   if strings.TrimSpace(output) == "" { http.Error(w, "switch returned an empty configuration; backup not created", http.StatusBadGateway); return }
+   entry, err := writeConfigBackup(dir, output, time.Now().UTC())
+   if err != nil { http.Error(w, "configuration backup could not be stored", http.StatusInternalServerError); return }
+   w.Header().Set("Content-Type", "application/json; charset=utf-8")
+   w.Header().Set("Cache-Control", "no-store")
+   w.WriteHeader(http.StatusCreated)
+   _ = json.NewEncoder(w).Encode(entry)
+  default:
+   http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+  }
+ })
+}
+
+func writeConfigBackup(dir, content string, now time.Time) (configBackup, error) {
+ if err := os.MkdirAll(dir, 0700); err != nil { return configBackup{}, err }
+ if err := os.Chmod(dir, 0700); err != nil { return configBackup{}, err }
+ id := now.UTC().Format("20060102T150405.000000000Z")
+ path := filepath.Join(dir, id+".cfg")
+ tmp, err := os.CreateTemp(dir, ".backup-*.tmp")
+ if err != nil { return configBackup{}, err }
+ tmpName := tmp.Name()
+ defer os.Remove(tmpName)
+ if err := tmp.Chmod(0600); err != nil { _ = tmp.Close(); return configBackup{}, err }
+ n, err := tmp.WriteString(content)
+ if err != nil { _ = tmp.Close(); return configBackup{}, err }
+ if err := tmp.Sync(); err != nil { _ = tmp.Close(); return configBackup{}, err }
+ if err := tmp.Close(); err != nil { return configBackup{}, err }
+ if _, err := os.Stat(path); err == nil { return configBackup{}, fmt.Errorf("backup id already exists") } else if !os.IsNotExist(err) { return configBackup{}, err }
+ if err := os.Rename(tmpName, path); err != nil { return configBackup{}, err }
+ sum := sha256.Sum256([]byte(content))
+ return configBackup{ID:id, CreatedAt:now.UTC(), Size:int64(n), SHA256:hex.EncodeToString(sum[:])}, nil
+}
+
+func listConfigBackups(dir string) ([]configBackup, error) {
+ files, err := os.ReadDir(dir)
+ if os.IsNotExist(err) { return []configBackup{}, nil }
+ if err != nil { return nil, err }
+ entries := make([]configBackup, 0, len(files))
+ for _, file := range files {
+  if file.IsDir() || !strings.HasSuffix(file.Name(), ".cfg") { continue }
+  id := strings.TrimSuffix(file.Name(), ".cfg")
+  if !validBackupID(id) { continue }
+  info, err := file.Info()
+  if err != nil { continue }
+  data, err := os.ReadFile(filepath.Join(dir, file.Name()))
+  if err != nil { continue }
+  sum := sha256.Sum256(data)
+  entries = append(entries, configBackup{ID:id, CreatedAt:info.ModTime().UTC(), Size:info.Size(), SHA256:hex.EncodeToString(sum[:])})
+ }
+ sort.Slice(entries, func(i,j int) bool { return entries[i].CreatedAt.After(entries[j].CreatedAt) })
+ return entries, nil
+}
+
+func validBackupID(id string) bool {
+ if len(id) != len("20060102T150405.000000000Z") { return false }
+ _, err := time.Parse("20060102T150405.000000000Z", id)
+ return err == nil
+}
+
+func configBackupDownloadHandler(dir string) http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+  if r.Method != http.MethodGet { http.Error(w, "method not allowed", http.StatusMethodNotAllowed); return }
+  id := r.URL.Query().Get("id")
+  if !validBackupID(id) { http.Error(w, "invalid backup id", http.StatusBadRequest); return }
+  path := filepath.Join(dir, id+".cfg")
+  data, err := os.ReadFile(path)
+  if os.IsNotExist(err) { http.NotFound(w, r); return }
+  if err != nil { http.Error(w, "backup read failed", http.StatusInternalServerError); return }
+  w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+  w.Header().Set("Content-Disposition", `attachment; filename="running-config-`+id+`.txt"`)
+  w.Header().Set("Cache-Control", "no-store")
+  w.Header().Set("X-Content-Type-Options", "nosniff")
+  _, _ = w.Write(data)
+ })
 }

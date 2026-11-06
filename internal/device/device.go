@@ -225,6 +225,24 @@ func (s *Service) ConfigureSSHUser(username,password string,privilege int,remove
  return s.runConfig([]string{"configure terminal",fmt.Sprintf("username %s privilege %d password %s",username,privilege,password),"end"})
 }
 
+func BuildSNMPv3UserCommands(username, group, authPassword, privacyPassword string, remove bool) ([]string, error) {
+ validName := regexp.MustCompile("^[A-Za-z0-9_.-]{1,32}$")
+ username = strings.TrimSpace(username)
+ group = strings.TrimSpace(group)
+ if !validName.MatchString(username) { return nil, fmt.Errorf("login SNMPv3: 1–32 znaków A-Z, a-z, 0-9, _ . -") }
+ if remove { return []string{"configure terminal", "no snmp-server user " + username, "end"}, nil }
+ if !validName.MatchString(group) { return nil, fmt.Errorf("grupa SNMPv3: 1–32 znaków A-Z, a-z, 0-9, _ . -") }
+ validPassword := regexp.MustCompile("^[A-Za-z0-9!@#$%^&*()_+={}.,:-]{8,64}$")
+ if !validPassword.MatchString(authPassword) || !validPassword.MatchString(privacyPassword) { return nil, fmt.Errorf("hasła SNMPv3 muszą mieć 8–64 znaki; dozwolone litery, cyfry i bezpieczne znaki specjalne bez spacji") }
+ if authPassword == privacyPassword { return nil, fmt.Errorf("hasło uwierzytelniania i szyfrowania muszą być różne") }
+ return []string{"configure terminal", "snmp-server group " + group + " priv", "snmp-server user " + username + " " + group + " auth sha " + authPassword + " priv aes " + privacyPassword, "end"}, nil
+}
+func (s *Service) ConfigureSNMPv3User(username, group, authPassword, privacyPassword string, remove bool) (string, error) {
+ cmds, err := BuildSNMPv3UserCommands(username, group, authPassword, privacyPassword, remove)
+ if err != nil { return "", err }
+ return s.runConfig(cmds)
+}
+
 func (s *Service) ConfigureSNMPTrapHost(address,community string,remove bool)(string,error){
  ip:=net.ParseIP(strings.TrimSpace(address))
  if ip==nil||ip.To4()==nil{return "",fmt.Errorf("adres odbiorcy trap musi być poprawnym IPv4")}

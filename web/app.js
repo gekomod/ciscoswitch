@@ -58,6 +58,19 @@ $('ssh-user-delete').onclick=()=>changeSSHUser(true);
 async function changeSNMPTrap(remove){const q={address:$('snmp-trap-ip').value.trim(),community:$('snmp-trap-community').value,delete:remove};if(!q.community){alert('Wpisz istniejącą community SNMP.');return;}if(!confirm((remove?'Usunąć':'Dodać')+' odbiorcę Trap '+q.address+' dla SNMPv2c?'))return;const b=remove?$('snmp-trap-remove'):$('snmp-trap-add');b.disabled=true;try{const d=await api('/api/snmp/trap-host',q);$('snmp-action-output').textContent=d.output||'Polecenie wysłane.';await refreshSNMP();}catch(e){$('snmp-action-output').textContent=e.message;}finally{b.disabled=false;}}
 $('snmp-trap-add').onclick=()=>changeSNMPTrap(false);
 $('snmp-trap-remove').onclick=()=>changeSNMPTrap(true);
+async function changeSNMPv3User(remove){
+ const q={username:$('snmp-v3-user').value.trim(),group:$('snmp-v3-group').value.trim(),authPassword:$('snmp-v3-auth').value,privacyPassword:$('snmp-v3-privacy').value,delete:remove};
+ if(!q.username){alert('Wpisz nazwę użytkownika SNMPv3.');return;}
+ if(!remove&&(!q.authPassword||!q.privacyPassword)){alert('Wpisz oba hasła SNMPv3.');return;}
+ if(!confirm((remove?'Usunąć':'Utworzyć')+' użytkownika SNMPv3 '+q.username+(remove?'?':' z SHA + AES (authPriv)?')))return;
+ const b=remove?$('snmp-v3-remove'):$('snmp-v3-add');b.disabled=true;
+ try{const d=await api('/api/snmp/v3-user',q);$('snmp-v3-output').textContent=d.output||'Polecenie wysłane.';$('snmp-v3-auth').value='';$('snmp-v3-privacy').value='';await refreshSNMP();}
+ catch(e){$('snmp-v3-output').textContent=e.message;}
+ finally{b.disabled=false;}
+}
+$('snmp-v3-add').onclick=()=>changeSNMPv3User(false);
+$('snmp-v3-remove').onclick=()=>changeSNMPv3User(true);
+
 $('refresh-l3').onclick=refreshL3;
 $('arp-filter').addEventListener('input',filterARP);
 

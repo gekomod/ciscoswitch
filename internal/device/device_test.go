@@ -75,3 +75,27 @@ func TestBuildVLANCommandsPreview(t *testing.T) {
  del,err:=BuildVLANCommands(30,"",true);if err!=nil{t.Fatal(err)}
  if !strings.Contains(strings.Join(del,"\\n"),"no vlan 30"){t.Fatalf("unexpected delete preview: %v",del)}
 }
+
+func TestBuildSNMPv3UserCommands(t *testing.T) {
+ cmds, err := BuildSNMPv3UserCommands("monitor01", "monitoring", "AuthPass123!", "PrivPass456!", false)
+ if err != nil { t.Fatal(err) }
+ joined := strings.Join(cmds, "\n")
+ for _, want := range []string{"snmp-server group monitoring priv", "snmp-server user monitor01 monitoring auth sha AuthPass123! priv aes PrivPass456!"} {
+  if !strings.Contains(joined, want) { t.Fatalf("preview missing %q: %v", want, cmds) }
+ }
+ del, err := BuildSNMPv3UserCommands("monitor01", "", "", "", true)
+ if err != nil { t.Fatal(err) }
+ if !strings.Contains(strings.Join(del, "\n"), "no snmp-server user monitor01") { t.Fatalf("unexpected delete preview: %v", del) }
+}
+func TestBuildSNMPv3UserCommandsRejectsUnsafeInput(t *testing.T) {
+ cases := [][4]string{
+  {"bad user", "monitoring", "AuthPass123!", "PrivPass456!"},
+  {"monitor01", "bad;group", "AuthPass123!", "PrivPass456!"},
+  {"monitor01", "monitoring", "short", "PrivPass456!"},
+  {"monitor01", "monitoring", "SamePass123!", "SamePass123!"},
+  {"monitor01", "monitoring", "Auth Pass123!", "PrivPass456!"},
+ }
+ for _, c := range cases {
+  if _, err := BuildSNMPv3UserCommands(c[0], c[1], c[2], c[3], false); err == nil { t.Errorf("expected invalid input to be rejected: %#v", c) }
+ }
+}

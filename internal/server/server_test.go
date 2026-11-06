@@ -4,7 +4,8 @@ import (
  "errors"
  "net/http"
  "net/http/httptest"
- "testing"\n "strings"
+ "testing"
+ "strings"
 )
 
 func TestConfigExportHandlerSelectsCorrectSource(t *testing.T) {

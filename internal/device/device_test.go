@@ -56,3 +56,22 @@ func TestConfigureSSHUserCannotDeletePanelAccount(t *testing.T) {
   t.Fatal("expected active panel SSH account deletion to be blocked")
  }
 }
+
+
+func TestBuildPortSettingsCommandsPreviewDoesNotNeedSSH(t *testing.T) {
+ cmds,err:=BuildPortSettingsCommands("port1.0.7","trunk",1,"10,20-21",10,"auto","auto","AP biuro")
+ if err!=nil{t.Fatal(err)}
+ joined:=strings.Join(cmds,"\\n")
+ for _,want:=range []string{"interface port1.0.7","switchport mode trunk","switchport trunk allowed vlan add 10,20,21","switchport trunk native vlan 10"}{
+  if !strings.Contains(joined,want){t.Fatalf("preview missing %q: %v",want,cmds)}
+ }
+ if _,err:=BuildPortSettingsCommands("port1.0.7","trunk",1,"10","20","auto","auto","");err==nil{t.Fatal("native VLAN outside allowed list must fail preview")}
+}
+
+func TestBuildVLANCommandsPreview(t *testing.T) {
+ cmds,err:=BuildVLANCommands(30,"IOT",false);if err!=nil{t.Fatal(err)}
+ joined:=strings.Join(cmds,"\\n")
+ if !strings.Contains(joined,"vlan 30 name IOT state enable"){t.Fatalf("unexpected create preview: %v",cmds)}
+ del,err:=BuildVLANCommands(30,"",true);if err!=nil{t.Fatal(err)}
+ if !strings.Contains(strings.Join(del,"\\n"),"no vlan 30"){t.Fatalf("unexpected delete preview: %v",del)}
+}

@@ -277,6 +277,21 @@ func (s *Service) ConfigureSNMPv3User(username, group, authPassword, privacyPass
  return s.runConfig(cmds)
 }
 
+func BuildSNMPv3TrapHostCommands(address, username string, remove bool) ([]string, error) {
+ ip:=net.ParseIP(strings.TrimSpace(address))
+ if ip==nil || ip.To4()==nil { return nil, fmt.Errorf("adres odbiorcy Trap musi być poprawnym IPv4") }
+ username=strings.TrimSpace(username)
+ if !regexp.MustCompile("^[A-Za-z0-9_.-]{1,32}$").MatchString(username) { return nil, fmt.Errorf("użytkownik SNMPv3: 1–32 znaki A-Z, a-z, 0-9, _ . -") }
+ command:="snmp-server host "+ip.To4().String()+" version 3 priv "+username
+ if remove { command="no "+command }
+ return []string{"configure terminal",command,"end"},nil
+}
+func (s *Service) ConfigureSNMPv3TrapHost(address,username string,remove bool)(string,error) {
+ cmds,err:=BuildSNMPv3TrapHostCommands(address,username,remove)
+ if err!=nil{return "",err}
+ return s.runConfig(cmds)
+}
+
 func (s *Service) ConfigureSNMPTrapHost(address,community string,remove bool)(string,error){
  ip:=net.ParseIP(strings.TrimSpace(address))
  if ip==nil||ip.To4()==nil{return "",fmt.Errorf("adres odbiorcy trap musi być poprawnym IPv4")}

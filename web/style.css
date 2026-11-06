@@ -26,3 +26,11 @@ body{background:#f4f6f9;color:var(--text)}.sidebar{background:#fff;border-right:
 .snmp-v3-form .form-actions{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap}
 .snmp-v3-form .note{color:var(--muted);font-size:10px;margin:12px 0}
 @media(max-width:760px){.snmp-v3-form .form-grid{grid-template-columns:1fr}}
+
+.snmp-v3-trap-form{border-top:1px solid var(--line-soft);padding-top:18px;margin-top:18px}
+.snmp-v3-trap-form .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}
+.snmp-v3-trap-form label{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:11px}
+.snmp-v3-trap-form input{background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;color:var(--text);min-width:0}
+.snmp-v3-trap-form .form-actions{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap}
+.snmp-v3-trap-form .note{color:var(--muted);font-size:10px;margin:12px 0}
+@media(max-width:760px){.snmp-v3-trap-form .form-grid{grid-template-columns:1fr}}

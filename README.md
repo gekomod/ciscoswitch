@@ -69,14 +69,14 @@ AUDIT_LOG_PATH=data/audit.jsonl
 ## Dodatkowe moduły
 - Diagnostyka systemu: wersja, CPU, pamięć, środowisko, boot.
 - Routing statyczny i testy ping/traceroute.
-- SNMP: diagnostyka agenta, odbiorca trapów v2c oraz tworzenie/usuwanie użytkownika SNMPv3 authPriv (SHA + DES).
+- SNMP: diagnostyka agenta, odbiorcy Trap v2c/v3 oraz tworzenie/usuwanie użytkownika SNMPv3 authPriv (SHA + DES).
 - SSH: podgląd i zarządzanie lokalnymi użytkownikami; panel blokuje usunięcie konta wskazanego w `SWITCH_SSH_USER`, aby nie odciąć własnego dostępu.
 - DHCP server/pule — składnia wymaga potwierdzenia na konkretnej wersji firmware przed użyciem produkcyjnym.
 
 ## Ważne
 Eksport konfiguracji może zawierać sekrety i dane administracyjne — przechowuj pliki jak hasła. Porównanie konfiguracji nie zapisuje kopii i nie zmienia urządzenia. Przywracanie konfiguracji z pliku nie jest jeszcze udostępnione; nie wykonuj go przez ręczne wklejanie niezweryfikowanych komend.
 
-SNMPv3 monitoring: ustaw `SWITCH_SNMP_VERSION=3`, `SWITCH_SNMP_V3_USER`, `SWITCH_SNMP_V3_AUTH_PASSWORD` i `SWITCH_SNMP_V3_PRIV_PASSWORD` w `.env`, a następnie zrestartuj panel. Używany jest poziom authPriv (SHA/DES); community v2c nie jest wtedy wymagana. Sekrety pozostają poza repozytorium i logami. Nie wykonano jeszcze testów integracyjnych na fizycznym AT-GS948MX. CI sprawdza składnię JS, testy Go i kompilację, ale nie potwierdza obsługi każdej komendy przez urządzenie.
+SNMPv3 Trap: odbiorca jest konfigurowany komendą `snmp-server host IP version 3 priv USER` i może być dodany po utworzeniu użytkownika. SNMPv3 monitoring: ustaw `SWITCH_SNMP_VERSION=3`, `SWITCH_SNMP_V3_USER`, `SWITCH_SNMP_V3_AUTH_PASSWORD` i `SWITCH_SNMP_V3_PRIV_PASSWORD` w `.env`, a następnie zrestartuj panel. Używany jest poziom authPriv (SHA/DES); community v2c nie jest wtedy wymagana. Sekrety pozostają poza repozytorium i logami. Nie wykonano jeszcze testów integracyjnych na fizycznym AT-GS948MX. CI sprawdza składnię JS, testy Go i kompilację, ale nie potwierdza obsługi każdej komendy przez urządzenie.
 
 
 ### Lokalne kopie konfiguracji

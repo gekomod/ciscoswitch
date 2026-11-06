@@ -70,6 +70,18 @@ async function changeSNMPv3User(remove){
 }
 $('snmp-v3-add').onclick=()=>changeSNMPv3User(false);
 $('snmp-v3-remove').onclick=()=>changeSNMPv3User(true);
+async function changeSNMPv3Trap(remove){
+ const q={address:$('snmp-v3-trap-ip').value.trim(),username:$('snmp-v3-trap-user').value.trim(),delete:remove};
+ if(!q.address||!q.username){alert('Wpisz adres IPv4 i użytkownika SNMPv3.');return;}
+ if(!confirm((remove?'Usunąć':'Dodać')+' odbiorcę Trap SNMPv3 '+q.address+' ('+q.username+')?'))return;
+ const b=remove?$('snmp-v3-trap-remove'):$('snmp-v3-trap-add');b.disabled=true;
+ try{const d=await api('/api/snmp/v3-trap-host',q);$('snmp-v3-trap-output').textContent=d.output||'Polecenie wysłane.';await refreshSNMP();}
+ catch(e){$('snmp-v3-trap-output').textContent=e.message;}
+ finally{b.disabled=false;}
+}
+$('snmp-v3-trap-add').onclick=()=>changeSNMPv3Trap(false);
+$('snmp-v3-trap-remove').onclick=()=>changeSNMPv3Trap(true);
+
 
 $('refresh-l3').onclick=refreshL3;
 $('arp-filter').addEventListener('input',filterARP);

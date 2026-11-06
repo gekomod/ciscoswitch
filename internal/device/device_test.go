@@ -122,3 +122,17 @@ func TestNewSNMPClientRejectsIncompleteV3(t *testing.T) {
  }
  for _,c:=range cases {if _,err:=newSNMPClient(c);err==nil{t.Errorf("expected invalid SNMP configuration to fail: %+v",c)}}
 }
+
+func TestBuildSNMPv3TrapHostCommands(t *testing.T) {
+ cmds,err:=BuildSNMPv3TrapHostCommands("192.0.2.20","monitor01",false)
+ if err!=nil{t.Fatal(err)}
+ if got:=strings.Join(cmds,"\n");!strings.Contains(got,"snmp-server host 192.0.2.20 version 3 priv monitor01"){t.Fatalf("unexpected SNMPv3 trap command: %v",cmds)}
+ del,err:=BuildSNMPv3TrapHostCommands("192.0.2.20","monitor01",true)
+ if err!=nil{t.Fatal(err)}
+ if got:=strings.Join(del,"\n");!strings.Contains(got,"no snmp-server host 192.0.2.20 version 3 priv monitor01"){t.Fatalf("unexpected SNMPv3 trap delete: %v",del)}
+}
+func TestBuildSNMPv3TrapHostRejectsUnsafeInput(t *testing.T) {
+ for _,v:=range [][2]string{{"not-an-ip","monitor01"},{"192.0.2.20","bad user"},{"192.0.2.20","monitor01;shutdown"}} {
+  if _,err:=BuildSNMPv3TrapHostCommands(v[0],v[1],false);err==nil{t.Errorf("expected invalid trap target to be rejected: %#v",v)}
+ }
+}

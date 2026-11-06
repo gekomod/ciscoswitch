@@ -62,6 +62,14 @@ m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method
    v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureSNMPv3User(q.Username,q.Group,q.AuthPassword,q.PrivacyPassword,q.Delete)})
    write(w,v,e)
   })
+  m.HandleFunc("/api/snmp/v3-trap-host",func(w http.ResponseWriter,r *http.Request){
+   if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
+   r.Body=http.MaxBytesReader(w,r.Body,2048)
+   var q struct{Address string `json:"address"`;Username string `json:"username"`;Delete bool `json:"delete"`}
+   if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return}
+   v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureSNMPv3TrapHost(q.Address,q.Username,q.Delete)})
+   write(w,v,e)
+  })
   m.HandleFunc("/api/network/probe",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,2048);var q struct{Kind string `json:"kind"`;Target string `json:"target"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=svc.ProbeNetwork(q.Kind,q.Target);write(w,v,e)})
  m.HandleFunc("/api/route/static",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,2048);var q struct{Prefix string `json:"prefix"`;Gateway string `json:"gateway"`;Distance int `json:"distance"`;Delete bool `json:"delete"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureStaticRoute(q.Prefix,q.Gateway,q.Distance,q.Delete)});write(w,v,e)})
  m.HandleFunc("/api/dhcp/pool",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,4096);var q struct{Name string `json:"name"`;Network string `json:"network"`;Mask string `json:"mask"`;Low string `json:"low"`;High string `json:"high"`;Router string `json:"router"`;DNS string `json:"dns"`;Enable bool `json:"enable"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureDHCPPool(q.Name,q.Network,q.Mask,q.Low,q.High,q.Router,q.DNS,q.Enable)});write(w,v,e)})

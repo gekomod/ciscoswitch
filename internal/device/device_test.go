@@ -18,8 +18,8 @@ func TestParseVLANListRejectsInvalidInput(t *testing.T) {
  }
 }
 func TestValidPort(t *testing.T) {
- for _,v:=range []string{"port1.0.1","port1.0.50"} { if !validPort(v){t.Errorf("%s should be valid",v)} }
- for _,v:=range []string{"port1.0.0","port1.0.51","port1.1.1","port1.0.1;shutdown"} { if validPort(v){t.Errorf("%s should be invalid",v)} }
+ for _,v:=range []string{"port1.0.1","port1.0.48","port1.0.49","port1.0.50","port1.0.51","port1.0.52"} { if !validPort(v){t.Errorf("%s should be valid",v)} }
+ for _,v:=range []string{"port1.0.0","port1.0.53","port1.1.1","port1.0.1;shutdown"} { if validPort(v){t.Errorf("%s should be invalid",v)} }
 }
 func TestConfigurePortSettingsRejectsUnsafeDescription(t *testing.T) {
  s:=New(Config{})
@@ -34,11 +34,18 @@ func TestParsePortNumbers(t *testing.T) {
  got,err:=parsePortNumbers("6,5,6")
  if err!=nil {t.Fatal(err)}
  if !reflect.DeepEqual(got,[]int{5,6}) {t.Fatalf("unexpected port list: %v",got)}
- for _,v:=range []string{"5","1,51","1;shutdown,2",""} {if _,err:=parsePortNumbers(v);err==nil{t.Errorf("expected invalid port list %q",v)}}
+ for _,v:=range []string{"5","1,53","1;shutdown,2",""} {if _,err:=parsePortNumbers(v);err==nil{t.Errorf("expected invalid port list %q",v)}}
 }
 func TestConfigureSTPValidation(t *testing.T) {
  s:=New(Config{})
  if _,err:=s.ConfigureSTP("rstp",8192);err==nil||!strings.Contains(err.Error(),"brak konfiguracji SSH"){t.Fatalf("valid values should pass validation and reach SSH config check; got %v",err)}
  if _,err:=s.ConfigureSTP("rapid",8192);err==nil{t.Fatal("invalid STP mode should be rejected")}
  if _,err:=s.ConfigureSTP("rstp",9000);err==nil{t.Fatal("invalid bridge priority should be rejected")}
+}
+
+func TestParsePortNumbersIncludesSFPPlusPorts(t *testing.T) {
+ got,err:=parsePortNumbers("1,48,51,52")
+ if err!=nil { t.Fatal(err) }
+ want:=[]int{1,48,51,52}
+ if !reflect.DeepEqual(got,want) { t.Fatalf("got %v, want %v",got,want) }
 }

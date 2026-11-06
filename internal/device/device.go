@@ -24,6 +24,12 @@ type Port struct {
  MTU uint32 `json:"mtu"`
  InOctets uint64 `json:"inOctets"`
  OutOctets uint64 `json:"outOctets"`
+ InErrors uint64 `json:"inErrors"`
+ OutErrors uint64 `json:"outErrors"`
+ InDiscards uint64 `json:"inDiscards"`
+ OutDiscards uint64 `json:"outDiscards"`
+ InUcastPkts uint64 `json:"inUcastPkts"`
+ OutUcastPkts uint64 `json:"outUcastPkts"`
 }
 type Status struct {
  Host string `json:"host"`
@@ -52,16 +58,23 @@ func (s *Service) Status() Status {
  o.Reachable=true
  mtu,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.4")
  speed,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.5")
+ highSpeed,_:=walkNum(&g,".1.3.6.1.2.1.31.1.1.1.15")
  adm,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.7")
  op,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.8")
  inOctets,_:=walkCounter(&g,".1.3.6.1.2.1.31.1.1.1.6")
  outOctets,_:=walkCounter(&g,".1.3.6.1.2.1.31.1.1.1.10")
+ inErrors,_:=walkCounter(&g,".1.3.6.1.2.1.2.2.1.14")
+ outErrors,_:=walkCounter(&g,".1.3.6.1.2.1.2.2.1.20")
+ inDiscards,_:=walkCounter(&g,".1.3.6.1.2.1.2.2.1.13")
+ outDiscards,_:=walkCounter(&g,".1.3.6.1.2.1.2.2.1.19")
+ inUcast,_:=walkCounter(&g,".1.3.6.1.2.1.31.1.1.1.7")
+ outUcast,_:=walkCounter(&g,".1.3.6.1.2.1.31.1.1.1.11")
  ix:=make([]int,0,len(d))
  for i:=range d { ix=append(ix,i) }
  sort.Ints(ix)
  for _,i:=range ix {
-  p:=Port{Index:i,Name:d[i],Admin:state(adm[i]),Oper:state(op[i]),MTU:mtu[i],InOctets:inOctets[i],OutOctets:outOctets[i]}
-  if speed[i]>0 { p.Speed=fmt.Sprintf("%d Mb/s",speed[i]/1000000) }
+  p:=Port{Index:i,Name:d[i],Admin:state(adm[i]),Oper:state(op[i]),MTU:mtu[i],InOctets:inOctets[i],OutOctets:outOctets[i],InErrors:inErrors[i],OutErrors:outErrors[i],InDiscards:inDiscards[i],OutDiscards:outDiscards[i],InUcastPkts:inUcast[i],OutUcastPkts:outUcast[i]}
+  if highSpeed[i]>0 { p.Speed=fmt.Sprintf("%d Mb/s",highSpeed[i]) } else if speed[i]>0 { p.Speed=fmt.Sprintf("%d Mb/s",speed[i]/1000000) }
   o.Ports=append(o.Ports,p)
  }
  return o
@@ -147,7 +160,7 @@ func (s *Service) SetManagementDHCP(on bool)(string,error) {
 }
 func (s *Service) SaveConfig()(string,error) { return s.runConfig([]string{"copy running-config startup-config"}) }
 
-var allowed=[]string{"show system","show version","show interfaces status","show interfaces","show vlan","show ip interface brief","show lldp neighbors","show spanning-tree","show boot","show http","show vlan all","show interface switchport","show running-config interface","show etherchannel","show static-channel-group"}
+var allowed=[]string{"show system","show system environment","show version","show cpu","show memory","show interfaces status","show interfaces","show vlan","show vlan all","show ip interface brief","show lldp neighbors","show spanning-tree","show boot","show http","show interface switchport","show running-config interface","show etherchannel","show static-channel-group","show mac address-table","show log","show log tail 30","show system mac","show system serialnumber"}
 func (s *Service) RunReadOnly(cmd string)(string,error) {
  ok:=false;for _,v:=range allowed{if cmd==v{ok=true;break}}
  if !ok{return "",fmt.Errorf("polecenie niedozwolone")}

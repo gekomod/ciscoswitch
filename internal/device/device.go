@@ -161,6 +161,23 @@ func (s *Service) SetManagementDHCP(on bool)(string,error) {
 func (s *Service) SaveConfig()(string,error) { return s.runConfig([]string{"copy running-config startup-config"}) }
 
 var allowed=[]string{"show system","show system environment","show version","show cpu","show memory","show interfaces status","show interfaces","show vlan","show vlan all","show ip interface brief","show lldp neighbors","show spanning-tree","show boot","show http","show interface switchport","show running-config interface","show etherchannel","show static-channel-group","show mac address-table","show log","show log tail 30","show system mac","show system serialnumber"}
+// SystemInfo returns raw, read-only AlliedWare Plus diagnostics. Values are deliberately
+// kept as device output because available sensors and command formats vary by firmware.
+func (s *Service) SystemInfo() map[string]string {
+ out:=map[string]string{}
+ for _,item:=range []struct{key,cmd string}{
+  {"version","show version"},
+  {"cpu","show cpu"},
+  {"memory","show memory"},
+  {"environment","show system environment"},
+  {"boot","show boot"},
+ } {
+  value,err:=s.RunReadOnly(item.cmd)
+  if err!=nil { out[item.key]="Błąd odczytu: "+err.Error() } else if strings.TrimSpace(value)=="" { out[item.key]="Urządzenie nie zwróciło danych." } else { out[item.key]=strings.TrimSpace(value) }
+ }
+ return out
+}
+
 func (s *Service) RunReadOnly(cmd string)(string,error) {
  ok:=false;for _,v:=range allowed{if cmd==v{ok=true;break}}
  if !ok{return "",fmt.Errorf("polecenie niedozwolone")}

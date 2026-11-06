@@ -87,23 +87,23 @@ func (s *Service) Status() Status {
  if err!=nil { o.Warning=err.Error(); return o }
  if e:=g.Connect();e!=nil { o.Warning="SNMPv"+version+" connect: "+e.Error(); return o }
  defer g.Conn.Close()
- d,e:=walkText(&g,".1.3.6.1.2.1.2.2.1.2")
+ d,e:=walkText(g,".1.3.6.1.2.1.2.2.1.2")
  if e!=nil { o.Warning="IF-MIB ifDescr: "+e.Error(); return o }
  if len(d)==0 { o.Warning="SNMP działa, ale IF-MIB ifDescr jest pusty."; return o }
  o.Reachable=true
- mtu,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.4")
- speed,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.5")
- highSpeed,_:=walkNum(&g,".1.3.6.1.2.1.31.1.1.1.15")
- adm,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.7")
- op,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.8")
- inOctets,_:=walkCounter(&g,".1.3.6.1.2.1.31.1.1.1.6")
- outOctets,_:=walkCounter(&g,".1.3.6.1.2.1.31.1.1.1.10")
- inErrors,_:=walkCounter(&g,".1.3.6.1.2.1.2.2.1.14")
- outErrors,_:=walkCounter(&g,".1.3.6.1.2.1.2.2.1.20")
- inDiscards,_:=walkCounter(&g,".1.3.6.1.2.1.2.2.1.13")
- outDiscards,_:=walkCounter(&g,".1.3.6.1.2.1.2.2.1.19")
- inUcast,_:=walkCounter(&g,".1.3.6.1.2.1.31.1.1.1.7")
- outUcast,_:=walkCounter(&g,".1.3.6.1.2.1.31.1.1.1.11")
+ mtu,_:=walkNum(g,".1.3.6.1.2.1.2.2.1.4")
+ speed,_:=walkNum(g,".1.3.6.1.2.1.2.2.1.5")
+ highSpeed,_:=walkNum(g,".1.3.6.1.2.1.31.1.1.1.15")
+ adm,_:=walkNum(g,".1.3.6.1.2.1.2.2.1.7")
+ op,_:=walkNum(g,".1.3.6.1.2.1.2.2.1.8")
+ inOctets,_:=walkCounter(g,".1.3.6.1.2.1.31.1.1.1.6")
+ outOctets,_:=walkCounter(g,".1.3.6.1.2.1.31.1.1.1.10")
+ inErrors,_:=walkCounter(g,".1.3.6.1.2.1.2.2.1.14")
+ outErrors,_:=walkCounter(g,".1.3.6.1.2.1.2.2.1.20")
+ inDiscards,_:=walkCounter(g,".1.3.6.1.2.1.2.2.1.13")
+ outDiscards,_:=walkCounter(g,".1.3.6.1.2.1.2.2.1.19")
+ inUcast,_:=walkCounter(g,".1.3.6.1.2.1.31.1.1.1.7")
+ outUcast,_:=walkCounter(g,".1.3.6.1.2.1.31.1.1.1.11")
  ix:=make([]int,0,len(d))
  for i:=range d { ix=append(ix,i) }
  sort.Ints(ix)

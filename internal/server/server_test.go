@@ -185,3 +185,19 @@ func TestPruneConfigBackupsKeepsNewest(t *testing.T) {
 func TestPruneConfigBackupsRejectsZeroRetention(t *testing.T) {
  if err:=pruneConfigBackups(t.TempDir(),0);err==nil{t.Fatal("expected invalid retention error")}
 }
+
+
+func TestPortShutdownRequiresExplicitOptIn(t *testing.T) {
+ t.Setenv("ALLOW_PORT_SHUTDOWN","")
+ if portShutdownEnabled(){t.Fatal("shutdown must be disabled by default")}
+ t.Setenv("ALLOW_PORT_SHUTDOWN","false")
+ if portShutdownEnabled(){t.Fatal("false must not enable shutdown")}
+ t.Setenv("ALLOW_PORT_SHUTDOWN","true")
+ if !portShutdownEnabled(){t.Fatal("explicit true should enable shutdown")}
+}
+
+func TestProtectedPortsAreMatchedExactly(t *testing.T) {
+ t.Setenv("PROTECTED_PORTS","port1.0.49, port1.0.52")
+ if !isProtectedPort("port1.0.49") || !isProtectedPort("port1.0.52"){t.Fatal("configured protected port not recognized")}
+ if isProtectedPort("port1.0.4") || isProtectedPort("port1.0.50"){t.Fatal("partial port match must not protect unrelated interface")}
+}

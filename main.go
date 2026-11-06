@@ -33,7 +33,16 @@ func main() {
  }
  handler := securityHeaders(basicAuth(mux, panelUser, panelPassword))
  log.Printf("CiscoSwitch Manager listening on http://%s (switch=%s, snmp=%s)",addr,cfg.Host,masked(cfg.SNMPCommunity))
- log.Fatal(http.ListenAndServe(addr,handler))
+ httpServer := &http.Server{
+  Addr: addr,
+  Handler: handler,
+  ReadHeaderTimeout: 5 * time.Second,
+  ReadTimeout: 15 * time.Second,
+  WriteTimeout: 60 * time.Second,
+  IdleTimeout: 60 * time.Second,
+  MaxHeaderBytes: 1 << 20,
+ }
+ log.Fatal(httpServer.ListenAndServe())
 }
 func loadEnv(path string) error {
  f,err:=os.Open(path); if err!=nil{return err}; defer f.Close()

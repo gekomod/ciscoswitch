@@ -19,10 +19,12 @@ type monitorRecord struct {
  Timestamp time.Time `json:"timestamp"`
  Message string `json:"message,omitempty"`
  Type string `json:"type,omitempty"`
+ Port string `json:"port,omitempty"`
+ State string `json:"state,omitempty"`
  RX float64 `json:"rx,omitempty"`
  TX float64 `json:"tx,omitempty"`
 }
-type monitorHistoryResponse struct { Events []monitorRecord `json:"events"`; Samples []monitorRecord `json:"samples"` }
+type monitorHistoryResponse struct { Events []monitorRecord `json:"events"`; Samples []monitorRecord `json:"samples"`; PortEvents []monitorRecord `json:"portEvents"` }
 type monitorHistoryStore struct { path string; mu sync.Mutex }
 
 func monitorHistoryHandler(path string) http.Handler {
@@ -50,6 +52,9 @@ func validateMonitorRecord(r monitorRecord) error {
  case "event":
   if strings.TrimSpace(r.Message)=="" || len(r.Message)>300 { return http.ErrNotSupported }
   switch r.Type { case "info","success","warning","danger": default: return http.ErrNotSupported }
+ case "port":
+  if len(r.Port)>64 || !strings.HasPrefix(r.Port,"port") || strings.ContainsAny(r.Port," <>\\\"'") { return http.ErrNotSupported }
+  if r.State!="up" && r.State!="down" { return http.ErrNotSupported }
  case "sample":
   if math.IsNaN(r.RX)||math.IsNaN(r.TX)||math.IsInf(r.RX,0)||math.IsInf(r.TX,0)||r.RX<0||r.TX<0 { return http.ErrNotSupported }
  default: return http.ErrNotSupported
@@ -67,14 +72,15 @@ func (s *monitorHistoryStore) append(r monitorRecord) error {
 }
 func (s *monitorHistoryStore) read() (monitorHistoryResponse,error) {
  s.mu.Lock(); defer s.mu.Unlock()
- out:=monitorHistoryResponse{Events:[]monitorRecord{},Samples:[]monitorRecord{}}
+ out:=monitorHistoryResponse{Events:[]monitorRecord{},Samples:[]monitorRecord{},PortEvents:[]monitorRecord{}}
  f,err:=os.Open(s.path); if os.IsNotExist(err){return out,nil}; if err!=nil{return out,err}; defer f.Close()
  info,err:=f.Stat(); if err!=nil{return out,err}; if info.Size()>monitorHistoryMaxBytes{return out,os.ErrInvalid}
  sc:=bufio.NewScanner(f); sc.Buffer(make([]byte,4096),4096)
- for sc.Scan(){var r monitorRecord;if json.Unmarshal(sc.Bytes(),&r)!=nil{continue};switch r.Kind{case "event":out.Events=append(out.Events,r);case "sample":out.Samples=append(out.Samples,r)}}
+ for sc.Scan(){var r monitorRecord;if json.Unmarshal(sc.Bytes(),&r)!=nil{continue};switch r.Kind{case "event":out.Events=append(out.Events,r);case "sample":out.Samples=append(out.Samples,r);case "port":out.PortEvents=append(out.PortEvents,r)}}
  if err:=sc.Err();err!=nil{return out,err}
  if len(out.Events)>200{out.Events=out.Events[len(out.Events)-200:]}
  if len(out.Samples)>300{out.Samples=out.Samples[len(out.Samples)-300:]}
+ if len(out.PortEvents)>2000{out.PortEvents=out.PortEvents[len(out.PortEvents)-2000:]}
  return out,nil
 }
 func (s *monitorHistoryStore) prune() error {

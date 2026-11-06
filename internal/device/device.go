@@ -188,6 +188,38 @@ func (s *Service) RunReadOnly(cmd string)(string,error) {
  b,e:=ss.Output(cmd);return string(b),e
 }
 
+func validProbeTarget(target string) bool {
+ target=strings.TrimSpace(target)
+ if ip:=net.ParseIP(target);ip!=nil{return ip.To4()!=nil}
+ if len(target)<1||len(target)>253{return false}
+ for _,label:=range strings.Split(target,"."){if len(label)<1||len(label)>63||label[0]=='-'||label[len(label)-1]=='-'{return false};for _,r:=range label{if !(r>='a'&&r<='z'||r>='A'&&r<='Z'||r>='0'&&r<='9'||r=='-'){return false}}}
+ return true
+}
+func (s *Service) ProbeNetwork(kind,target string)(string,error){
+ target=strings.TrimSpace(target)
+ if !validProbeTarget(target){return "",fmt.Errorf("podaj poprawny adres IPv4 lub nazwę DNS")}
+ var cmd string
+ switch kind{case "ping":cmd="ping "+target;case "traceroute":cmd="traceroute "+target;default:return "",fmt.Errorf("nieznany test sieciowy")}
+ return s.RunCLICommand(cmd)
+}
+func (s *Service) RunCLICommand(cmd string)(string,error){
+ if s.cfg.Host==""||s.cfg.SSHUser==""||s.cfg.SSHPassword==""{return "",fmt.Errorf("brak SWITCH_HOST lub danych SSH w .env")}
+ client,e:=ssh.Dial("tcp",net.JoinHostPort(s.cfg.Host,s.cfg.SSHPort),&ssh.ClientConfig{User:s.cfg.SSHUser,Auth:[]ssh.AuthMethod{ssh.Password(s.cfg.SSHPassword)},HostKeyCallback:ssh.InsecureIgnoreHostKey(),HostKeyAlgorithms:[]string{ssh.KeyAlgoRSA},Timeout:s.cfg.Timeout})
+ if e!=nil{return "",e};defer client.Close()
+ session,e:=client.NewSession();if e!=nil{return "",e};defer session.Close()
+ output,e:=session.Output(cmd);return string(output),e
+}
+func (s *Service) ConfigureStaticRoute(prefix,gateway string,distance int,remove bool)(string,error){
+ _,network,e:=net.ParseCIDR(strings.TrimSpace(prefix));if e!=nil{return "",fmt.Errorf("podaj poprawną sieć CIDR, np. 192.168.20.0/24")}
+ ip:=net.ParseIP(gateway);if ip==nil||ip.To4()==nil{return "",fmt.Errorf("brama musi być poprawnym adresem IPv4")}
+ if !network.IP.Equal(ip.To4().Mask(network.Mask))&&network.Contains(ip){return "",fmt.Errorf("brama nie może być adresem z sieci docelowej")}
+ if distance<1||distance>255{return "",fmt.Errorf("dystans administracyjny musi być w zakresie 1–255")}
+ command:="ip route "+network.String()+" "+ip.String()
+ if distance!=1{command+=" "+strconv.Itoa(distance)}
+ if remove{command="no "+command}
+ return s.runConfig([]string{"configure terminal",command,"end"})
+}
+
 func validVLANID(v int)bool{return v>=1&&v<=4094}
 func parseVLANList(raw string)([]int,error) {
  raw=strings.TrimSpace(raw);if raw==""{return nil,fmt.Errorf("podaj co najmniej jeden VLAN")}

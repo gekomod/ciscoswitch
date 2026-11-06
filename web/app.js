@@ -45,6 +45,12 @@ $('route-delete').onclick=()=>configureStaticRoute(true);
 async function runProbe(kind){const target=$('probe-target').value.trim();$('probe-output').textContent=(kind==='ping'?'Ping':'Traceroute')+' '+target+'…';try{const d=await api('/api/network/probe',{kind,target});$('probe-output').textContent=d.output||'Brak odpowiedzi.';}catch(e){$('probe-output').textContent=e.message;}}
 $('probe-ping').onclick=()=>runProbe('ping');
 $('probe-trace').onclick=()=>runProbe('traceroute');
+
+async function refreshSNMP(){const jobs=[['show snmp-server','snmp-agent'],['show snmp-server community','snmp-communities'],['show snmp-server user','snmp-users'],['show counter snmp-server','snmp-counters'],['show running-config snmp','snmp-running']];for(const [command,id] of jobs){try{const d=await api('/api/command',{command});$(id).textContent=d.output||'Brak danych zwróconych przez switch.';}catch(e){$(id).textContent=e.message;}}}
+$('snmp-refresh').onclick=refreshSNMP;
+async function changeSNMPTrap(remove){const q={address:$('snmp-trap-ip').value.trim(),community:$('snmp-trap-community').value,delete:remove};if(!q.community){alert('Wpisz istniejącą community SNMP.');return;}if(!confirm((remove?'Usunąć':'Dodać')+' odbiorcę Trap '+q.address+' dla SNMPv2c?'))return;const b=remove?$('snmp-trap-remove'):$('snmp-trap-add');b.disabled=true;try{const d=await api('/api/snmp/trap-host',q);$('snmp-action-output').textContent=d.output||'Polecenie wysłane.';await refreshSNMP();}catch(e){$('snmp-action-output').textContent=e.message;}finally{b.disabled=false;}}
+$('snmp-trap-add').onclick=()=>changeSNMPTrap(false);
+$('snmp-trap-remove').onclick=()=>changeSNMPTrap(true);
 $('refresh-l3').onclick=refreshL3;
 $('arp-filter').addEventListener('input',filterARP);
 

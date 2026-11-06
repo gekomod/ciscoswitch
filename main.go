@@ -2,8 +2,10 @@ package main
 
 import (
  "bufio"
+ "crypto/subtle"
  "log"
  "net/http"
+ "net/url"
  "os"
  "strings"
  "time"
@@ -25,8 +27,13 @@ func main() {
  addr := env("LISTEN_ADDR","127.0.0.1:8090")
  mux := http.NewServeMux()
  server.Register(mux,svc)
+ panelUser, panelPassword := os.Getenv("PANEL_USER"), os.Getenv("PANEL_PASSWORD")
+ if panelUser == "" || len(panelPassword) < 16 {
+  log.Fatal("Wymagane PANEL_USER oraz PANEL_PASSWORD (minimum 16 znaków); panel nie zostanie uruchomiony bez uwierzytelnienia")
+ }
+ handler := securityHeaders(basicAuth(mux, panelUser, panelPassword))
  log.Printf("CiscoSwitch Manager listening on http://%s (switch=%s, snmp=%s)",addr,cfg.Host,masked(cfg.SNMPCommunity))
- log.Fatal(http.ListenAndServe(addr,securityHeaders(mux)))
+ log.Fatal(http.ListenAndServe(addr,handler))
 }
 func loadEnv(path string) error {
  f,err:=os.Open(path); if err!=nil{return err}; defer f.Close()
@@ -37,3 +44,28 @@ func loadEnv(path string) error {
 func env(k,f string)string{if v:=os.Getenv(k);v!=""{return v};return f}
 func masked(v string)string{if v==""{return "nieustawione"};return "ustawione"}
 func securityHeaders(next http.Handler)http.Handler{return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){w.Header().Set("X-Content-Type-Options","nosniff");w.Header().Set("X-Frame-Options","DENY");w.Header().Set("Referrer-Policy","no-referrer");w.Header().Set("Content-Security-Policy","default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:");next.ServeHTTP(w,r)})}
+
+func basicAuth(next http.Handler, username, password string) http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+  if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+   origin := r.Header.Get("Origin")
+   if origin != "" {
+    u, err := url.Parse(origin)
+    if err != nil || !strings.EqualFold(u.Host, r.Host) {
+     http.Error(w, "forbidden origin", http.StatusForbidden)
+     return
+    }
+   }
+  }
+  user, pass, ok := r.BasicAuth()
+  userOK := subtle.ConstantTimeCompare([]byte(user), []byte(username)) == 1
+  passOK := subtle.ConstantTimeCompare([]byte(pass), []byte(password)) == 1
+  if !ok || !userOK || !passOK {
+   w.Header().Set("WWW-Authenticate", `Basic realm="Switch Manager", charset="UTF-8"`)
+   w.Header().Set("Cache-Control", "no-store")
+   http.Error(w, "authentication required", http.StatusUnauthorized)
+   return
+  }
+  next.ServeHTTP(w, r)
+ })
+}

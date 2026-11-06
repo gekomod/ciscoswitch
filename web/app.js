@@ -34,6 +34,13 @@ async function inspectVLAN(){const id=Number($('vlan-inspect-id').value);if(!Num
 $('inspect-vlan').onclick=inspectVLAN;
 async function refreshDHCP(){for(const [cmd,id] of [['show ip dhcp server summary','dhcp-summary'],['show ip dhcp binding','dhcp-bindings']]){try{const d=await api('/api/command',{command:cmd});$(id).textContent=d.output||'Brak danych';}catch(e){$(id).textContent=e.message;}}}
 $('dhcp-refresh').onclick=refreshDHCP;
+
+let arpTableText='';
+async function refreshL3(){for(const [cmd,id] of [['show ip interface brief','l3-interfaces'],['show ip route','l3-routes'],['show arp','l3-arp']]){try{const d=await api('/api/command',{command:cmd});const out=d.output||'Brak danych zwróconych przez switch.';$(id).textContent=out;if(id==='l3-arp'){arpTableText=out;filterARP();}}catch(e){$(id).textContent=e.message;if(id==='l3-arp'){arpTableText=e.message;filterARP();}}}}
+function filterARP(){const q=$('arp-filter').value.trim().toLowerCase();$('l3-arp').textContent=q?arpTableText.split(/\r?\n/).filter(x=>x.toLowerCase().includes(q)).join('\n')||'Brak pasujących wpisów.':arpTableText;}
+$('refresh-l3').onclick=refreshL3;
+$('arp-filter').addEventListener('input',filterARP);
+
 $('dhcp-create').onclick=async()=>{const q={name:$('dhcp-name').value,network:$('dhcp-network').value,mask:$('dhcp-mask').value,low:$('dhcp-low').value,high:$('dhcp-high').value,router:$('dhcp-router').value,dns:$('dhcp-dns').value,enable:true};if(!confirm('Utworzyć pulę DHCP '+q.name+' i włączyć usługę DHCP Server? Upewnij się, że nie działa drugi serwer DHCP w tej sieci.'))return;const b=$('dhcp-create');b.disabled=true;try{const d=await api('/api/dhcp/pool',q);$('dhcp-summary').textContent=d.output||'Polecenia konfiguracji wysłane. Odczytaj status DHCP.';await refreshDHCP();}catch(e){alert(e.message);}finally{b.disabled=false;}};
 
 async function loadDiagnostic(command,target){$(target).textContent='Pobieranie przez SSH…';try{const d=await api('/api/command',{command});$(target).textContent=d.output||'Brak danych';}catch(e){$(target).textContent=e.message;}}

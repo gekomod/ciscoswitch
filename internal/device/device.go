@@ -1,6 +1,7 @@
 package device
 
 import (
+ "crypto/subtle"
  "fmt"
  "net"
  "regexp"
@@ -13,7 +14,7 @@ import (
  "golang.org/x/crypto/ssh"
 )
 
-type Config struct { Host, SSHPort, SSHUser, SSHPassword string; SNMPCommunity, SNMPPort string; Timeout time.Duration }
+type Config struct { Host, SSHPort, SSHUser, SSHPassword, SSHHostKeyFingerprint string; SNMPCommunity, SNMPPort string; Timeout time.Duration }
 type Service struct { cfg Config }
 type Port struct {
  Index int `json:"index"`
@@ -128,9 +129,30 @@ func validPort(v string)bool {
 }
 func port(v string,f int)int { n,e:=strconv.Atoi(v);if e!=nil||n<1||n>65535{return f};return n }
 
+// dialSSH verifies the switch host key against a SHA256 fingerprint configured out of band.
+func (s *Service) dialSSH() (*ssh.Client, error) {
+ if s.cfg.SSHHostKeyFingerprint == "" {
+  return nil, fmt.Errorf("brak SWITCH_SSH_HOST_KEY: połączenie SSH zablokowane do czasu przypięcia klucza hosta")
+ }
+ expected := strings.TrimSpace(s.cfg.SSHHostKeyFingerprint)
+ callback := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+  actual := ssh.FingerprintSHA256(key)
+  if subtle.ConstantTimeCompare([]byte(actual), []byte(expected)) != 1 {
+   return fmt.Errorf("niezgodny klucz SSH hosta %s (%s); oczekiwano %s", hostname, actual, expected)
+  }
+  return nil
+ }
+ return ssh.Dial("tcp", net.JoinHostPort(s.cfg.Host, s.cfg.SSHPort), &ssh.ClientConfig{
+  User: s.cfg.SSHUser,
+  Auth: []ssh.AuthMethod{ssh.Password(s.cfg.SSHPassword)},
+  HostKeyCallback: callback,
+  Timeout: s.cfg.Timeout,
+ })
+}
+
 func (s *Service) runConfig(cmds []string)(string,error) {
  if s.cfg.Host==""||s.cfg.SSHUser==""||s.cfg.SSHPassword=="" {return "",fmt.Errorf("brak konfiguracji SSH w .env")}
- c,e:=ssh.Dial("tcp",net.JoinHostPort(s.cfg.Host,s.cfg.SSHPort),&ssh.ClientConfig{User:s.cfg.SSHUser,Auth:[]ssh.AuthMethod{ssh.Password(s.cfg.SSHPassword)},HostKeyCallback:ssh.InsecureIgnoreHostKey(),HostKeyAlgorithms:[]string{ssh.KeyAlgoRSA},Timeout:s.cfg.Timeout})
+ c,e:=s.dialSSH()
  if e!=nil{return "",e}
  defer c.Close()
  ss,e:=c.NewSession();if e!=nil{return "",e};defer ss.Close()
@@ -182,7 +204,7 @@ func (s *Service) RunReadOnly(cmd string)(string,error) {
  ok:=false;for _,v:=range allowed{if cmd==v{ok=true;break}};if strings.HasPrefix(cmd,"show vlan "){id,err:=strconv.Atoi(strings.TrimPrefix(cmd,"show vlan "));if err==nil&&id>=1&&id<=4094{ok=true}}
  if !ok{return "",fmt.Errorf("polecenie niedozwolone")}
  if s.cfg.Host==""||s.cfg.SSHUser==""||s.cfg.SSHPassword==""{return "",fmt.Errorf("brak SWITCH_HOST lub danych SSH w .env")}
- c,e:=ssh.Dial("tcp",net.JoinHostPort(s.cfg.Host,s.cfg.SSHPort),&ssh.ClientConfig{User:s.cfg.SSHUser,Auth:[]ssh.AuthMethod{ssh.Password(s.cfg.SSHPassword)},HostKeyCallback:ssh.InsecureIgnoreHostKey(),HostKeyAlgorithms:[]string{ssh.KeyAlgoRSA},Timeout:s.cfg.Timeout})
+ c,e:=s.dialSSH()
  if e!=nil{return "",e};defer c.Close()
  ss,e:=c.NewSession();if e!=nil{return "",e};defer ss.Close()
  b,e:=ss.Output(cmd);return string(b),e
@@ -224,7 +246,7 @@ func (s *Service) ProbeNetwork(kind,target string)(string,error){
 }
 func (s *Service) RunCLICommand(cmd string)(string,error){
  if s.cfg.Host==""||s.cfg.SSHUser==""||s.cfg.SSHPassword==""{return "",fmt.Errorf("brak SWITCH_HOST lub danych SSH w .env")}
- client,e:=ssh.Dial("tcp",net.JoinHostPort(s.cfg.Host,s.cfg.SSHPort),&ssh.ClientConfig{User:s.cfg.SSHUser,Auth:[]ssh.AuthMethod{ssh.Password(s.cfg.SSHPassword)},HostKeyCallback:ssh.InsecureIgnoreHostKey(),HostKeyAlgorithms:[]string{ssh.KeyAlgoRSA},Timeout:s.cfg.Timeout})
+ client,e:=s.dialSSH()
  if e!=nil{return "",e};defer client.Close()
  session,e:=client.NewSession();if e!=nil{return "",e};defer session.Close()
  output,e:=session.Output(cmd);return string(output),e

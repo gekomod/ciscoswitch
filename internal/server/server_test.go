@@ -161,7 +161,7 @@ func TestRunWithPreChangeBackupFailsClosedOnReadError(t *testing.T) {
 
 func TestRunWithPreChangeBackupFailsClosedOnEmptyConfig(t *testing.T) {
  changed:=false
- _,err:=runWithPreChangeBackup(t.TempDir(),func(string)(string,error){return "  \\n",nil},func()(string,error){changed=true;return "",nil})
+ _,err:=runWithPreChangeBackup(t.TempDir(),func(string)(string,error){return "  \n",nil},func()(string,error){changed=true;return "",nil})
  if err==nil { t.Fatal("expected empty configuration error") }
  if changed { t.Fatal("configuration change must not run") }
 }

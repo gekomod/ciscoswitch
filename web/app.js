@@ -38,6 +38,13 @@ $('dhcp-refresh').onclick=refreshDHCP;
 let arpTableText='';
 async function refreshL3(){for(const [cmd,id] of [['show ip interface brief','l3-interfaces'],['show ip route','l3-routes'],['show arp','l3-arp']]){try{const d=await api('/api/command',{command:cmd});const out=d.output||'Brak danych zwróconych przez switch.';$(id).textContent=out;if(id==='l3-arp'){arpTableText=out;filterARP();}}catch(e){$(id).textContent=e.message;if(id==='l3-arp'){arpTableText=e.message;filterARP();}}}}
 function filterARP(){const q=$('arp-filter').value.trim().toLowerCase();$('l3-arp').textContent=q?arpTableText.split(/\r?\n/).filter(x=>x.toLowerCase().includes(q)).join('\n')||'Brak pasujących wpisów.':arpTableText;}
+
+async function configureStaticRoute(remove){const q={prefix:$('route-prefix').value.trim(),gateway:$('route-gateway').value.trim(),distance:Number($('route-distance').value),delete:remove};const action=remove?'usunąć':'dodać';if(!confirm('Czy na pewno '+action+' trasę '+q.prefix+' przez '+q.gateway+'? Zmiana może wpłynąć na łączność z przełącznikiem.'))return;try{const d=await api('/api/route/static',q);$('probe-output').textContent=d.output||'Polecenie przekazane.';await refreshL3();}catch(e){alert(e.message);}}
+$('route-add').onclick=()=>configureStaticRoute(false);
+$('route-delete').onclick=()=>configureStaticRoute(true);
+async function runProbe(kind){const target=$('probe-target').value.trim();$('probe-output').textContent=(kind==='ping'?'Ping':'Traceroute')+' '+target+'…';try{const d=await api('/api/network/probe',{kind,target});$('probe-output').textContent=d.output||'Brak odpowiedzi.';}catch(e){$('probe-output').textContent=e.message;}}
+$('probe-ping').onclick=()=>runProbe('ping');
+$('probe-trace').onclick=()=>runProbe('traceroute');
 $('refresh-l3').onclick=refreshL3;
 $('arp-filter').addEventListener('input',filterARP);
 

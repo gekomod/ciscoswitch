@@ -2,6 +2,7 @@ package server
 
 import (
  "encoding/json"
+ "bufio"
  "crypto/sha256"
  "encoding/hex"
  "fmt"
@@ -25,6 +26,7 @@ func Register(m *http.ServeMux,svc *device.Service){
  if raw := os.Getenv("CONFIG_BACKUP_RETENTION"); raw != "" { if n, err := strconv.Atoi(raw); err == nil && n >= 1 && n <= 10000 { retention = n } }
  m.Handle("/api/config/backups", configBackupsHandler(svc.RunReadOnly, backupDir, retention))
  m.Handle("/api/config/backups/download", configBackupDownloadHandler(backupDir))
+ m.Handle("/api/audit", auditHistoryHandler(os.Getenv("AUDIT_LOG_PATH")))
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
  m.HandleFunc("/api/port/preview",func(w http.ResponseWriter,r *http.Request){
  if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
@@ -66,6 +68,40 @@ m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method
 }
 func write(w http.ResponseWriter,v string,e error){w.Header().Set("Content-Type","application/json");if e!=nil{w.WriteHeader(400);_ = json.NewEncoder(w).Encode(map[string]string{"error":e.Error(),"output":v});return};_ = json.NewEncoder(w).Encode(map[string]string{"output":v,"ok":"true"})}
 
+
+
+type auditHistoryRecord struct {
+ Timestamp time.Time `json:"timestamp"`
+ Username string `json:"username"`
+ Method string `json:"method"`
+ Path string `json:"path"`
+ Status int `json:"status"`
+ DurationMS int64 `json:"durationMs"`
+}
+
+func auditHistoryHandler(path string) http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request) {
+  if r.Method != http.MethodGet { http.Error(w,"method not allowed",http.StatusMethodNotAllowed); return }
+  if path == "" { path = filepath.Join("data","audit.jsonl") }
+  info,err:=os.Stat(path)
+  if os.IsNotExist(err) { w.Header().Set("Content-Type","application/json"); _=json.NewEncoder(w).Encode([]auditHistoryRecord{}); return }
+  if err != nil { http.Error(w,"audit history unavailable",http.StatusInternalServerError); return }
+  if info.Size() > 10<<20 { http.Error(w,"audit history exceeds 10 MiB safety limit",http.StatusRequestEntityTooLarge); return }
+  file,err:=os.Open(path); if err!=nil { http.Error(w,"audit history unavailable",http.StatusInternalServerError); return }; defer file.Close()
+  records:=make([]auditHistoryRecord,0,200)
+  scanner:=bufio.NewScanner(file); scanner.Buffer(make([]byte,4096),64*1024)
+  for scanner.Scan() {
+   var item auditHistoryRecord
+   if json.Unmarshal(scanner.Bytes(),&item)!=nil { continue }
+   records=append(records,item)
+   if len(records)>200 { records=records[1:] }
+  }
+  if err:=scanner.Err();err!=nil { http.Error(w,"audit history read failed",http.StatusInternalServerError); return }
+  w.Header().Set("Content-Type","application/json; charset=utf-8")
+  w.Header().Set("Cache-Control","no-store")
+  _=json.NewEncoder(w).Encode(records)
+ })
+}
 
 // configExportHandler keeps the export endpoint independently testable without a live switch.
 func configExportHandler(run func(string) (string, error)) http.Handler {

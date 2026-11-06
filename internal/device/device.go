@@ -160,7 +160,7 @@ func (s *Service) SetManagementDHCP(on bool)(string,error) {
 }
 func (s *Service) SaveConfig()(string,error) { return s.runConfig([]string{"copy running-config startup-config"}) }
 
-var allowed=[]string{"show system","show system environment","show version","show cpu","show memory","show interfaces status","show interfaces","show vlan","show vlan all","show ip interface brief","show lldp neighbors","show spanning-tree","show boot","show http","show interface switchport","show running-config interface","show etherchannel","show static-channel-group","show mac address-table","show log","show log tail 30","show system mac","show system serialnumber"}
+var allowed=[]string{"show system","show system environment","show version","show cpu","show memory","show interfaces status","show interfaces","show vlan","show vlan all","show ip interface brief","show lldp neighbors","show spanning-tree","show boot","show http","show interface switchport","show running-config interface","show etherchannel","show static-channel-group","show mac address-table","show log","show log tail 30","show system mac","show system serialnumber","show ip dhcp server summary","show ip dhcp binding","show running-config dhcp"}
 // SystemInfo returns raw, read-only AlliedWare Plus diagnostics. Values are deliberately
 // kept as device output because available sensors and command formats vary by firmware.
 func (s *Service) SystemInfo() map[string]string {
@@ -207,6 +207,26 @@ func parseVLANList(raw string)([]int,error) {
  if len(out)==0{return nil,fmt.Errorf("pusta lista VLAN")}
  return out,nil
 }
+func validIPv4(s string) bool { ip:=net.ParseIP(strings.TrimSpace(s)); return ip!=nil && ip.To4()!=nil }
+func (s *Service) ConfigureDHCPPool(name,network,mask,low,high,router,dns string,enable bool)(string,error) {
+ name=strings.TrimSpace(name)
+ if len(name)<1||len(name)>32||!regexp.MustCompile("^[A-Za-z0-9_-]+$").MatchString(name){return "",fmt.Errorf("nazwa puli: 1–32 znaków A-Z, a-z, 0-9, _ lub -")}
+ for label,value:=range map[string]string{"sieć":network,"maska":mask,"początek zakresu":low,"koniec zakresu":high,"brama":router,"DNS":dns}{if !validIPv4(value){return "",fmt.Errorf("nieprawidłowy adres IPv4 (%s)",label)}}
+ n:=net.ParseIP(network).To4();m:=net.IPMask(net.ParseIP(mask).To4());ones,bits:=m.Size()
+ if bits!=32||ones<1||ones>30{return "",fmt.Errorf("maska musi być poprawną maską IPv4 od /1 do /30")}
+ ipnet:=&net.IPNet{IP:n.Mask(m),Mask:m}
+ lo,hi,gw,ns:=net.ParseIP(low).To4(),net.ParseIP(high).To4(),net.ParseIP(router).To4(),net.ParseIP(dns).To4()
+ if !ipnet.Contains(lo)||!ipnet.Contains(hi)||!ipnet.Contains(gw)||!ipnet.Contains(ns){return "",fmt.Errorf("zakres, brama i DNS muszą należeć do podanej podsieci")}
+ if bytesCompare(lo,hi)>0{return "",fmt.Errorf("początek zakresu jest większy niż koniec")}
+ if lo.Equal(ipnet.IP)||hi.Equal(ipnet.IP)||lo.Equal(net.IP{byte(n[0]|^m[0]),byte(n[1]|^m[1]),byte(n[2]|^m[2]),byte(n[3]|^m[3])}){return "",fmt.Errorf("zakres nie może zawierać adresu sieci ani broadcast")}
+ if bytesCompare(gw,lo)>=0&&bytesCompare(gw,hi)<=0{return "",fmt.Errorf("wyłącz adres bramy z zakresu DHCP")}
+ cmds:=[]string{"configure terminal","ip dhcp pool "+name,"network "+network+" "+mask,"range "+low+" "+high,"default-router "+router,"dns-server "+dns,"exit"}
+ if enable {cmds=append(cmds,"service dhcp-server")}
+ cmds=append(cmds,"end")
+ return s.runConfig(cmds)
+}
+func bytesCompare(a,b net.IP) int { for i:=0;i<4;i++ {if a[i]<b[i]{return -1};if a[i]>b[i]{return 1}};return 0 }
+
 func (s *Service) ConfigureVLAN(id int,name string,remove bool)(string,error) {
  if id<2||id>4094{return "",fmt.Errorf("VLAN ID musi być z zakresu 2–4094; VLAN 1 jest domyślny")}
  if remove{return s.runConfig([]string{"configure terminal","vlan database",fmt.Sprintf("no vlan %d",id),"exit","end"})}

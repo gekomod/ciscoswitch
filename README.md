@@ -3,7 +3,7 @@
 Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948MX z AlliedWare Plus. Repozytorium zachowuje nazwę ciscoswitch, ale adapter CLI jest przeznaczony dla Allied Telesis, nie Cisco IOS.
 
 ## Moduły
-- Dashboard z odczytem portów SNMP v2c / IF-MIB.
+- Dashboard z odczytem portów SNMP v2c / IF-MIB (porty 1–52, w tym dwa SFP+ 10G i dwa porty combo).
 - Włączanie i wyłączanie portu.
 - VLAN: podgląd listy, tworzenie i usuwanie VLAN 2–4094.
 - Porty: access/trunk, VLAN access, lista VLAN dozwolonych na trunk, native VLAN.

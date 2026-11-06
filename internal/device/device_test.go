@@ -65,7 +65,7 @@ func TestBuildPortSettingsCommandsPreviewDoesNotNeedSSH(t *testing.T) {
  for _,want:=range []string{"interface port1.0.7","switchport mode trunk","switchport trunk allowed vlan add 10,20,21","switchport trunk native vlan 10"}{
   if !strings.Contains(joined,want){t.Fatalf("preview missing %q: %v",want,cmds)}
  }
- if _,err:=BuildPortSettingsCommands("port1.0.7","trunk",1,"10","20","auto","auto","");err==nil{t.Fatal("native VLAN outside allowed list must fail preview")}
+ if _,err:=BuildPortSettingsCommands("port1.0.7","trunk",1,"10",20,"auto","auto","");err==nil{t.Fatal("native VLAN outside allowed list must fail preview")}
 }
 
 func TestBuildVLANCommandsPreview(t *testing.T) {

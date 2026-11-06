@@ -38,3 +38,17 @@ body{background:#f4f6f9;color:var(--text)}.sidebar{background:#fff;border-right:
 .port-history-panel{margin:0 0 20px}.port-history-filter{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:11px}.port-history-filter select{min-width:150px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);color:var(--text)}.port-history-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}.port-history-metrics article{display:flex;flex-direction:column;gap:7px;padding:13px 15px;border:1px solid var(--line-soft);border-radius:12px;background:var(--surface-2)}.port-history-metrics small{font-size:9px;letter-spacing:.08em;color:var(--muted)}.port-history-metrics b{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}.port-history-panel .table-wrap{margin-top:12px}.port-history-panel table{min-width:650px}.port-rank-head{display:flex;align-items:center;justify-content:space-between;margin:22px 0 8px}.port-rank-head h3{font-size:13px;margin:0}.port-rank-head span{font-size:9px;letter-spacing:.1em;color:var(--muted)}.port-history-panel .note{margin-top:14px}@media(max-width:650px){.port-history-filter{width:100%;justify-content:space-between}.port-history-filter select{flex:1;min-width:0}.port-history-metrics{grid-template-columns:1fr}.port-history-metrics article{padding:10px 12px}.port-history-metrics b{font-size:18px}}
 
 .counter-history-panel{margin:0 0 20px}.counter-history-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}.counter-history-metrics article{display:flex;flex-direction:column;gap:7px;padding:13px 15px;border:1px solid var(--line-soft);border-radius:12px;background:var(--surface-2)}.counter-history-metrics small{font-size:9px;letter-spacing:.08em;color:var(--muted)}.counter-history-metrics b{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}.counter-history-panel .table-wrap{margin-top:12px}.counter-history-panel table{min-width:690px}.counter-history-panel .port-rank-head{margin-top:22px}.counter-history-panel .note{margin-top:14px}@media(max-width:650px){.counter-history-metrics{grid-template-columns:1fr}.counter-history-metrics article{padding:10px 12px}.counter-history-metrics b{font-size:18px}}
+
+/* Page-oriented navigation: only the selected workspace is visible. */
+.main>[hidden],.main section[hidden],.main article[hidden],.main div[hidden]{display:none!important}
+.main>.welcome,.main>.metrics,.main>.dashboard-grid{transition:opacity .15s ease}
+.port-dialog{width:min(720px,calc(100vw - 28px));max-width:720px;max-height:calc(100dvh - 32px);overflow:auto;border:1px solid #dce4ed;border-radius:18px;padding:22px;background:#fff;color:#1c2939;box-shadow:0 24px 80px #10243d40}
+.port-dialog::backdrop{background:#14223580;backdrop-filter:blur(3px)}
+.dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
+.dialog-head h2{margin:5px 0 6px;font-size:21px}
+.dialog-head p{margin:0;color:#718096;font-size:12px}
+.dialog-close{width:34px;height:34px;flex:none;border:1px solid #e0e6ed;border-radius:10px;background:#f7f9fb;color:#526176;font-size:23px;line-height:1;cursor:pointer}
+.port-dialog .port-form{margin:0}
+.port-dialog .note{margin-top:16px}
+.sidebar .nav{white-space:nowrap}
+@media(max-width:650px){.port-dialog{padding:17px}.port-dialog .port-form{grid-template-columns:1fr}}

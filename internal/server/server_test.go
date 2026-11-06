@@ -130,3 +130,38 @@ func TestConfigBackupDownloadRejectsTraversal(t *testing.T) {
  h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/config/backups/download?id=../../.env", nil))
  if rec.Code != http.StatusBadRequest { t.Fatalf("status=%d", rec.Code) }
 }
+
+
+func TestRunWithPreChangeBackupBacksUpBeforeChange(t *testing.T) {
+ dir := t.TempDir()
+ order := []string{}
+ output, err := runWithPreChangeBackup(dir, func(command string) (string,error) {
+  order = append(order, "backup:"+command)
+  return "hostname sw1\\n", nil
+ }, func() (string,error) {
+  order = append(order, "change")
+  return "configured", nil
+ })
+ if err != nil { t.Fatal(err) }
+ if output != "configured" { t.Fatalf("output=%q", output) }
+ if len(order)!=2 || order[0]!="backup:show running-config" || order[1]!="change" { t.Fatalf("order=%v", order) }
+ entries,err:=listConfigBackups(dir)
+ if err!=nil || len(entries)!=1 { t.Fatalf("backups=%v err=%v",entries,err) }
+}
+
+func TestRunWithPreChangeBackupFailsClosedOnReadError(t *testing.T) {
+ dir := t.TempDir()
+ changed := false
+ _,err:=runWithPreChangeBackup(dir,func(string)(string,error){return "",errors.New("ssh offline")},func()(string,error){changed=true;return "bad",nil})
+ if err==nil { t.Fatal("expected backup error") }
+ if changed { t.Fatal("configuration change must not run without backup") }
+ entries,listErr:=listConfigBackups(dir)
+ if listErr!=nil || len(entries)!=0 { t.Fatalf("backups=%v err=%v",entries,listErr) }
+}
+
+func TestRunWithPreChangeBackupFailsClosedOnEmptyConfig(t *testing.T) {
+ changed:=false
+ _,err:=runWithPreChangeBackup(t.TempDir(),func(string)(string,error){return "  \\n",nil},func()(string,error){changed=true;return "",nil})
+ if err==nil { t.Fatal("expected empty configuration error") }
+ if changed { t.Fatal("configuration change must not run") }
+}

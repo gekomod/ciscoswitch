@@ -8,6 +8,8 @@ Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948
 - VLAN: podgląd listy, tworzenie i usuwanie VLAN 2–4094.
 - Porty: access/trunk, VLAN access, lista VLAN dozwolonych na trunk, native VLAN.
 - Porty: opis, speed auto/10/100/1000, duplex auto/full/half.
+- LACP: tworzenie i usuwanie channel-group, tryb active/passive, podgląd etherchannel.
+- STP: ustawienie trybu STP/RSTP/MSTP, priorytet bridge, edgeport na porcie.
 - DHCP client dla interfejsu zarządzającego VLAN 1.
 - Zapis running-config do startup-config.
 - Diagnostyka CLI z allowlistą poleceń show.

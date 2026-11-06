@@ -3,6 +3,40 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const natural=(a,b)=>String(a??'').localeCompare(String(b??''),'en',{numeric:true,sensitivity:'base'});
 const sorted=ports=>[...ports].sort((a,b)=>natural(a.name,b.name)||Number(a.index)-Number(b.index));
 async function api(path,body){const r=await fetch(path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});const d=await r.json().catch(()=>({error:'Nieprawidłowa odpowiedź API'}));if(!r.ok)throw Error(d.error||'Błąd API');return d;}
+
+function activatePage(hash){
+ const main=document.querySelector('.main');if(!main)return;
+ const targetId=(hash||'#overview').slice(1),target=document.getElementById(targetId);
+ const navLinks=[...document.querySelectorAll('.sidebar .nav')];
+ navLinks.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+targetId));
+ const topbar=main.querySelector('.topbar');
+ [...main.children].forEach(node=>{if(node===topbar)return;node.hidden=true;});
+ if(targetId==='overview'){
+  ['overview','warning','network-dashboard'].forEach(id=>{const el=document.getElementById(id);if(el)el.hidden=false;});
+  const metrics=main.querySelector('.metrics');if(metrics)metrics.hidden=false;
+  return;
+ }
+ if(!target){activatePage('#overview');return;}
+ let node=target;
+ while(node&&node!==main){
+  node.hidden=false;
+  const parent=node.parentElement;
+  if(parent&&parent!==main){
+   [...parent.children].forEach(sibling=>{if(sibling!==node)sibling.hidden=true;});
+   parent.hidden=false;
+  }
+  node=parent;
+ }
+}
+function initPageNavigation(){
+ document.querySelectorAll('.sidebar .nav').forEach(a=>a.addEventListener('click',e=>{
+  const hash=a.getAttribute('href');if(!hash||!hash.startsWith('#'))return;
+  e.preventDefault();history.replaceState(null,'',hash);activatePage(hash);
+ }));
+ window.addEventListener('hashchange',()=>activatePage(location.hash));
+ activatePage(location.hash||'#overview');
+}
+initPageNavigation();
 function syncPortChoices(){for(const id of ['cfg-port','edgeport-port','detail-port']){const sel=$(id),old=sel.value;sel.innerHTML=latestPorts.map(p=>'<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>').join('');if([...sel.options].some(o=>o.value===old))sel.value=old;}}
 function render(){const q=$('filter').value.toLowerCase(),st=$('state-filter').value;const ps=latestPorts.filter(p=>(p.name||'').toLowerCase().includes(q)&&(st==='all'||p.oper===st));$('port-count').textContent=ps.length+' / '+latestPorts.length+' portów';$('ports').innerHTML=ps.length?ps.map(p=>{const on=p.admin==='up';return '<tr><td><b>'+esc(p.name)+'</b></td><td><span class="state '+(on?'up':'down')+'">'+esc(p.admin)+'</span></td><td><span class="state '+(p.oper==='up'?'up':p.oper==='down'?'down':'unknown')+'">'+esc(p.oper)+'</span></td><td>'+esc(p.speed||'—')+'</td><td>'+fmtCount(p.inOctets)+'</td><td>'+fmtCount(p.outOctets)+'</td><td>'+fmtCount(p.inErrors)+' / '+fmtCount(p.outErrors)+'</td><td>'+(Number(p.mtu)||'—')+'</td><td><button class="port-action '+(on?'danger':'')+'" data-port="'+esc(p.name)+'" data-action="'+(on?'disable':'enable')+'">'+(on?'Wyłącz port':'Włącz port')+'</button> <button class="port-action" data-config-port="'+esc(p.name)+'">Konfiguruj</button></td></tr>'}).join(''):'<tr><td colspan="9" class="empty">Brak portów pasujących do filtra.</td></tr>';}
 function fmtDuration(seconds){const n=Math.max(0,Math.floor(seconds));if(n<60)return n+' s';const d=Math.floor(n/86400),h=Math.floor(n%86400/3600),m=Math.floor(n%3600/60);return (d?d+' d ':'')+(h?h+' godz. ':'')+(m?m+' min':'')||'0 min';}
@@ -29,10 +63,22 @@ $('show-lacp').onclick=async()=>{try{const d=await api('/api/command',{command:'
 $('apply-stp').onclick=async()=>{const mode=$('stp-mode').value,priority=Number($('stp-priority').value);if(!confirm('Zmienić globalny tryb STP na '+mode.toUpperCase()+' i priorytet bridge na '+priority+'?'))return;try{const d=await api('/api/stp',{mode,priority});$('stp-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
 $('show-stp').onclick=async()=>{try{const d=await api('/api/command',{command:'show spanning-tree'});$('stp-output').textContent=d.output||'Brak danych';}catch(e){$('stp-output').textContent=e.message;}};
 $('edgeport-toggle').onchange=async e=>{const port=$('edgeport-port').value,enabled=e.target.checked;if(!port){alert('Wybierz port edge.');e.target.checked=false;return;}if(!confirm((enabled?'Włączyć':'Wyłączyć')+' edgeport na '+port+'? Włączaj wyłącznie na portach końcowych.')){e.target.checked=!enabled;return;}try{const d=await api('/api/edgeport',{port,enabled});$('stp-output').textContent=d.output||'Polecenie przekazane';}catch(x){e.target.checked=!enabled;alert(x.message);}};
+
+function openPortDialog(port){
+ const dialog=$('port-dialog');if(!dialog)return;
+ $('cfg-port').value=port||$('cfg-port').value;
+ $('cfg-description').value='';
+ $('cfg-mode').value='access';$('cfg-access-vlan').disabled=false;$('cfg-allowed').disabled=true;$('cfg-native').disabled=true;
+ const current=latestPorts.find(p=>p.name===$('cfg-port').value);
+ if(current&&current.description)$('cfg-description').value=current.description;
+ if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');
+}
+$('close-port-dialog').onclick=()=>{const d=$('port-dialog');if(d.close)d.close();else d.removeAttribute('open');};
+$('port-dialog').addEventListener('click',e=>{if(e.target===$('port-dialog'))$('port-dialog').close();});
 $('cfg-mode').onchange=()=>{const trunk=$('cfg-mode').value==='trunk';$('cfg-access-vlan').disabled=trunk;$('cfg-allowed').disabled=!trunk;$('cfg-native').disabled=!trunk;};
-$('ports').addEventListener('click',e=>{const b=e.target.closest('[data-config-port]');if(!b)return;$('cfg-port').value=b.dataset.configPort;$('port-settings').scrollIntoView({behavior:'smooth'});});
-$('port-map').addEventListener('click',e=>{const b=e.target.closest('[data-map-port]');if(!b)return;$('cfg-port').value=b.dataset.mapPort;$('port-settings').scrollIntoView({behavior:'smooth'});});
-$('dashboard-ports').onclick=()=>$('ports-section').scrollIntoView({behavior:'smooth'});
+$('ports').addEventListener('click',e=>{const b=e.target.closest('[data-config-port]');if(!b)return;openPortDialog(b.dataset.configPort);});
+$('port-map').addEventListener('click',e=>{const b=e.target.closest('[data-map-port]');if(!b)return;openPortDialog(b.dataset.mapPort);});
+$('dashboard-ports').onclick=()=>{history.replaceState(null,'','#ports-section');activatePage('#ports-section');};
 $('dashboard-vlans').onclick=()=>$('show-vlans').click();
 window.addEventListener('resize',drawTraffic);
 $('detail-port').onchange=renderPortDetail;$('port-history-select').onchange=renderPortHistory;
@@ -111,7 +157,7 @@ $('load-logs').onclick=()=>loadDiagnostic('show log tail 30','logs-output');
 $('create-vlan').onclick=async()=>{const id=Number($('vlan-id').value),name=$('vlan-name').value;try{const p=await api('/api/vlan/preview',{id,name,delete:false});const summary='PODGLĄD — bez zmian na switchu\\n\\n'+p.commands.join('\\n')+'\\n\\n'+p.warnings.join('\\n');$('vlan-output').textContent=summary;if(!confirm(summary+'\\n\\nWysłać te komendy do przełącznika?'))return;const d=await api('/api/vlan',{id,name,delete:false});$('vlan-output').textContent=d.output||'Polecenie przekazane';alert('Polecenie utworzenia VLAN wysłane. Zweryfikuj listę VLAN.');}catch(e){alert(e.message);}};
 $('delete-vlan').onclick=async()=>{const id=Number($('vlan-id').value);try{const p=await api('/api/vlan/preview',{id,delete:true});const summary='PODGLĄD — bez zmian na switchu\\n\\n'+p.commands.join('\\n')+'\\n\\n'+p.warnings.join('\\n');$('vlan-output').textContent=summary;if(!confirm(summary+'\\n\\nCzy na pewno wykonać?'))return;const d=await api('/api/vlan',{id,delete:true});$('vlan-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
 $('show-vlans').onclick=async()=>{try{const d=await api('/api/command',{command:'show vlan all'});$('vlan-output').textContent=d.output||'Brak danych';}catch(e){$('vlan-output').textContent=e.message;}};
-$('apply-port-settings').onclick=async()=>{const payload={port:$('cfg-port').value,mode:$('cfg-mode').value,accessVlan:Number($('cfg-access-vlan').value),allowed:$('cfg-allowed').value,native:Number($('cfg-native').value),speed:$('cfg-speed').value,duplex:$('cfg-duplex').value,description:$('cfg-description').value};if(!payload.port){alert('Wybierz port.');return;}try{const p=await api('/api/port/preview',payload);const summary='PODGLĄD — bez zmian na switchu\\n\\n'+p.commands.join('\\n')+'\\n\\n'+p.warnings.join('\\n');$('output').textContent=summary;if(!confirm(summary+'\\n\\nWysłać te komendy do przełącznika?'))return;const d=await api('/api/port/settings',payload);$('output').textContent=d.output||'Polecenie przekazane';addEvent('Zmieniono konfigurację '+payload.port);alert('Komendy przekazane. Zweryfikuj konfigurację portu w CLI.');await load();}catch(e){alert(e.message);}};
+$('apply-port-settings').onclick=async()=>{const payload={port:$('cfg-port').value,mode:$('cfg-mode').value,accessVlan:Number($('cfg-access-vlan').value),allowed:$('cfg-allowed').value,native:Number($('cfg-native').value),speed:$('cfg-speed').value,duplex:$('cfg-duplex').value,description:$('cfg-description').value};if(!payload.port){alert('Wybierz port.');return;}try{const p=await api('/api/port/preview',payload);const summary='PODGLĄD — bez zmian na switchu\\n\\n'+p.commands.join('\\n')+'\\n\\n'+p.warnings.join('\\n');$('output').textContent=summary;if(!confirm(summary+'\\n\\nWysłać te komendy do przełącznika?'))return;const d=await api('/api/port/settings',payload);$('output').textContent=d.output||'Polecenie przekazane';addEvent('Zmieniono konfigurację '+payload.port);alert('Komendy przekazane. Zweryfikuj konfigurację portu w CLI.');$('port-dialog').close();await load();}catch(e){alert(e.message);}};
 $('refresh').onclick=load;$('filter').oninput=render;$('state-filter').onchange=render;
 $('ports').addEventListener('click',async e=>{const b=e.target.closest('[data-port]');if(!b)return;const action=b.dataset.action,port=b.dataset.port;if(!confirm((action==='disable'?'Wyłączyć':'Włączyć')+' port '+port+'?'))return;b.disabled=true;try{const d=await api('/api/port',{port,action});$('output').textContent=d.output||'Polecenie wysłane';addEvent('Port '+port+' — '+(action==='disable'?'wyłączono':'włączono'));await load();}catch(x){alert('Nie udało się zmienić portu: '+x.message);}finally{b.disabled=false;}});
 $('dhcp-toggle').onchange=async e=>{const enabled=e.target.checked;if(!confirm((enabled?'Włączyć':'Wyłączyć')+' klienta DHCP na VLAN 1? Zmiana adresu może zerwać połączenie.')){e.target.checked=!enabled;return;}e.target.disabled=true;try{const d=await api('/api/management-dhcp',{enabled});$('output').textContent=d.output||'Polecenie wysłane';alert('Polecenie przekazane. Sprawdź adres zarządzający switcha.');}catch(x){e.target.checked=!enabled;alert(x.message);}finally{e.target.disabled=false;}};

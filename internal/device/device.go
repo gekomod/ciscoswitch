@@ -41,7 +41,7 @@ func(s *Service)runConfig(cmds []string)(string,error){
  if e=ss.Shell();e!=nil{return "",e};for _,x:=range cmds{if _,e=fmt.Fprintln(in,x);e!=nil{return out.String(),e}};_ = in.Close()
  done:=make(chan error,1);go func(){done<-ss.Wait()}();select{case e=<-done:if e!=nil{return out.String(),fmt.Errorf("CLI: %w; %s",e,out.String())};case <-time.After(8*time.Second):_ = ss.Close();return out.String(),fmt.Errorf("timeout CLI")};return out.String(),nil
 }
-var allowed=[]string{"show system","show version","show interfaces status","show interfaces","show vlan","show ip interface brief","show lldp neighbors","show spanning-tree","show boot","show http"}
+var allowed=[]string{"show system","show version","show interfaces status","show interfaces","show vlan","show ip interface brief","show lldp neighbors","show spanning-tree","show boot","show http","show vlan all","show interface switchport","show running-config interface"}
 func(s *Service)RunReadOnly(cmd string)(string,error){ok:=false;for _,v:=range allowed{if cmd==v{ok=true;break}};if !ok{return "",fmt.Errorf("polecenie niedozwolone")};if s.cfg.Host==""||s.cfg.SSHUser==""{return "",fmt.Errorf("brak SWITCH_HOST lub SWITCH_SSH_USER")};c,e:=ssh.Dial("tcp",net.JoinHostPort(s.cfg.Host,s.cfg.SSHPort),&ssh.ClientConfig{User:s.cfg.SSHUser,Auth:[]ssh.AuthMethod{ssh.Password(s.cfg.SSHPassword)},HostKeyCallback:ssh.InsecureIgnoreHostKey(),HostKeyAlgorithms:[]string{ssh.KeyAlgoRSA},Timeout:s.cfg.Timeout});if e!=nil{return "",e};defer c.Close();ss,e:=c.NewSession();if e!=nil{return "",e};defer ss.Close();b,e:=ss.Output(cmd);return string(b),e
 }
 func port(v string,f int)int{n,e:=strconv.Atoi(v);if e!=nil||n<1||n>65535{return f};return n}
@@ -94,7 +94,7 @@ func (s *Service) ConfigurePortSettings(name,mode string,access int,allowed stri
   if native<1||native>4094{return "",fmt.Errorf("native VLAN musi być z zakresu 1–4094")}
   found:=false;for _,v:=range vlans{if v==native{found=true}}
   if !found{return "",fmt.Errorf("native VLAN musi znajdować się na liście dozwolonych VLAN-ów")}
-  cmds=append(cmds,"switchport mode trunk","switchport trunk allowed vlan none", "switchport trunk allowed vlan add "+allowed,fmt.Sprintf("switchport trunk native vlan %d",native))
+  canonical:=make([]string,0,len(vlans));for _,v:=range vlans{canonical=append(canonical,strconv.Itoa(v))};cmds=append(cmds,"switchport mode trunk","switchport trunk allowed vlan none", "switchport trunk allowed vlan add "+strings.Join(canonical,","),fmt.Sprintf("switchport trunk native vlan %d",native))
  }
  cmds=append(cmds,"end")
  return s.runConfig(cmds)

@@ -306,32 +306,32 @@ func (s *Service) ConfigureDHCPPool(name,network,mask,low,high,router,dns string
 func bytesCompare(a,b net.IP) int { for i:=0;i<4;i++ {if a[i]<b[i]{return -1};if a[i]>b[i]{return 1}};return 0 }
 
 func BuildVLANCommands(id int,name string,remove bool)([]string,error) {
- if id<2||id>4094{return "",fmt.Errorf("VLAN ID musi być z zakresu 2–4094; VLAN 1 jest domyślny")}
+ if id<2||id>4094{return nil,fmt.Errorf("VLAN ID musi być z zakresu 2–4094; VLAN 1 jest domyślny")}
  if remove{return []string{"configure terminal","vlan database",fmt.Sprintf("no vlan %d",id),"exit","end"},nil}
  name=strings.TrimSpace(name)
- if name!="" {ok,_:=regexp.MatchString("^[A-Za-z0-9_-]+$",name);if len(name)>16||!ok{return "",fmt.Errorf("nazwa VLAN: 1–16 znaków A-Z, a-z, 0-9, _ lub -")}}
+ if name!="" {ok,_:=regexp.MatchString("^[A-Za-z0-9_-]+$",name);if len(name)>16||!ok{return nil,fmt.Errorf("nazwa VLAN: 1–16 znaków A-Z, a-z, 0-9, _ lub -")}}
  cmd:=fmt.Sprintf("vlan %d state enable",id);if name!=""{cmd=fmt.Sprintf("vlan %d name %s state enable",id,name)}
  return []string{"configure terminal","vlan database",cmd,"exit","end"},nil
 }
 func BuildPortSettingsCommands(name,mode string,access int,allowed string,native int,speed,duplex,description string)([]string,error) {
- if !validPort(name){return "",fmt.Errorf("nieprawidłowy port")}
- if mode!="access"&&mode!="trunk"{return "",fmt.Errorf("tryb portu musi być access lub trunk")}
- if speed!="auto"&&speed!="10"&&speed!="100"&&speed!="1000"{return "",fmt.Errorf("prędkość musi wynosić auto, 10, 100 lub 1000 Mb/s")}
- if duplex!="auto"&&duplex!="full"&&duplex!="half"{return "",fmt.Errorf("duplex musi być auto, full lub half")}
+ if !validPort(name){return nil,fmt.Errorf("nieprawidłowy port")}
+ if mode!="access"&&mode!="trunk"{return nil,fmt.Errorf("tryb portu musi być access lub trunk")}
+ if speed!="auto"&&speed!="10"&&speed!="100"&&speed!="1000"{return nil,fmt.Errorf("prędkość musi wynosić auto, 10, 100 lub 1000 Mb/s")}
+ if duplex!="auto"&&duplex!="full"&&duplex!="half"{return nil,fmt.Errorf("duplex musi być auto, full lub half")}
  description=strings.TrimSpace(description)
  ok,_:=regexp.MatchString("^[A-Za-z0-9 _./:-]*$",description)
- if len(description)>64||!ok{return "",fmt.Errorf("opis portu: maks. 64 znaki; dozwolone litery łacińskie, cyfry, spacja i _ . / : -")}
+ if len(description)>64||!ok{return nil,fmt.Errorf("opis portu: maks. 64 znaki; dozwolone litery łacińskie, cyfry, spacja i _ . / : -")}
  cmds:=[]string{"configure terminal","interface "+name}
  if description==""{cmds=append(cmds,"no description")}else{cmds=append(cmds,"description "+description)}
  cmds=append(cmds,"speed "+speed,"duplex "+duplex,"switchport")
  if mode=="access" {
-  if access<1||access>4094{return "",fmt.Errorf("access VLAN musi być z zakresu 1–4094")}
+  if access<1||access>4094{return nil,fmt.Errorf("access VLAN musi być z zakresu 1–4094")}
   cmds=append(cmds,"switchport mode access",fmt.Sprintf("switchport access vlan %d",access))
  } else {
   vlans,e:=parseVLANList(allowed);if e!=nil{return "",e}
-  if native<1||native>4094{return "",fmt.Errorf("native VLAN musi być z zakresu 1–4094")}
+  if native<1||native>4094{return nil,fmt.Errorf("native VLAN musi być z zakresu 1–4094")}
   found:=false;for _,v:=range vlans{if v==native{found=true}}
-  if !found{return "",fmt.Errorf("native VLAN musi znajdować się na liście dozwolonych VLAN-ów")}
+  if !found{return nil,fmt.Errorf("native VLAN musi znajdować się na liście dozwolonych VLAN-ów")}
   canonical:=make([]string,0,len(vlans));for _,v:=range vlans{canonical=append(canonical,strconv.Itoa(v))}
   cmds=append(cmds,"switchport mode trunk","switchport trunk allowed vlan none","switchport trunk allowed vlan add "+strings.Join(canonical,","),fmt.Sprintf("switchport trunk native vlan %d",native))
  }

@@ -160,7 +160,7 @@ func (s *Service) SetManagementDHCP(on bool)(string,error) {
 }
 func (s *Service) SaveConfig()(string,error) { return s.runConfig([]string{"copy running-config startup-config"}) }
 
-var allowed=[]string{"show system","show system environment","show version","show cpu","show memory","show interfaces status","show interfaces","show vlan","show vlan all","show ip interface brief","show ip route","show arp","show lldp neighbors","show spanning-tree","show boot","show http","show interface switchport","show running-config interface","show etherchannel","show static-channel-group","show mac address-table","show log","show log tail 30","show system mac","show system serialnumber","show ip dhcp server summary","show ip dhcp binding","show running-config dhcp"}
+var allowed=[]string{"show system","show system environment","show version","show cpu","show memory","show interfaces status","show interfaces","show vlan","show vlan all","show ip interface brief","show ip route","show arp","show lldp neighbors","show snmp-server","show snmp-server community","show snmp-server user","show snmp-server group","show running-config snmp","show counter snmp-server","show spanning-tree","show boot","show http","show interface switchport","show running-config interface","show etherchannel","show static-channel-group","show mac address-table","show log","show log tail 30","show system mac","show system serialnumber","show ip dhcp server summary","show ip dhcp binding","show running-config dhcp"}
 // SystemInfo returns raw, read-only AlliedWare Plus diagnostics. Values are deliberately
 // kept as device output because available sensors and command formats vary by firmware.
 func (s *Service) SystemInfo() map[string]string {
@@ -186,6 +186,16 @@ func (s *Service) RunReadOnly(cmd string)(string,error) {
  if e!=nil{return "",e};defer c.Close()
  ss,e:=c.NewSession();if e!=nil{return "",e};defer ss.Close()
  b,e:=ss.Output(cmd);return string(b),e
+}
+
+func (s *Service) ConfigureSNMPTrapHost(address,community string,remove bool)(string,error){
+ ip:=net.ParseIP(strings.TrimSpace(address))
+ if ip==nil||ip.To4()==nil{return "",fmt.Errorf("adres odbiorcy trap musi być poprawnym IPv4")}
+ community=strings.TrimSpace(community)
+ if len(community)<1||len(community)>32||!regexp.MustCompile("^[A-Za-z0-9_.-]+$").MatchString(community){return "",fmt.Errorf("community: 1–32 znaków A-Z, a-z, 0-9, _ . -")}
+ command:="snmp-server host "+ip.To4().String()+" traps version 2c "+community
+ if remove{command="no "+command}
+ return s.runConfig([]string{"configure terminal",command,"end"})
 }
 
 func validProbeTarget(target string) bool {

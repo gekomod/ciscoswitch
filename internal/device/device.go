@@ -216,7 +216,7 @@ func (s *Service) ConfigureDHCPPool(name,network,mask,low,high,router,dns string
  if bits!=32||ones<1||ones>30{return "",fmt.Errorf("maska musi być poprawną maską IPv4 od /1 do /30")}
  ipnet:=&net.IPNet{IP:n.Mask(m),Mask:m}
  lo,hi,gw,ns:=net.ParseIP(low).To4(),net.ParseIP(high).To4(),net.ParseIP(router).To4(),net.ParseIP(dns).To4()
- if !ipnet.Contains(lo)||!ipnet.Contains(hi)||!ipnet.Contains(gw)||!ipnet.Contains(ns){return "",fmt.Errorf("zakres, brama i DNS muszą należeć do podanej podsieci")}
+ if !ipnet.Contains(lo)||!ipnet.Contains(hi)||!ipnet.Contains(gw){return "",fmt.Errorf("zakres i brama muszą należeć do podanej podsieci")};if !n.Equal(ipnet.IP){return "",fmt.Errorf("adres sieci musi być adresem sieci, np. 192.168.10.0") }
  if bytesCompare(lo,hi)>0{return "",fmt.Errorf("początek zakresu jest większy niż koniec")}
  if lo.Equal(ipnet.IP)||hi.Equal(ipnet.IP)||lo.Equal(net.IP{byte(n[0]|^m[0]),byte(n[1]|^m[1]),byte(n[2]|^m[2]),byte(n[3]|^m[3])}){return "",fmt.Errorf("zakres nie może zawierać adresu sieci ani broadcast")}
  if bytesCompare(gw,lo)>=0&&bytesCompare(gw,hi)<=0{return "",fmt.Errorf("wyłącz adres bramy z zakresu DHCP")}

@@ -161,7 +161,7 @@ func (s *Service) ConfigureVLAN(id int,name string,remove bool)(string,error) {
  cmd:=fmt.Sprintf("vlan %d state enable",id);if name!=""{cmd=fmt.Sprintf("vlan %d name %s state enable",id,name)}
  return s.runConfig([]string{"configure terminal","vlan database",cmd,"exit","end"})
 }
-func (s *Service) ConfigurePortSettings(name,mode string,access int,allowed,nativeRaw string,native int,speed,duplex,description string)(string,error) {
+func (s *Service) ConfigurePortSettings(name,mode string,access int,allowed string,native int,speed,duplex,description string)(string,error) {
  if !validPort(name){return "",fmt.Errorf("nieprawidłowy port")}
  if mode!="access"&&mode!="trunk"{return "",fmt.Errorf("tryb portu musi być access lub trunk")}
  if speed!="auto"&&speed!="10"&&speed!="100"&&speed!="1000"{return "",fmt.Errorf("prędkość musi wynosić auto, 10, 100 lub 1000 Mb/s")}

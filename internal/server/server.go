@@ -253,6 +253,7 @@ func backupRetentionFromEnv() int { n,err:=strconv.Atoi(os.Getenv("CONFIG_BACKUP
 func pruneConfigBackups(dir string, keep int) error {
  if keep < 1 { return fmt.Errorf("retention must be at least 1") }
  entries,err:=listConfigBackups(dir); if err!=nil{return err}
+ if len(entries) <= keep { return nil }
  for _,entry:=range entries[keep:] { if err:=os.Remove(filepath.Join(dir,entry.ID+".cfg"));err!=nil&&!os.IsNotExist(err){return err} }
  return nil
 }

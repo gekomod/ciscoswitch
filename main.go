@@ -2,6 +2,7 @@ package main
 
 import (
  "bufio"
+ "encoding/json"
  "path/filepath"
  "sync"
  "crypto/subtle"

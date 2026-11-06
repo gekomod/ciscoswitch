@@ -17,6 +17,7 @@ func main() {
  cfg := device.Config{
   Host: os.Getenv("SWITCH_HOST"), SSHPort: env("SWITCH_SSH_PORT","22"),
   SSHUser: os.Getenv("SWITCH_SSH_USER"), SSHPassword: os.Getenv("SWITCH_SSH_PASSWORD"),
+  SSHHostKeyFingerprint: os.Getenv("SWITCH_SSH_HOST_KEY"),
   SNMPCommunity: os.Getenv("SWITCH_SNMP_COMMUNITY"), SNMPPort: env("SWITCH_SNMP_PORT","161"),
   Timeout: 4*time.Second,
  }

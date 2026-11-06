@@ -213,7 +213,12 @@ func (s *Service) RunReadOnly(cmd string)(string,error) {
 func (s *Service) ConfigureSSHUser(username,password string,privilege int,remove bool)(string,error){
  username=strings.TrimSpace(username)
  if len(username)<1||len(username)>32||!regexp.MustCompile("^[A-Za-z0-9_.-]+$").MatchString(username){return "",fmt.Errorf("login: 1–32 znaków A-Z, a-z, 0-9, _ . -")}
- if remove{return s.runConfig([]string{"configure terminal","no username "+username,"end"})}
+ if remove {
+  if strings.EqualFold(username, strings.TrimSpace(s.cfg.SSHUser)) {
+   return "", fmt.Errorf("nie można usunąć konta używanego przez panel (SWITCH_SSH_USER); najpierw skonfiguruj i przetestuj inne konto")
+  }
+  return s.runConfig([]string{"configure terminal","no username "+username,"end"})
+ }
  if privilege<1||privilege>15{return "",fmt.Errorf("poziom uprawnień musi wynosić 1–15")}
  if len(password)<8||len(password)>23||!regexp.MustCompile("^[A-Za-z0-9!@#$%^&*()_+={}.,:-]+$").MatchString(password){return "",fmt.Errorf("hasło musi mieć 8–23 znaki; dozwolone litery, cyfry i bezpieczne znaki specjalne")}
  if !regexp.MustCompile("[A-Z]").MatchString(password)||!regexp.MustCompile("[a-z]").MatchString(password)||!regexp.MustCompile("[0-9]").MatchString(password){return "",fmt.Errorf("hasło musi zawierać wielką i małą literę oraz cyfrę")}

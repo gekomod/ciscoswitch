@@ -10,7 +10,7 @@ function activatePage(hash){
  const navLinks=[...document.querySelectorAll('.sidebar .nav')];
  navLinks.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+targetId));
  const topbar=main.querySelector('.topbar');
- [...main.children].forEach(node=>{if(node===topbar)return;node.hidden=true;});
+ [...main.children].forEach(node=>{if(node===topbar||node.id==='port-dialog')return;node.hidden=true;});
  if(targetId==='overview'){
   ['overview','warning','network-dashboard'].forEach(id=>{const el=document.getElementById(id);if(el)el.hidden=false;});
   const metrics=main.querySelector('.metrics');if(metrics)metrics.hidden=false;

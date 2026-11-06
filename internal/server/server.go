@@ -163,6 +163,7 @@ type configBackup struct {
  CreatedAt time.Time `json:"createdAt"`
  Size int64 `json:"size"`
  SHA256 string `json:"sha256"`
+ Verified bool `json:"verified"`
 }
 
 func configBackupsHandler(run func(string) (string, error), dir string, retention int) http.Handler {
@@ -208,7 +209,28 @@ func writeConfigBackup(dir, content string, now time.Time) (configBackup, error)
  if _, err := os.Stat(path); err == nil { return configBackup{}, fmt.Errorf("backup id already exists") } else if !os.IsNotExist(err) { return configBackup{}, err }
  if err := os.Rename(tmpName, path); err != nil { return configBackup{}, err }
  sum := sha256.Sum256([]byte(content))
- return configBackup{ID:id, CreatedAt:now.UTC(), Size:int64(n), SHA256:hex.EncodeToString(sum[:])}, nil
+ digest := hex.EncodeToString(sum[:])
+ if err := writeBackupDigest(dir, id, digest); err != nil {
+  _ = os.Remove(path)
+  return configBackup{}, err
+ }
+ return configBackup{ID:id, CreatedAt:now.UTC(), Size:int64(n), SHA256:digest, Verified:true}, nil
+}
+
+
+// writeBackupDigest stores the expected SHA-256 separately from the configuration
+// file so later reads can detect accidental or unauthorized modification.
+func writeBackupDigest(dir, id, digest string) error {
+ path := filepath.Join(dir, id+".sha256")
+ tmp, err := os.CreateTemp(dir, ".digest-*.tmp")
+ if err != nil { return err }
+ tmpName := tmp.Name()
+ defer os.Remove(tmpName)
+ if err := tmp.Chmod(0600); err != nil { _ = tmp.Close(); return err }
+ if _, err := tmp.WriteString(digest+"\\n"); err != nil { _ = tmp.Close(); return err }
+ if err := tmp.Sync(); err != nil { _ = tmp.Close(); return err }
+ if err := tmp.Close(); err != nil { return err }
+ return os.Rename(tmpName, path)
 }
 
 func listConfigBackups(dir string) ([]configBackup, error) {
@@ -225,7 +247,10 @@ func listConfigBackups(dir string) ([]configBackup, error) {
   data, err := os.ReadFile(filepath.Join(dir, file.Name()))
   if err != nil { continue }
   sum := sha256.Sum256(data)
-  entries = append(entries, configBackup{ID:id, CreatedAt:info.ModTime().UTC(), Size:info.Size(), SHA256:hex.EncodeToString(sum[:])})
+  actual := hex.EncodeToString(sum[:])
+  expected, digestErr := os.ReadFile(filepath.Join(dir, id+".sha256"))
+  verified := digestErr == nil && strings.TrimSpace(string(expected)) == actual
+  entries = append(entries, configBackup{ID:id, CreatedAt:info.ModTime().UTC(), Size:info.Size(), SHA256:actual, Verified:verified})
  }
  sort.Slice(entries, func(i,j int) bool { return entries[i].CreatedAt.After(entries[j].CreatedAt) })
  return entries, nil
@@ -246,6 +271,20 @@ func configBackupDownloadHandler(dir string) http.Handler {
   data, err := os.ReadFile(path)
   if os.IsNotExist(err) { http.NotFound(w, r); return }
   if err != nil { http.Error(w, "backup read failed", http.StatusInternalServerError); return }
+  expected, digestErr := os.ReadFile(filepath.Join(dir, id+".sha256"))
+  if digestErr == nil {
+   sum := sha256.Sum256(data)
+   if strings.TrimSpace(string(expected)) != hex.EncodeToString(sum[:]) {
+    http.Error(w, "backup integrity check failed; download blocked", http.StatusConflict)
+    return
+   }
+   w.Header().Set("X-Backup-Integrity", "verified")
+  } else if os.IsNotExist(digestErr) {
+   w.Header().Set("X-Backup-Integrity", "unverified-legacy")
+  } else {
+   http.Error(w, "backup integrity metadata read failed", http.StatusInternalServerError)
+   return
+  }
   w.Header().Set("Content-Type", "text/plain; charset=utf-8")
   w.Header().Set("Content-Disposition", `attachment; filename="running-config-`+id+`.txt"`)
   w.Header().Set("Cache-Control", "no-store")
@@ -276,7 +315,7 @@ func pruneConfigBackups(dir string, keep int) error {
  if keep < 1 { return fmt.Errorf("retention must be at least 1") }
  entries,err:=listConfigBackups(dir); if err!=nil{return err}
  if len(entries) <= keep { return nil }
- for _,entry:=range entries[keep:] { if err:=os.Remove(filepath.Join(dir,entry.ID+".cfg"));err!=nil&&!os.IsNotExist(err){return err} }
+ for _,entry:=range entries[keep:] { if err:=os.Remove(filepath.Join(dir,entry.ID+".cfg"));err!=nil&&!os.IsNotExist(err){return err}; if err:=os.Remove(filepath.Join(dir,entry.ID+".sha256"));err!=nil&&!os.IsNotExist(err){return err} }
  return nil
 }
 

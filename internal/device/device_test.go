@@ -49,3 +49,10 @@ func TestParsePortNumbersIncludesSFPPlusPorts(t *testing.T) {
  want:=[]int{1,48,51,52}
  if !reflect.DeepEqual(got,want) { t.Fatalf("got %v, want %v",got,want) }
 }
+
+func TestConfigureSSHUserCannotDeletePanelAccount(t *testing.T) {
+ s:=New(Config{SSHUser:"manager"})
+ if _,err:=s.ConfigureSSHUser("manager","",0,true);err==nil {
+  t.Fatal("expected active panel SSH account deletion to be blocked")
+ }
+}

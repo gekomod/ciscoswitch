@@ -6,6 +6,10 @@ import (
  "path/filepath"
  "sync"
  "crypto/subtle"
+ "crypto/rand"
+ "encoding/hex"
+ "encoding/json"
+ "fmt"
  "log"
  "net/http"
  "net/url"
@@ -38,7 +42,7 @@ func main() {
  if panelUser == "" || len(panelPassword) < 8 {
   log.Fatal("Wymagane PANEL_USER oraz PANEL_PASSWORD (minimum 8 znaków); panel nie zostanie uruchomiony bez uwierzytelnienia")
  }
- handler := securityHeaders(auditLog(basicAuth(mux, panelUser, panelPassword), env("AUDIT_LOG_PATH", filepath.Join("data", "audit.jsonl"))))
+ handler := securityHeaders(auditLog(sessionAuth(mux, panelUser, panelPassword), env("AUDIT_LOG_PATH", filepath.Join("data", "audit.jsonl"))))
  log.Printf("CiscoSwitch Manager listening on http://%s (switch=%s, snmp-version=%s, community=%s)",addr,cfg.Host,snmpMode(cfg),masked(cfg.SNMPCommunity))
  httpServer := &http.Server{
   Addr: addr,
@@ -62,30 +66,100 @@ func snmpMode(c device.Config)string{v:=strings.TrimSpace(c.SNMPVersion);if v=="
 func masked(v string)string{if v==""{return "nieustawione"};return "ustawione"}
 func securityHeaders(next http.Handler)http.Handler{return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){w.Header().Set("X-Content-Type-Options","nosniff");w.Header().Set("X-Frame-Options","DENY");w.Header().Set("Referrer-Policy","no-referrer");w.Header().Set("Content-Security-Policy","default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:");next.ServeHTTP(w,r)})}
 
-func basicAuth(next http.Handler, username, password string) http.Handler {
- return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-  if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
-   origin := r.Header.Get("Origin")
-   if origin != "" {
-    u, err := url.Parse(origin)
-    if err != nil || !strings.EqualFold(u.Host, r.Host) {
-     http.Error(w, "forbidden origin", http.StatusForbidden)
-     return
-    }
-   }
+
+const panelSessionCookie = "switch_panel_session"
+const panelSessionTTL = 12 * time.Hour
+
+type panelSession struct { expires time.Time }
+type panelSessions struct {
+ mu sync.Mutex
+ values map[string]panelSession
+}
+
+func (s *panelSessions) create() (string,error) {
+ raw:=make([]byte,32)
+ if _,err:=rand.Read(raw);err!=nil{return "",err}
+ token:=hex.EncodeToString(raw)
+ s.mu.Lock()
+ if s.values==nil{s.values=make(map[string]panelSession)}
+ now:=time.Now()
+ for key,value:=range s.values{if now.After(value.expires){delete(s.values,key)}}
+ s.values[token]=panelSession{expires:now.Add(panelSessionTTL)}
+ s.mu.Unlock()
+ return token,nil
+}
+func (s *panelSessions) valid(token string) bool {
+ if len(token)!=64{return false}
+ s.mu.Lock();defer s.mu.Unlock()
+ value,ok:=s.values[token]
+ if !ok{return false}
+ if time.Now().After(value.expires){delete(s.values,token);return false}
+ return true
+}
+func (s *panelSessions) revoke(token string) {
+ s.mu.Lock();delete(s.values,token);s.mu.Unlock()
+}
+
+func sessionAuth(next http.Handler, username, password string) http.Handler {
+ sessions:=&panelSessions{values:make(map[string]panelSession)}
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request) {
+  path:=r.URL.Path
+  if path=="/login" || path=="/login/" {
+   if r.Method!=http.MethodGet && r.Method!=http.MethodHead {http.Error(w,"method not allowed",405);return}
+   r.URL.Path="/login.html"
+   next.ServeHTTP(w,r);return
   }
-  user, pass, ok := r.BasicAuth()
-  userOK := subtle.ConstantTimeCompare([]byte(user), []byte(username)) == 1
-  passOK := subtle.ConstantTimeCompare([]byte(pass), []byte(password)) == 1
-  if !ok || !userOK || !passOK {
-   w.Header().Set("WWW-Authenticate", `Basic realm="Switch Manager", charset="UTF-8"`)
-   w.Header().Set("Cache-Control", "no-store")
-   http.Error(w, "authentication required", http.StatusUnauthorized)
+  if path=="/login.css" || path=="/login.js" {
+   next.ServeHTTP(w,r);return
+  }
+  if path=="/api/login" {
+   if r.Method!=http.MethodPost {http.Error(w,"method not allowed",405);return}
+   if !sameOrigin(r) {http.Error(w,"forbidden origin",http.StatusForbidden);return}
+   r.Body=http.MaxBytesReader(w,r.Body,2048)
+   var credentials struct { Username string `json:"username"`; Password string `json:"password"` }
+   if json.NewDecoder(r.Body).Decode(&credentials)!=nil {http.Error(w,"invalid credentials",http.StatusUnauthorized);return}
+   userOK:=subtle.ConstantTimeCompare([]byte(credentials.Username),[]byte(username))==1
+   passOK:=subtle.ConstantTimeCompare([]byte(credentials.Password),[]byte(password))==1
+   if !userOK || !passOK {w.Header().Set("Cache-Control","no-store");http.Error(w,"Nieprawidłowy login lub hasło.",http.StatusUnauthorized);return}
+   token,err:=sessions.create()
+   if err!=nil {http.Error(w,"Nie można utworzyć sesji.",http.StatusInternalServerError);return}
+   http.SetCookie(w,&http.Cookie{Name:panelSessionCookie,Value:token,Path:"/",HttpOnly:true,Secure:r.TLS!=nil||strings.EqualFold(r.Header.Get("X-Forwarded-Proto"),"https"),SameSite:http.SameSiteStrictMode,MaxAge:int(panelSessionTTL.Seconds())})
+   w.Header().Set("Content-Type","application/json")
+   w.Header().Set("Cache-Control","no-store")
+   _=json.NewEncoder(w).Encode(map[string]any{"ok":true,"expiresIn":int(panelSessionTTL.Seconds())})
    return
   }
-  next.ServeHTTP(w, r)
+  if path=="/api/logout" {
+   if r.Method!=http.MethodPost {http.Error(w,"method not allowed",405);return}
+   if !sameOrigin(r) {http.Error(w,"forbidden origin",http.StatusForbidden);return}
+   cookie,err:=r.Cookie(panelSessionCookie)
+   if err==nil {sessions.revoke(cookie.Value)}
+   clearPanelCookie(w,r)
+   w.Header().Set("Content-Type","application/json")
+   _=json.NewEncoder(w).Encode(map[string]bool{"ok":true})
+   return
+  }
+  cookie,err:=r.Cookie(panelSessionCookie)
+  if err!=nil || !sessions.valid(cookie.Value) {
+   w.Header().Set("Cache-Control","no-store")
+   if strings.HasPrefix(path,"/api/") {http.Error(w,"session expired",http.StatusUnauthorized);return}
+   http.Redirect(w,r,"/login",http.StatusSeeOther);return
+  }
+  if !sameOrigin(r) {http.Error(w,"forbidden origin",http.StatusForbidden);return}
+  next.ServeHTTP(w,r)
  })
 }
+func sameOrigin(r *http.Request) bool {
+ if r.Method==http.MethodGet || r.Method==http.MethodHead || r.Method==http.MethodOptions {return true}
+ origin:=r.Header.Get("Origin")
+ if origin=="" {return true}
+ u,err:=url.Parse(origin)
+ return err==nil && strings.EqualFold(u.Host,r.Host) && (u.Scheme=="http"||u.Scheme=="https")
+}
+func clearPanelCookie(w http.ResponseWriter,r *http.Request) {
+ http.SetCookie(w,&http.Cookie{Name:panelSessionCookie,Value:"",Path:"/",HttpOnly:true,Secure:r.TLS!=nil||strings.EqualFold(r.Header.Get("X-Forwarded-Proto"),"https"),SameSite:http.SameSiteStrictMode,MaxAge:-1})
+}
+
 
 
 type auditRecord struct {

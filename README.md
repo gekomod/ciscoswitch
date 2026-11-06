@@ -58,7 +58,7 @@ PANEL_PASSWORD=USE_A_RANDOM_PASSWORD_AT_LEAST_16_CHARS
 - Diagnostyka systemu: wersja, CPU, pamięć, środowisko, boot.
 - Routing statyczny i testy ping/traceroute.
 - SNMP: diagnostyka agenta i konfiguracja odbiorcy trapów v2c.
-- SSH: podgląd i zarządzanie lokalnymi użytkownikami.
+- SSH: podgląd i zarządzanie lokalnymi użytkownikami; panel blokuje usunięcie konta wskazanego w `SWITCH_SSH_USER`, aby nie odciąć własnego dostępu.
 - DHCP server/pule — składnia wymaga potwierdzenia na konkretnej wersji firmware przed użyciem produkcyjnym.
 
 ## Ważne

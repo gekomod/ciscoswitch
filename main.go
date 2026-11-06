@@ -35,8 +35,8 @@ func main() {
  mux := http.NewServeMux()
  server.Register(mux,svc)
  panelUser, panelPassword := os.Getenv("PANEL_USER"), os.Getenv("PANEL_PASSWORD")
- if panelUser == "" || len(panelPassword) < 16 {
-  log.Fatal("Wymagane PANEL_USER oraz PANEL_PASSWORD (minimum 16 znaków); panel nie zostanie uruchomiony bez uwierzytelnienia")
+ if panelUser == "" || len(panelPassword) < 8 {
+  log.Fatal("Wymagane PANEL_USER oraz PANEL_PASSWORD (minimum 8 znaków); panel nie zostanie uruchomiony bez uwierzytelnienia")
  }
  handler := securityHeaders(auditLog(basicAuth(mux, panelUser, panelPassword), env("AUDIT_LOG_PATH", filepath.Join("data", "audit.jsonl"))))
  log.Printf("CiscoSwitch Manager listening on http://%s (switch=%s, snmp-version=%s, community=%s)",addr,cfg.Host,snmpMode(cfg),masked(cfg.SNMPCommunity))

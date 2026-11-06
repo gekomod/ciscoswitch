@@ -21,7 +21,9 @@ type Port struct {
  Admin string `json:"admin"`
  Oper string `json:"oper"`
  Speed string `json:"speed"`
- MTU uint32 `json:"mtu"`\n InOctets uint64 `json:"inOctets"`\n OutOctets uint64 `json:"outOctets"`
+ MTU uint32 `json:"mtu"`
+ InOctets uint64 `json:"inOctets"`
+ OutOctets uint64 `json:"outOctets"`
 }
 type Status struct {
  Host string `json:"host"`
@@ -51,7 +53,9 @@ func (s *Service) Status() Status {
  mtu,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.4")
  speed,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.5")
  adm,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.7")
- op,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.8")\n inOctets,_:=walkCounter(&g,".1.3.6.1.2.1.31.1.1.1.6")\n outOctets,_:=walkCounter(&g,".1.3.6.1.2.1.31.1.1.1.10")
+ op,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.8")
+ inOctets,_:=walkCounter(&g,".1.3.6.1.2.1.31.1.1.1.6")
+ outOctets,_:=walkCounter(&g,".1.3.6.1.2.1.31.1.1.1.10")
  ix:=make([]int,0,len(d))
  for i:=range d { ix=append(ix,i) }
  sort.Ints(ix)

@@ -1,6 +1,7 @@
 package server
 
 import (
+ "encoding/json"
  "errors"
  "fmt"
  "os"
@@ -241,4 +242,27 @@ func TestLegacyBackupCanBeDownloadedAsUnverified(t *testing.T) {
  h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/config/backups/download?id="+id,nil))
  if rec.Code!=http.StatusOK{t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String())}
  if got:=rec.Header().Get("X-Backup-Integrity");got!="unverified-legacy"{t.Fatalf("integrity header=%q",got)}
+}
+
+func TestAuditHistoryReturnsOnlyLatest200Records(t *testing.T) {
+ path:=filepath.Join(t.TempDir(),"audit.jsonl")
+ file,err:=os.Create(path);if err!=nil{t.Fatal(err)}
+ for i:=0;i<205;i++ { fmt.Fprintf(file,`{"timestamp":"2026-11-06T12:00:00Z","username":"admin","method":"POST","path":"/api/test","status":200,"durationMs":%d}\n`,i) }
+ if err:=file.Close();err!=nil{t.Fatal(err)}
+ h:=auditHistoryHandler(path)
+ rec:=httptest.NewRecorder()
+ h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/audit",nil))
+ if rec.Code!=http.StatusOK{t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String())}
+ var items []auditHistoryRecord
+ if err:=json.Unmarshal(rec.Body.Bytes(),&items);err!=nil{t.Fatal(err)}
+ if len(items)!=200{t.Fatalf("records=%d want 200",len(items))}
+ if items[0].DurationMS!=5||items[199].DurationMS!=204{t.Fatalf("unexpected retained range: first=%d last=%d",items[0].DurationMS,items[199].DurationMS)}
+}
+
+func TestAuditHistoryRejectsLargeFile(t *testing.T) {
+ path:=filepath.Join(t.TempDir(),"audit.jsonl")
+ if err:=os.WriteFile(path,make([]byte,10<<20+1),0600);err!=nil{t.Fatal(err)}
+ rec:=httptest.NewRecorder()
+ auditHistoryHandler(path).ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/audit",nil))
+ if rec.Code!=http.StatusRequestEntityTooLarge{t.Fatalf("status=%d",rec.Code)}
 }

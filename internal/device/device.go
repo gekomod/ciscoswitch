@@ -305,15 +305,15 @@ func (s *Service) ConfigureDHCPPool(name,network,mask,low,high,router,dns string
 }
 func bytesCompare(a,b net.IP) int { for i:=0;i<4;i++ {if a[i]<b[i]{return -1};if a[i]>b[i]{return 1}};return 0 }
 
-func (s *Service) ConfigureVLAN(id int,name string,remove bool)(string,error) {
+func BuildVLANCommands(id int,name string,remove bool)([]string,error) {
  if id<2||id>4094{return "",fmt.Errorf("VLAN ID musi być z zakresu 2–4094; VLAN 1 jest domyślny")}
- if remove{return s.runConfig([]string{"configure terminal","vlan database",fmt.Sprintf("no vlan %d",id),"exit","end"})}
+ if remove{return []string{"configure terminal","vlan database",fmt.Sprintf("no vlan %d",id),"exit","end"},nil}
  name=strings.TrimSpace(name)
  if name!="" {ok,_:=regexp.MatchString("^[A-Za-z0-9_-]+$",name);if len(name)>16||!ok{return "",fmt.Errorf("nazwa VLAN: 1–16 znaków A-Z, a-z, 0-9, _ lub -")}}
  cmd:=fmt.Sprintf("vlan %d state enable",id);if name!=""{cmd=fmt.Sprintf("vlan %d name %s state enable",id,name)}
- return s.runConfig([]string{"configure terminal","vlan database",cmd,"exit","end"})
+ return []string{"configure terminal","vlan database",cmd,"exit","end"},nil
 }
-func (s *Service) ConfigurePortSettings(name,mode string,access int,allowed string,native int,speed,duplex,description string)(string,error) {
+func BuildPortSettingsCommands(name,mode string,access int,allowed string,native int,speed,duplex,description string)([]string,error) {
  if !validPort(name){return "",fmt.Errorf("nieprawidłowy port")}
  if mode!="access"&&mode!="trunk"{return "",fmt.Errorf("tryb portu musi być access lub trunk")}
  if speed!="auto"&&speed!="10"&&speed!="100"&&speed!="1000"{return "",fmt.Errorf("prędkość musi wynosić auto, 10, 100 lub 1000 Mb/s")}
@@ -336,7 +336,13 @@ func (s *Service) ConfigurePortSettings(name,mode string,access int,allowed stri
   cmds=append(cmds,"switchport mode trunk","switchport trunk allowed vlan none","switchport trunk allowed vlan add "+strings.Join(canonical,","),fmt.Sprintf("switchport trunk native vlan %d",native))
  }
  cmds=append(cmds,"end")
- return s.runConfig(cmds)
+ return cmds,nil
+}
+func (s *Service) ConfigureVLAN(id int,name string,remove bool)(string,error) {
+ cmds,err:=BuildVLANCommands(id,name,remove);if err!=nil{return "",err};return s.runConfig(cmds)
+}
+func (s *Service) ConfigurePortSettings(name,mode string,access int,allowed string,native int,speed,duplex,description string)(string,error) {
+ cmds,err:=BuildPortSettingsCommands(name,mode,access,allowed,native,speed,duplex,description);if err!=nil{return "",err};return s.runConfig(cmds)
 }
 func parsePortNumbers(raw string)([]int,error) {
  seen:=map[int]bool{};out:=[]int{}

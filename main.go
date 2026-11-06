@@ -2,14 +2,11 @@ package main
 
 import (
  "bufio"
- "encoding/json"
  "path/filepath"
  "sync"
  "crypto/subtle"
  "crypto/rand"
  "encoding/hex"
- "encoding/json"
- "fmt"
  "log"
  "net/http"
  "net/url"

@@ -9,19 +9,7 @@ import (
 
 func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/",http.FileServer(http.Dir("web")))
- m.HandleFunc("/api/config/export",func(w http.ResponseWriter,r *http.Request){
-  if r.Method!="GET"{http.Error(w,"method not allowed",405);return}
-  source:=r.URL.Query().Get("source")
-  command:="show running-config"
-  filename:="running-config.txt"
-  if source=="startup"{command="show startup-config";filename="startup-config.txt"}else if source!=""&&source!="running"{http.Error(w,"invalid source",400);return}
-  output,err:=svc.RunReadOnly(command)
-  if err!=nil{http.Error(w,err.Error(),502);return}
-  w.Header().Set("Content-Type","text/plain; charset=utf-8")
-  w.Header().Set("Content-Disposition",`attachment; filename="`+filename+`"`)
-  w.Header().Set("Cache-Control","no-store")
-  _,_=w.Write([]byte(output))
- })
+ m.Handle("/api/config/export", configExportHandler(svc.RunReadOnly))
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
  m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,2048);var q struct{Port string `json:"port"`;Action string `json:"action"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=svc.ConfigurePort(q.Port,q.Action);write(w,v,e)})
  m.HandleFunc("/api/management-dhcp",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,1024);var q struct{Enabled bool `json:"enabled"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=svc.SetManagementDHCP(q.Enabled);write(w,v,e)})
@@ -40,3 +28,34 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.HandleFunc("/api/command",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,4096);var q struct{Command string `json:"command"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=svc.RunReadOnly(strings.TrimSpace(q.Command));write(w,v,e)})
 }
 func write(w http.ResponseWriter,v string,e error){w.Header().Set("Content-Type","application/json");if e!=nil{w.WriteHeader(400);_ = json.NewEncoder(w).Encode(map[string]string{"error":e.Error(),"output":v});return};_ = json.NewEncoder(w).Encode(map[string]string{"output":v,"ok":"true"})}
+
+
+// configExportHandler keeps the export endpoint independently testable without a live switch.
+func configExportHandler(run func(string) (string, error)) http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+  if r.Method != http.MethodGet {
+   http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+   return
+  }
+  source := r.URL.Query().Get("source")
+  command, filename := "show running-config", "running-config.txt"
+  switch source {
+  case "", "running":
+  case "startup":
+   command, filename = "show startup-config", "startup-config.txt"
+  default:
+   http.Error(w, "invalid source", http.StatusBadRequest)
+   return
+  }
+  output, err := run(command)
+  if err != nil {
+   http.Error(w, "switch configuration export failed", http.StatusBadGateway)
+   return
+  }
+  w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+  w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+  w.Header().Set("Cache-Control", "no-store")
+  w.Header().Set("X-Content-Type-Options", "nosniff")
+  _, _ = w.Write([]byte(output))
+ })
+}

@@ -27,6 +27,7 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/api/config/backups", configBackupsHandler(svc.RunReadOnly, backupDir, retention))
  m.Handle("/api/config/backups/download", configBackupDownloadHandler(backupDir))
  m.Handle("/api/audit", auditHistoryHandler(os.Getenv("AUDIT_LOG_PATH")))
+ m.Handle("/api/monitor/history", monitorHistoryHandler(filepath.Join("data", "monitor-history.jsonl")))
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
  m.HandleFunc("/api/port/preview",func(w http.ResponseWriter,r *http.Request){
  if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}

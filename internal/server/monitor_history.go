@@ -23,10 +23,14 @@ type monitorRecord struct {
  State string `json:"state,omitempty"`
  RX float64 `json:"rx,omitempty"`
  TX float64 `json:"tx,omitempty"`
- ErrorDelta float64 `json:"errorDelta,omitempty"`
- DiscardDelta float64 `json:"discardDelta,omitempty"`
- ErrorTotal float64 `json:"errorTotal,omitempty"`
- DiscardTotal float64 `json:"discardTotal,omitempty"`
+ ErrorRXDelta float64 `json:"errorRxDelta,omitempty"`
+ ErrorTXDelta float64 `json:"errorTxDelta,omitempty"`
+ DiscardRXDelta float64 `json:"discardRxDelta,omitempty"`
+ DiscardTXDelta float64 `json:"discardTxDelta,omitempty"`
+ ErrorRXTotal float64 `json:"errorRxTotal,omitempty"`
+ ErrorTXTotal float64 `json:"errorTxTotal,omitempty"`
+ DiscardRXTotal float64 `json:"discardRxTotal,omitempty"`
+ DiscardTXTotal float64 `json:"discardTxTotal,omitempty"`
 }
 type monitorHistoryResponse struct { Events []monitorRecord `json:"events"`; Samples []monitorRecord `json:"samples"`; PortEvents []monitorRecord `json:"portEvents"`; CounterEvents []monitorRecord `json:"counterEvents"` }
 type monitorHistoryStore struct { path string; mu sync.Mutex }
@@ -61,7 +65,7 @@ func validateMonitorRecord(r monitorRecord) error {
   if r.State!="up" && r.State!="down" { return http.ErrNotSupported }
  case "counter":
   if len(r.Port)>64 || !strings.HasPrefix(r.Port,"port") || strings.ContainsAny(r.Port," <>\\\"'") { return http.ErrNotSupported }
-  values:=[]float64{r.ErrorDelta,r.DiscardDelta,r.ErrorTotal,r.DiscardTotal}; for _,v:=range values { if math.IsNaN(v)||math.IsInf(v,0)||v<0 { return http.ErrNotSupported } }; if r.ErrorDelta==0 && r.DiscardDelta==0 { return http.ErrNotSupported }
+  values:=[]float64{r.ErrorRXDelta,r.ErrorTXDelta,r.DiscardRXDelta,r.DiscardTXDelta,r.ErrorRXTotal,r.ErrorTXTotal,r.DiscardRXTotal,r.DiscardTXTotal}; for _,v:=range values { if math.IsNaN(v)||math.IsInf(v,0)||v<0 { return http.ErrNotSupported } }; if r.ErrorRXDelta==0 && r.ErrorTXDelta==0 && r.DiscardRXDelta==0 && r.DiscardTXDelta==0 { return http.ErrNotSupported }
  case "sample":
   if math.IsNaN(r.RX)||math.IsNaN(r.TX)||math.IsInf(r.RX,0)||math.IsInf(r.TX,0)||r.RX<0||r.TX<0 { return http.ErrNotSupported }
  default: return http.ErrNotSupported

@@ -5,6 +5,7 @@ import (
  "crypto/sha256"
  "encoding/hex"
  "fmt"
+ "strconv"
  "os"
  "path/filepath"
  "sort"
@@ -20,7 +21,9 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/api/config/compare", configCompareHandler(svc.RunReadOnly))
  backupDir := os.Getenv("CONFIG_BACKUP_DIR")
  if backupDir == "" { backupDir = filepath.Join("data", "config-backups") }
- m.Handle("/api/config/backups", configBackupsHandler(svc.RunReadOnly, backupDir))
+ retention := 100
+ if raw := os.Getenv("CONFIG_BACKUP_RETENTION"); raw != "" { if n, err := strconv.Atoi(raw); err == nil && n >= 1 && n <= 10000 { retention = n } }
+ m.Handle("/api/config/backups", configBackupsHandler(svc.RunReadOnly, backupDir, retention))
  m.Handle("/api/config/backups/download", configBackupDownloadHandler(backupDir))
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
  m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,2048);var q struct{Port string `json:"port"`;Action string `json:"action"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigurePort(q.Port,q.Action)});write(w,v,e)})
@@ -140,7 +143,7 @@ type configBackup struct {
  SHA256 string `json:"sha256"`
 }
 
-func configBackupsHandler(run func(string) (string, error), dir string) http.Handler {
+func configBackupsHandler(run func(string) (string, error), dir string, retention int) http.Handler {
  return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
   switch r.Method {
   case http.MethodGet:
@@ -155,6 +158,7 @@ func configBackupsHandler(run func(string) (string, error), dir string) http.Han
    if strings.TrimSpace(output) == "" { http.Error(w, "switch returned an empty configuration; backup not created", http.StatusBadGateway); return }
    entry, err := writeConfigBackup(dir, output, time.Now().UTC())
    if err != nil { http.Error(w, "configuration backup could not be stored", http.StatusInternalServerError); return }
+   if err := pruneConfigBackups(dir, retention); err != nil { http.Error(w, "backup saved but retention cleanup failed", http.StatusInternalServerError); return }
    w.Header().Set("Content-Type", "application/json; charset=utf-8")
    w.Header().Set("Cache-Control", "no-store")
    w.WriteHeader(http.StatusCreated)
@@ -238,5 +242,17 @@ func runWithPreChangeBackup(dir string, run func(string) (string, error), change
  if _, err := writeConfigBackup(dir, content, time.Now().UTC()); err != nil {
   return "", fmt.Errorf("zmiana zablokowana: nie udało się zapisać kopii bezpieczeństwa: %w", err)
  }
+ if err := pruneConfigBackups(dir, backupRetentionFromEnv()); err != nil {
+  return "", fmt.Errorf("zmiana zablokowana: kopia została zapisana, ale porządkowanie historii nie powiodło się: %w", err)
+ }
  return change()
+}
+
+func backupRetentionFromEnv() int { n,err:=strconv.Atoi(os.Getenv("CONFIG_BACKUP_RETENTION")); if err!=nil||n<1||n>10000{return 100};return n }
+
+func pruneConfigBackups(dir string, keep int) error {
+ if keep < 1 { return fmt.Errorf("retention must be at least 1") }
+ entries,err:=listConfigBackups(dir); if err!=nil{return err}
+ for _,entry:=range entries[keep:] { if err:=os.Remove(filepath.Join(dir,entry.ID+".cfg"));err!=nil&&!os.IsNotExist(err){return err} }
+ return nil
 }

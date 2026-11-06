@@ -125,7 +125,7 @@ func state(v uint32)string { switch v {case 1:return "up";case 2:return "down";c
 func validPort(v string)bool {
  if !strings.HasPrefix(v,"port1.0.") {return false}
  n,e:=strconv.Atoi(strings.TrimPrefix(v,"port1.0."))
- return e==nil&&n>=1&&n<=50
+ return e==nil&&n>=1&&n<=52
 }
 func port(v string,f int)int { n,e:=strconv.Atoi(v);if e!=nil||n<1||n>65535{return f};return n }
 
@@ -335,7 +335,7 @@ func (s *Service) ConfigurePortSettings(name,mode string,access int,allowed stri
 }
 func parsePortNumbers(raw string)([]int,error) {
  seen:=map[int]bool{};out:=[]int{}
- for _,p:=range strings.Split(raw,",") {p=strings.TrimSpace(p);n,e:=strconv.Atoi(p);if e!=nil||n<1||n>50{return nil,fmt.Errorf("porty podaj jako listę numerów 1–50, np. 5,6")};if !seen[n]{seen[n]=true;out=append(out,n)}}
+ for _,p:=range strings.Split(raw,",") {p=strings.TrimSpace(p);n,e:=strconv.Atoi(p);if e!=nil||n<1||n>52{return nil,fmt.Errorf("porty podaj jako listę numerów 1–52, np. 5,6,51,52")};if !seen[n]{seen[n]=true;out=append(out,n)}}
  if len(out)<2{return nil,fmt.Errorf("agregacja wymaga co najmniej dwóch portów")}
  sort.Ints(out);return out,nil
 }

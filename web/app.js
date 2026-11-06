@@ -27,6 +27,8 @@ $('dashboard-ports').onclick=()=>$('ports-section').scrollIntoView({behavior:'sm
 $('dashboard-vlans').onclick=()=>$('show-vlans').click();
 window.addEventListener('resize',drawTraffic);
 $('detail-port').onchange=renderPortDetail;
+async function refreshSystem(){const button=$('refresh-system');button.disabled=true;button.textContent='Odczytuję…';try{const d=await api('/api/system');for(const [key,id] of Object.entries({version:'sys-version',cpu:'sys-cpu',memory:'sys-memory',environment:'sys-environment',boot:'sys-boot'}))$(id).textContent=d[key]||'Brak danych';}catch(e){for(const id of ['sys-version','sys-cpu','sys-memory','sys-environment','sys-boot'])$(id).textContent='Błąd: '+e.message;}finally{button.disabled=false;button.textContent='Odczytaj ponownie';}}
+$('refresh-system').onclick=refreshSystem;
 async function loadDiagnostic(command,target){$(target).textContent='Pobieranie przez SSH…';try{const d=await api('/api/command',{command});$(target).textContent=d.output||'Brak danych';}catch(e){$(target).textContent=e.message;}}
 $('load-system').onclick=async()=>{await loadDiagnostic('show system','system-output');const env=await api('/api/command',{command:'show system environment'}).catch(e=>({error:e.message}));$('system-output').textContent+='\n\n--- show system environment ---\n'+(env.output||env.error||'Brak danych');};
 $('load-mac').onclick=()=>loadDiagnostic('show mac address-table','mac-output');

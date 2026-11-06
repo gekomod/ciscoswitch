@@ -2,6 +2,7 @@ package device
 
 import (
  "reflect"
+ "strings"
  "testing"
 )
 
@@ -37,7 +38,7 @@ func TestParsePortNumbers(t *testing.T) {
 }
 func TestConfigureSTPValidation(t *testing.T) {
  s:=New(Config{})
- if _,err:=s.ConfigureSTP("rstp",8192);err==nil{t.Fatal("valid values should pass validation then fail on missing SSH credentials")}
+ if _,err:=s.ConfigureSTP("rstp",8192);err==nil||!strings.Contains(err.Error(),"brak konfiguracji SSH"){t.Fatalf("valid values should pass validation and reach SSH config check; got %v",err)}
  if _,err:=s.ConfigureSTP("rapid",8192);err==nil{t.Fatal("invalid STP mode should be rejected")}
  if _,err:=s.ConfigureSTP("rstp",9000);err==nil{t.Fatal("invalid bridge priority should be rejected")}
 }

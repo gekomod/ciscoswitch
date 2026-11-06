@@ -21,7 +21,7 @@ type Port struct {
  Admin string `json:"admin"`
  Oper string `json:"oper"`
  Speed string `json:"speed"`
- MTU uint32 `json:"mtu"`
+ MTU uint32 `json:"mtu"`\n InOctets uint64 `json:"inOctets"`\n OutOctets uint64 `json:"outOctets"`
 }
 type Status struct {
  Host string `json:"host"`
@@ -51,12 +51,12 @@ func (s *Service) Status() Status {
  mtu,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.4")
  speed,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.5")
  adm,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.7")
- op,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.8")
+ op,_:=walkNum(&g,".1.3.6.1.2.1.2.2.1.8")\n inOctets,_:=walkCounter(&g,".1.3.6.1.2.1.31.1.1.1.6")\n outOctets,_:=walkCounter(&g,".1.3.6.1.2.1.31.1.1.1.10")
  ix:=make([]int,0,len(d))
  for i:=range d { ix=append(ix,i) }
  sort.Ints(ix)
  for _,i:=range ix {
-  p:=Port{Index:i,Name:d[i],Admin:state(adm[i]),Oper:state(op[i]),MTU:mtu[i]}
+  p:=Port{Index:i,Name:d[i],Admin:state(adm[i]),Oper:state(op[i]),MTU:mtu[i],InOctets:inOctets[i],OutOctets:outOctets[i]}
   if speed[i]>0 { p.Speed=fmt.Sprintf("%d Mb/s",speed[i]/1000000) }
   o.Ports=append(o.Ports,p)
  }
@@ -79,6 +79,26 @@ func walkNum(g *gosnmp.GoSNMP,oid string)(map[int]uint32,error) {
   a:=strings.Split(p.Name,".")
   i,x:=strconv.Atoi(a[len(a)-1]); if x!=nil{return nil}
   switch v:=p.Value.(type) { case uint:m[i]=uint32(v); case uint32:m[i]=v; case int:if v>0{m[i]=uint32(v)}; case int64:if v>0{m[i]=uint32(v)}; case uint64:m[i]=uint32(v) }
+  return nil
+ })
+ return m,e
+}
+func walkCounter(g *gosnmp.GoSNMP,oid string)(map[int]uint64,error) {
+ m:=map[int]uint64{}
+ e:=g.Walk(oid,func(p gosnmp.SnmpPDU)error {
+  a:=strings.Split(p.Name,".")
+  i,x:=strconv.Atoi(a[len(a)-1]); if x!=nil{return nil}
+  var n uint64
+  switch v:=p.Value.(type) {
+  case uint: n=uint64(v)
+  case uint32: n=uint64(v)
+  case uint64: n=v
+  case int: if v>0{n=uint64(v)}
+  case int64: if v>0{n=uint64(v)}
+  case []byte: n,_=strconv.ParseUint(strings.TrimSpace(string(v)),10,64)
+  default: n,_=strconv.ParseUint(fmt.Sprint(v),10,64)
+  }
+  m[i]=n
   return nil
  })
  return m,e

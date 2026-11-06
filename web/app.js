@@ -48,6 +48,13 @@ $('probe-trace').onclick=()=>runProbe('traceroute');
 
 async function refreshSNMP(){const jobs=[['show snmp-server','snmp-agent'],['show snmp-server community','snmp-communities'],['show snmp-server user','snmp-users'],['show counter snmp-server','snmp-counters'],['show running-config snmp','snmp-running']];for(const [command,id] of jobs){try{const d=await api('/api/command',{command});$(id).textContent=d.output||'Brak danych zwróconych przez switch.';}catch(e){$(id).textContent=e.message;}}}
 $('snmp-refresh').onclick=refreshSNMP;
+
+async function refreshSSH(){for(const [command,id] of [['show users','ssh-users'],['show ssh server','ssh-status'],['show running-config ssh','ssh-config']]){try{const d=await api('/api/command',{command});$(id).textContent=d.output||'Brak danych.';}catch(e){$(id).textContent=e.message;}}}
+$('ssh-refresh').onclick=refreshSSH;
+async function changeSSHUser(remove){const q={username:$('ssh-new-user').value.trim(),password:$('ssh-new-password').value,privilege:Number($('ssh-new-privilege').value),delete:remove};if(!q.username){alert('Wpisz login.');return;}if(!remove&&!q.password){alert('Wpisz nowe hasło.');return;}if(!confirm((remove?'Usunąć':'Utworzyć lub zaktualizować')+' konto '+q.username+'?'))return;const b=remove?$('ssh-user-delete'):$('ssh-user-save');b.disabled=true;try{const d=await api('/api/ssh/user',q);$('ssh-action-output').textContent=d.output||'Polecenie przekazane.';$('ssh-new-password').value='';await refreshSSH();}catch(e){$('ssh-action-output').textContent=e.message;}finally{b.disabled=false;}}
+$('ssh-user-save').onclick=()=>changeSSHUser(false);
+$('ssh-user-delete').onclick=()=>changeSSHUser(true);
+
 async function changeSNMPTrap(remove){const q={address:$('snmp-trap-ip').value.trim(),community:$('snmp-trap-community').value,delete:remove};if(!q.community){alert('Wpisz istniejącą community SNMP.');return;}if(!confirm((remove?'Usunąć':'Dodać')+' odbiorcę Trap '+q.address+' dla SNMPv2c?'))return;const b=remove?$('snmp-trap-remove'):$('snmp-trap-add');b.disabled=true;try{const d=await api('/api/snmp/trap-host',q);$('snmp-action-output').textContent=d.output||'Polecenie wysłane.';await refreshSNMP();}catch(e){$('snmp-action-output').textContent=e.message;}finally{b.disabled=false;}}
 $('snmp-trap-add').onclick=()=>changeSNMPTrap(false);
 $('snmp-trap-remove').onclick=()=>changeSNMPTrap(true);

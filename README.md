@@ -13,6 +13,7 @@ Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948
 - DHCP client dla interfejsu zarządzającego VLAN 1.
 - Zapis running-config do startup-config.
 - Eksport running-config i startup-config do plików tekstowych z poziomu panelu (wymaga logowania).
+- Porównanie running-config i startup-config z listą dodanych oraz usuniętych linii.
 - Diagnostyka CLI z allowlistą poleceń show.
 
 ## Instalacja — Debian 13
@@ -62,6 +63,6 @@ PANEL_PASSWORD=USE_A_RANDOM_PASSWORD_AT_LEAST_16_CHARS
 - DHCP server/pule — składnia wymaga potwierdzenia na konkretnej wersji firmware przed użyciem produkcyjnym.
 
 ## Ważne
-Eksport konfiguracji może zawierać sekrety i dane administracyjne — przechowuj pliki jak hasła. Przywracanie konfiguracji z pliku nie jest jeszcze udostępnione; nie wykonuj go przez ręczne wklejanie niezweryfikowanych komend.
+Eksport konfiguracji może zawierać sekrety i dane administracyjne — przechowuj pliki jak hasła. Porównanie konfiguracji nie zapisuje kopii i nie zmienia urządzenia. Przywracanie konfiguracji z pliku nie jest jeszcze udostępnione; nie wykonuj go przez ręczne wklejanie niezweryfikowanych komend.
 
 Nie wykonano jeszcze testów integracyjnych na fizycznym AT-GS948MX. CI sprawdza składnię JS, testy Go i kompilację, ale nie potwierdza obsługi każdej komendy przez urządzenie.

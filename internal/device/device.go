@@ -41,7 +41,7 @@ func(s *Service)runConfig(cmds []string)(string,error){
  if e=ss.Shell();e!=nil{return "",e};for _,x:=range cmds{if _,e=fmt.Fprintln(in,x);e!=nil{return out.String(),e}};_ = in.Close()
  done:=make(chan error,1);go func(){done<-ss.Wait()}();select{case e=<-done:if e!=nil{return out.String(),fmt.Errorf("CLI: %w; %s",e,out.String())};case <-time.After(8*time.Second):_ = ss.Close();return out.String(),fmt.Errorf("timeout CLI")};return out.String(),nil
 }
-var allowed=[]string{"show system","show version","show interfaces status","show interfaces","show vlan","show ip interface brief","show lldp neighbors","show spanning-tree","show boot","show http","show vlan all","show interface switchport","show running-config interface"}
+var allowed=[]string{"show system","show version","show interfaces status","show interfaces","show vlan","show ip interface brief","show lldp neighbors","show spanning-tree","show boot","show http","show vlan all","show interface switchport","show running-config interface","show etherchannel","show static-channel-group"}
 func(s *Service)RunReadOnly(cmd string)(string,error){ok:=false;for _,v:=range allowed{if cmd==v{ok=true;break}};if !ok{return "",fmt.Errorf("polecenie niedozwolone")};if s.cfg.Host==""||s.cfg.SSHUser==""{return "",fmt.Errorf("brak SWITCH_HOST lub SWITCH_SSH_USER")};c,e:=ssh.Dial("tcp",net.JoinHostPort(s.cfg.Host,s.cfg.SSHPort),&ssh.ClientConfig{User:s.cfg.SSHUser,Auth:[]ssh.AuthMethod{ssh.Password(s.cfg.SSHPassword)},HostKeyCallback:ssh.InsecureIgnoreHostKey(),HostKeyAlgorithms:[]string{ssh.KeyAlgoRSA},Timeout:s.cfg.Timeout});if e!=nil{return "",e};defer c.Close();ss,e:=c.NewSession();if e!=nil{return "",e};defer ss.Close();b,e:=ss.Output(cmd);return string(b),e
 }
 func port(v string,f int)int{n,e:=strconv.Atoi(v);if e!=nil||n<1||n>65535{return f};return n}
@@ -182,4 +182,30 @@ func (s *Service) ConfigurePortSettings(name,mode string,access int,allowed stri
  }
  cmds=append(cmds,"end")
  return s.runConfig(cmds)
+}
+
+func parsePortNumbers(raw string)([]int,error){
+ parts:=strings.Split(raw,",");seen:=map[int]bool{};out:=[]int{}
+ for _,p:=range parts{p=strings.TrimSpace(p);n,e:=strconv.Atoi(p);if e!=nil||n<1||n>50{return nil,fmt.Errorf("porty podaj jako listę numerów 1–50, np. 5,6")};if !seen[n]{seen[n]=true;out=append(out,n)}}
+ if len(out)<2{return nil,fmt.Errorf("agregacja wymaga co najmniej dwóch portów")}
+ sort.Ints(out);return out,nil
+}
+func (s *Service) ConfigureLACP(group int,rawPorts,mode string,remove bool)(string,error){
+ if group<1||group>32{return "",fmt.Errorf("numer grupy LACP musi być z zakresu 1–32")}
+ ports,e:=parsePortNumbers(rawPorts);if e!=nil{return "",e}
+ if mode!="active"&&mode!="passive"{return "",fmt.Errorf("tryb LACP musi być active lub passive")}
+ names:=make([]string,0,len(ports));for _,n:=range ports{names=append(names,fmt.Sprintf("port1.0.%d",n))}
+ cmd:="channel-group "+strconv.Itoa(group)+" mode "+mode
+ if remove{cmd="no channel-group"}
+ return s.runConfig([]string{"configure terminal","interface "+strings.Join(names,","),cmd,"end"})
+}
+func (s *Service) ConfigureSTP(mode string,priority int)(string,error){
+ if mode!="rstp"&&mode!="mstp"&&mode!="stp"{return "",fmt.Errorf("tryb STP musi być stp, rstp lub mstp")}
+ if priority<0||priority>61440||priority%4096!=0{return "",fmt.Errorf("priorytet musi być wielokrotnością 4096 w zakresie 0–61440")}
+ return s.runConfig([]string{"configure terminal","spanning-tree mode "+mode,fmt.Sprintf("spanning-tree priority %d",priority),"end"})
+}
+func (s *Service) SetPortEdgePort(name string,enabled bool)(string,error){
+ if !validPort(name){return "",fmt.Errorf("nieprawidłowy port")}
+ cmd:="no spanning-tree edgeport";if enabled{cmd="spanning-tree edgeport"}
+ return s.runConfig([]string{"configure terminal","interface "+name,cmd,"end"})
 }

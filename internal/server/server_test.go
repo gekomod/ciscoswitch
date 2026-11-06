@@ -2,6 +2,9 @@ package server
 
 import (
  "errors"
+ "os"
+ "path/filepath"
+ "time"
  "net/http"
  "net/http/httptest"
  "testing"
@@ -85,4 +88,45 @@ func TestConfigCompareHandlerReadsBothSources(t *testing.T) {
  if len(calls) != 2 { t.Fatalf("commands=%v", calls) }
  if !strings.Contains(rec.Body.String(), `"added":["hostname sw1"]`) { t.Fatalf("unexpected JSON: %s", rec.Body.String()) }
  if rec.Header().Get("Cache-Control") != "no-store" { t.Fatal("expected no-store") }
+}
+
+
+func TestConfigBackupCreatesRestrictedSnapshotAndListsIt(t *testing.T) {
+ dir := t.TempDir()
+ fixed := time.Date(2026, 11, 6, 12, 30, 0, 123, time.UTC)
+ entry, err := writeConfigBackup(dir, "hostname sw1\\n", fixed)
+ if err != nil { t.Fatal(err) }
+ if entry.Size == 0 || entry.SHA256 == "" { t.Fatalf("incomplete metadata: %+v", entry) }
+ info, err := os.Stat(dir)
+ if err != nil { t.Fatal(err) }
+ if info.Mode().Perm() != 0700 { t.Fatalf("directory permissions=%o", info.Mode().Perm()) }
+ fileInfo, err := os.Stat(filepath.Join(dir, entry.ID+".cfg"))
+ if err != nil { t.Fatal(err) }
+ if fileInfo.Mode().Perm() != 0600 { t.Fatalf("file permissions=%o", fileInfo.Mode().Perm()) }
+ listed, err := listConfigBackups(dir)
+ if err != nil { t.Fatal(err) }
+ if len(listed) != 1 || listed[0].ID != entry.ID { t.Fatalf("listed=%+v", listed) }
+}
+
+func TestConfigBackupsHandlerCreatesOnlyNonEmptyRunningConfig(t *testing.T) {
+ dir := t.TempDir()
+ calls := 0
+ h := configBackupsHandler(func(command string) (string, error) {
+  calls++
+  if command != "show running-config" { t.Fatalf("unexpected command %q", command) }
+  return "hostname sw1\\n", nil
+ }, dir)
+ rec := httptest.NewRecorder()
+ h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/config/backups", nil))
+ if rec.Code != http.StatusCreated { t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String()) }
+ if calls != 1 { t.Fatalf("calls=%d", calls) }
+ listed, err := listConfigBackups(dir)
+ if err != nil || len(listed) != 1 { t.Fatalf("listed=%+v err=%v", listed, err) }
+}
+
+func TestConfigBackupDownloadRejectsTraversal(t *testing.T) {
+ h := configBackupDownloadHandler(t.TempDir())
+ rec := httptest.NewRecorder()
+ h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/config/backups/download?id=../../.env", nil))
+ if rec.Code != http.StatusBadRequest { t.Fatalf("status=%d", rec.Code) }
 }

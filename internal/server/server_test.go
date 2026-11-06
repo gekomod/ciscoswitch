@@ -201,3 +201,17 @@ func TestProtectedPortsAreMatchedExactly(t *testing.T) {
  if !isProtectedPort("port1.0.49") || !isProtectedPort("port1.0.52"){t.Fatal("configured protected port not recognized")}
  if isProtectedPort("port1.0.4") || isProtectedPort("port1.0.50"){t.Fatal("partial port match must not protect unrelated interface")}
 }
+
+
+func TestManagementDHCPChangeRequiresExplicitOptIn(t *testing.T) {
+ t.Setenv("ALLOW_MANAGEMENT_DHCP_CHANGE","")
+ if managementDHCPChangeEnabled(){t.Fatal("management DHCP change must be disabled by default")}
+ t.Setenv("ALLOW_MANAGEMENT_DHCP_CHANGE","true")
+ if !managementDHCPChangeEnabled(){t.Fatal("explicit true should enable management DHCP change")}
+}
+
+func TestProtectedPortNumberList(t *testing.T) {
+ t.Setenv("PROTECTED_PORTS","port1.0.49,port1.0.52")
+ if !protectedPortNumberList("5,49"){t.Fatal("protected LACP member not detected")}
+ if protectedPortNumberList("5,6"){t.Fatal("unprotected ports incorrectly blocked")}
+}

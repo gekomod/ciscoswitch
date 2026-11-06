@@ -1,3 +1,4 @@
 /gs948mx-manager
 .env
 *.log
+/data/

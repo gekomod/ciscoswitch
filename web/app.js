@@ -41,7 +41,7 @@ $('load-system').onclick=async()=>{await loadDiagnostic('show system','system-ou
 
 let macFDBText='';
 async function refreshFDB(){try{const d=await api('/api/command',{command:'show mac address-table'});macFDBText=d.output||'';$('mac-output').textContent=macFDBText;$('mac-table-output').textContent=macFDBText||'Switch nie zwrócił wpisów FDB.';filterFDB();}catch(e){$('mac-output').textContent=e.message;$('mac-table-output').textContent=e.message;}}
-function filterFDB(){const q=$('mac-filter').value.trim().toLowerCase();const lines=macFDBText.split(/\\r?\\n/);$('mac-table-output').textContent=q?lines.filter(x=>x.toLowerCase().includes(q)).join('\\n')||'Brak pasujących wpisów.':macFDBText||'Brak danych.';}
+function filterFDB(){const q=$('mac-filter').value.trim().toLowerCase();const lines=macFDBText.split(/\r?\n/);$('mac-table-output').textContent=q?lines.filter(x=>x.toLowerCase().includes(q)).join('\n')||'Brak pasujących wpisów.':macFDBText||'Brak danych.';}
 $('load-mac').onclick=refreshFDB;
 $('mac-filter').addEventListener('input',filterFDB);
 $('load-lldp').onclick=async()=>{try{const d=await api('/api/command',{command:'show lldp neighbors'});$('lldp-output').textContent=d.output||'Brak wykrytych sąsiadów LLDP.';}catch(e){$('lldp-output').textContent=e.message;}};

@@ -38,7 +38,14 @@ $('dhcp-create').onclick=async()=>{const q={name:$('dhcp-name').value,network:$(
 
 async function loadDiagnostic(command,target){$(target).textContent='Pobieranie przez SSH…';try{const d=await api('/api/command',{command});$(target).textContent=d.output||'Brak danych';}catch(e){$(target).textContent=e.message;}}
 $('load-system').onclick=async()=>{await loadDiagnostic('show system','system-output');const env=await api('/api/command',{command:'show system environment'}).catch(e=>({error:e.message}));$('system-output').textContent+='\n\n--- show system environment ---\n'+(env.output||env.error||'Brak danych');};
-$('load-mac').onclick=()=>loadDiagnostic('show mac address-table','mac-output');
+
+let macFDBText='';
+async function refreshFDB(){try{const d=await api('/api/command',{command:'show mac address-table'});macFDBText=d.output||'';$('mac-output').textContent=macFDBText;$('mac-table-output').textContent=macFDBText||'Switch nie zwrócił wpisów FDB.';filterFDB();}catch(e){$('mac-output').textContent=e.message;$('mac-table-output').textContent=e.message;}}
+function filterFDB(){const q=$('mac-filter').value.trim().toLowerCase();const lines=macFDBText.split(/\\r?\\n/);$('mac-table-output').textContent=q?lines.filter(x=>x.toLowerCase().includes(q)).join('\\n')||'Brak pasujących wpisów.':macFDBText||'Brak danych.';}
+$('load-mac').onclick=refreshFDB;
+$('mac-filter').addEventListener('input',filterFDB);
+$('load-lldp').onclick=async()=>{try{const d=await api('/api/command',{command:'show lldp neighbors'});$('lldp-output').textContent=d.output||'Brak wykrytych sąsiadów LLDP.';}catch(e){$('lldp-output').textContent=e.message;}};
+
 $('load-logs').onclick=()=>loadDiagnostic('show log tail 30','logs-output');
 $('create-vlan').onclick=async()=>{const id=Number($('vlan-id').value),name=$('vlan-name').value;if(!confirm('Utworzyć VLAN '+id+(name?' ('+name+')':'')+'?'))return;try{const d=await api('/api/vlan',{id,name,delete:false});$('vlan-output').textContent=d.output||'Polecenie przekazane';alert('Polecenie utworzenia VLAN wysłane. Zweryfikuj listę VLAN.');}catch(e){alert(e.message);}};
 $('delete-vlan').onclick=async()=>{const id=Number($('vlan-id').value);if(!confirm('Usunąć VLAN '+id+'? To może przerwać ruch urządzeń przypisanych do VLAN.'))return;try{const d=await api('/api/vlan',{id,delete:true});$('vlan-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};

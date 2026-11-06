@@ -215,3 +215,30 @@ func TestProtectedPortNumberList(t *testing.T) {
  if !protectedPortNumberList("5,49"){t.Fatal("protected LACP member not detected")}
  if protectedPortNumberList("5,6"){t.Fatal("unprotected ports incorrectly blocked")}
 }
+
+func TestConfigBackupDetectsTamperingAndBlocksDownload(t *testing.T) {
+ dir:=t.TempDir()
+ fixed:=time.Date(2026,11,6,13,0,0,0,time.UTC)
+ entry,err:=writeConfigBackup(dir,"hostname original\\n",fixed)
+ if err!=nil{t.Fatal(err)}
+ listed,err:=listConfigBackups(dir)
+ if err!=nil||len(listed)!=1||!listed[0].Verified{t.Fatalf("fresh backup should verify: %+v err=%v",listed,err)}
+ if err:=os.WriteFile(filepath.Join(dir,entry.ID+".cfg"),[]byte("hostname changed\\n"),0600);err!=nil{t.Fatal(err)}
+ listed,err=listConfigBackups(dir)
+ if err!=nil||len(listed)!=1||listed[0].Verified{t.Fatalf("tampered backup must be unverified: %+v err=%v",listed,err)}
+ h:=configBackupDownloadHandler(dir)
+ rec:=httptest.NewRecorder()
+ h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/config/backups/download?id="+entry.ID,nil))
+ if rec.Code!=http.StatusConflict{t.Fatalf("tampered download status=%d body=%s",rec.Code,rec.Body.String())}
+}
+
+func TestLegacyBackupCanBeDownloadedAsUnverified(t *testing.T) {
+ dir:=t.TempDir()
+ id:=time.Date(2026,11,6,14,0,0,0,time.UTC).Format("20060102T150405.000000000Z")
+ if err:=os.WriteFile(filepath.Join(dir,id+".cfg"),[]byte("hostname legacy\\n"),0600);err!=nil{t.Fatal(err)}
+ h:=configBackupDownloadHandler(dir)
+ rec:=httptest.NewRecorder()
+ h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/config/backups/download?id="+id,nil))
+ if rec.Code!=http.StatusOK{t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String())}
+ if got:=rec.Header().Get("X-Backup-Integrity");got!="unverified-legacy"{t.Fatalf("integrity header=%q",got)}
+}

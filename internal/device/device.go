@@ -235,7 +235,7 @@ func BuildSNMPv3UserCommands(username, group, authPassword, privacyPassword stri
  validPassword := regexp.MustCompile("^[A-Za-z0-9!@#$%^&*()_+={}.,:-]{8,64}$")
  if !validPassword.MatchString(authPassword) || !validPassword.MatchString(privacyPassword) { return nil, fmt.Errorf("hasła SNMPv3 muszą mieć 8–64 znaki; dozwolone litery, cyfry i bezpieczne znaki specjalne bez spacji") }
  if authPassword == privacyPassword { return nil, fmt.Errorf("hasło uwierzytelniania i szyfrowania muszą być różne") }
- return []string{"configure terminal", "snmp-server group " + group + " priv", "snmp-server user " + username + " " + group + " auth sha " + authPassword + " priv aes " + privacyPassword, "end"}, nil
+ return []string{"configure terminal", "snmp-server view panel-readonly 1.3.6.1.2.1 included", "snmp-server group " + group + " priv read panel-readonly", "snmp-server user " + username + " " + group + " auth sha " + authPassword + " priv des " + privacyPassword, "end"}, nil
 }
 func (s *Service) ConfigureSNMPv3User(username, group, authPassword, privacyPassword string, remove bool) (string, error) {
  cmds, err := BuildSNMPv3UserCommands(username, group, authPassword, privacyPassword, remove)

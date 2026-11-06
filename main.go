@@ -24,6 +24,10 @@ func main() {
   SSHUser: os.Getenv("SWITCH_SSH_USER"), SSHPassword: os.Getenv("SWITCH_SSH_PASSWORD"),
   SSHHostKeyFingerprint: os.Getenv("SWITCH_SSH_HOST_KEY"),
   SNMPCommunity: os.Getenv("SWITCH_SNMP_COMMUNITY"), SNMPPort: env("SWITCH_SNMP_PORT","161"),
+  SNMPVersion: env("SWITCH_SNMP_VERSION","2c"),
+  SNMPV3User: os.Getenv("SWITCH_SNMP_V3_USER"),
+  SNMPV3AuthPassword: os.Getenv("SWITCH_SNMP_V3_AUTH_PASSWORD"),
+  SNMPV3PrivacyPassword: os.Getenv("SWITCH_SNMP_V3_PRIV_PASSWORD"),
   Timeout: 4*time.Second,
  }
  svc := device.New(cfg)
@@ -35,7 +39,7 @@ func main() {
   log.Fatal("Wymagane PANEL_USER oraz PANEL_PASSWORD (minimum 16 znaków); panel nie zostanie uruchomiony bez uwierzytelnienia")
  }
  handler := securityHeaders(auditLog(basicAuth(mux, panelUser, panelPassword), env("AUDIT_LOG_PATH", filepath.Join("data", "audit.jsonl"))))
- log.Printf("CiscoSwitch Manager listening on http://%s (switch=%s, snmp=%s)",addr,cfg.Host,masked(cfg.SNMPCommunity))
+ log.Printf("CiscoSwitch Manager listening on http://%s (switch=%s, snmp-version=%s, community=%s)",addr,cfg.Host,snmpMode(cfg),masked(cfg.SNMPCommunity))
  httpServer := &http.Server{
   Addr: addr,
   Handler: handler,
@@ -54,6 +58,7 @@ func loadEnv(path string) error {
  return sc.Err()
 }
 func env(k,f string)string{if v:=os.Getenv(k);v!=""{return v};return f}
+func snmpMode(c device.Config)string{v:=strings.TrimSpace(c.SNMPVersion);if v==""{return "2c"};return v}
 func masked(v string)string{if v==""{return "nieustawione"};return "ustawione"}
 func securityHeaders(next http.Handler)http.Handler{return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){w.Header().Set("X-Content-Type-Options","nosniff");w.Header().Set("X-Frame-Options","DENY");w.Header().Set("Referrer-Policy","no-referrer");w.Header().Set("Content-Security-Policy","default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:");next.ServeHTTP(w,r)})}
 

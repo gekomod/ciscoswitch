@@ -3,7 +3,7 @@
 Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948MX z AlliedWare Plus. Repozytorium zachowuje nazwę ciscoswitch, ale adapter CLI jest przeznaczony dla Allied Telesis, nie Cisco IOS.
 
 ## Moduły
-- Dashboard z odczytem portów SNMP v2c / IF-MIB (porty 1–52, w tym dwa SFP+ 10G i dwa porty combo).
+- Dashboard z odczytem portów IF-MIB przez SNMPv2c lub SNMPv3 authPriv (SHA/DES), wybieranym w `.env` (porty 1–52, w tym dwa SFP+ 10G i dwa porty combo).
 - Włączanie i wyłączanie portu.
 - VLAN: podgląd listy, tworzenie i usuwanie VLAN 2–4094.
 - Porty: access/trunk, VLAN access, lista VLAN dozwolonych na trunk, native VLAN.
@@ -39,6 +39,11 @@ SWITCH_SSH_PASSWORD=CHANGE_ME
 SWITCH_SSH_HOST_KEY=SHA256:REPLACE_WITH_VERIFIED_FINGERPRINT
 SWITCH_SNMP_COMMUNITY=CHANGE_ME_READONLY
 SWITCH_SNMP_PORT=161
+SWITCH_SNMP_VERSION=2c
+# For SNMPv3 authPriv, set SWITCH_SNMP_VERSION=3 and configure the following secrets:
+SWITCH_SNMP_V3_USER=
+SWITCH_SNMP_V3_AUTH_PASSWORD=
+SWITCH_SNMP_V3_PRIV_PASSWORD=
 LISTEN_ADDR=127.0.0.1:8090
 PANEL_USER=admin
 PANEL_PASSWORD=USE_A_RANDOM_PASSWORD_AT_LEAST_16_CHARS
@@ -71,7 +76,7 @@ AUDIT_LOG_PATH=data/audit.jsonl
 ## Ważne
 Eksport konfiguracji może zawierać sekrety i dane administracyjne — przechowuj pliki jak hasła. Porównanie konfiguracji nie zapisuje kopii i nie zmienia urządzenia. Przywracanie konfiguracji z pliku nie jest jeszcze udostępnione; nie wykonuj go przez ręczne wklejanie niezweryfikowanych komend.
 
-SNMPv3 używa grupy priv i użytkownika SHA + DES. Składnia bazuje na oficjalnym AlliedWare Plus Best Practice Guide; potwierdź ją na firmware urządzenia przed użyciem produkcyjnym. Nie wykonano jeszcze testów integracyjnych na fizycznym AT-GS948MX. CI sprawdza składnię JS, testy Go i kompilację, ale nie potwierdza obsługi każdej komendy przez urządzenie.
+SNMPv3 monitoring: ustaw `SWITCH_SNMP_VERSION=3`, `SWITCH_SNMP_V3_USER`, `SWITCH_SNMP_V3_AUTH_PASSWORD` i `SWITCH_SNMP_V3_PRIV_PASSWORD` w `.env`, a następnie zrestartuj panel. Używany jest poziom authPriv (SHA/DES); community v2c nie jest wtedy wymagana. Sekrety pozostają poza repozytorium i logami. Nie wykonano jeszcze testów integracyjnych na fizycznym AT-GS948MX. CI sprawdza składnię JS, testy Go i kompilację, ale nie potwierdza obsługi każdej komendy przez urządzenie.
 
 
 ### Lokalne kopie konfiguracji

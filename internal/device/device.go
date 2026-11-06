@@ -14,7 +14,12 @@ import (
  "golang.org/x/crypto/ssh"
 )
 
-type Config struct { Host, SSHPort, SSHUser, SSHPassword, SSHHostKeyFingerprint string; SNMPCommunity, SNMPPort string; Timeout time.Duration }
+type Config struct {
+ Host, SSHPort, SSHUser, SSHPassword, SSHHostKeyFingerprint string
+ SNMPCommunity, SNMPPort, SNMPVersion string
+ SNMPV3User, SNMPV3AuthPassword, SNMPV3PrivacyPassword string
+ Timeout time.Duration
+}
 type Service struct { cfg Config }
 type Port struct {
  Index int `json:"index"`
@@ -37,21 +42,50 @@ type Status struct {
  Reachable bool `json:"reachable"`
  Ports []Port `json:"ports"`
  Warning string `json:"warning,omitempty"`
+ SNMPVersion string `json:"snmpVersion"`
 }
 
 func New(c Config) *Service { return &Service{cfg:c} }
 
-func (s *Service) Status() Status {
- o:=Status{Host:s.cfg.Host,Ports:[]Port{}}
- if s.cfg.Host=="" || s.cfg.SNMPCommunity=="" { o.Warning="Brak SWITCH_HOST lub SWITCH_SNMP_COMMUNITY. Sprawdź .env i uruchom panel ponownie."; return o }
+func newSNMPClient(c Config) (*gosnmp.GoSNMP, error) {
+ if strings.TrimSpace(c.Host)=="" { return nil, fmt.Errorf("brak SWITCH_HOST") }
  g:=*gosnmp.Default
- g.Target=s.cfg.Host
- g.Port=uint16(port(s.cfg.SNMPPort,161))
- g.Community=s.cfg.SNMPCommunity
- g.Version=gosnmp.Version2c
- g.Timeout=s.cfg.Timeout
+ g.Target=c.Host
+ g.Port=uint16(port(c.SNMPPort,161))
+ g.Timeout=c.Timeout
  g.Retries=1
- if e:=g.Connect();e!=nil { o.Warning="SNMP connect: "+e.Error(); return o }
+ version:=strings.ToLower(strings.TrimSpace(c.SNMPVersion))
+ if version=="" || version=="2" || version=="2c" {
+  if c.SNMPCommunity=="" { return nil, fmt.Errorf("brak SWITCH_SNMP_COMMUNITY dla SNMPv2c") }
+  g.Version=gosnmp.Version2c
+  g.Community=c.SNMPCommunity
+  return &g,nil
+ }
+ if version!="3" && version!="v3" { return nil, fmt.Errorf("nieobsługiwana wersja SNMP %q; użyj 2c lub 3",c.SNMPVersion) }
+ if strings.TrimSpace(c.SNMPV3User)=="" || len(c.SNMPV3AuthPassword)<8 || len(c.SNMPV3PrivacyPassword)<8 {
+  return nil, fmt.Errorf("SNMPv3 wymaga SWITCH_SNMP_V3_USER oraz haseł auth/priv o długości co najmniej 8 znaków")
+ }
+ g.Version=gosnmp.Version3
+ g.SecurityModel=gosnmp.UserSecurityModel
+ g.MsgFlags=gosnmp.AuthPriv
+ g.SecurityParameters=&gosnmp.UsmSecurityParameters{
+  UserName: strings.TrimSpace(c.SNMPV3User),
+  AuthenticationProtocol: gosnmp.SHA,
+  AuthenticationPassphrase: c.SNMPV3AuthPassword,
+  PrivacyProtocol: gosnmp.DES,
+  PrivacyPassphrase: c.SNMPV3PrivacyPassword,
+ }
+ return &g,nil
+}
+
+func (s *Service) Status() Status {
+ version:=strings.ToLower(strings.TrimSpace(s.cfg.SNMPVersion))
+ if version=="" { version="2c" }
+ if version=="v3" { version="3" }
+ o:=Status{Host:s.cfg.Host,Ports:[]Port{},SNMPVersion:version}
+ g,err:=newSNMPClient(s.cfg)
+ if err!=nil { o.Warning=err.Error(); return o }
+ if e:=g.Connect();e!=nil { o.Warning="SNMPv"+version+" connect: "+e.Error(); return o }
  defer g.Conn.Close()
  d,e:=walkText(&g,".1.3.6.1.2.1.2.2.1.2")
  if e!=nil { o.Warning="IF-MIB ifDescr: "+e.Error(); return o }

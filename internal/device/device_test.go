@@ -4,6 +4,8 @@ import (
  "reflect"
  "strings"
  "testing"
+
+ "github.com/gosnmp/gosnmp"
 )
 
 func TestParseVLANList(t *testing.T) {
@@ -98,4 +100,25 @@ func TestBuildSNMPv3UserCommandsRejectsUnsafeInput(t *testing.T) {
  for _, c := range cases {
   if _, err := BuildSNMPv3UserCommands(c[0], c[1], c[2], c[3], false); err == nil { t.Errorf("expected invalid input to be rejected: %#v", c) }
  }
+}
+
+func TestNewSNMPClientV2cCompatibility(t *testing.T) {
+ g,err:=newSNMPClient(Config{Host:"127.0.0.1",SNMPCommunity:"readonly",SNMPPort:"161"})
+ if err!=nil {t.Fatal(err)}
+ if g.Version!=gosnmp.Version2c || g.Community!="readonly" {t.Fatalf("unexpected v2c config: version=%v community=%q",g.Version,g.Community)}
+}
+func TestNewSNMPClientV3AuthPriv(t *testing.T) {
+ g,err:=newSNMPClient(Config{Host:"127.0.0.1",SNMPVersion:"3",SNMPV3User:"monitor01",SNMPV3AuthPassword:"AuthPass123!",SNMPV3PrivacyPassword:"PrivPass456!"})
+ if err!=nil {t.Fatal(err)}
+ if g.Version!=gosnmp.Version3 || g.SecurityModel!=gosnmp.UserSecurityModel || g.MsgFlags!=gosnmp.AuthPriv {t.Fatalf("unexpected SNMPv3 security settings: version=%v model=%v flags=%v",g.Version,g.SecurityModel,g.MsgFlags)}
+ p,ok:=g.SecurityParameters.(*gosnmp.UsmSecurityParameters);if !ok {t.Fatalf("unexpected security parameters type %T",g.SecurityParameters)}
+ if p.UserName!="monitor01" || p.AuthenticationProtocol!=gosnmp.SHA || p.PrivacyProtocol!=gosnmp.DES {t.Fatalf("unexpected SNMPv3 protocols or username: %+v",p)}
+}
+func TestNewSNMPClientRejectsIncompleteV3(t *testing.T) {
+ cases:=[]Config{
+  {Host:"127.0.0.1",SNMPVersion:"3"},
+  {Host:"127.0.0.1",SNMPVersion:"3",SNMPV3User:"monitor01",SNMPV3AuthPassword:"short",SNMPV3PrivacyPassword:"PrivPass456!"},
+  {Host:"127.0.0.1",SNMPVersion:"4",SNMPV3User:"monitor01",SNMPV3AuthPassword:"AuthPass123!",SNMPV3PrivacyPassword:"PrivPass456!"},
+ }
+ for _,c:=range cases {if _,err:=newSNMPClient(c);err==nil{t.Errorf("expected invalid SNMP configuration to fail: %+v",c)}}
 }

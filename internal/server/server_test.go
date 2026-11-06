@@ -247,7 +247,7 @@ func TestLegacyBackupCanBeDownloadedAsUnverified(t *testing.T) {
 func TestAuditHistoryReturnsOnlyLatest200Records(t *testing.T) {
  path:=filepath.Join(t.TempDir(),"audit.jsonl")
  file,err:=os.Create(path);if err!=nil{t.Fatal(err)}
- for i:=0;i<205;i++ { fmt.Fprintf(file,`{"timestamp":"2026-11-06T12:00:00Z","username":"admin","method":"POST","path":"/api/test","status":200,"durationMs":%d}\n`,i) }
+ for i:=0;i<205;i++ { fmt.Fprintf(file,"{\"timestamp\":\"2026-11-06T12:00:00Z\",\"username\":\"admin\",\"method\":\"POST\",\"path\":\"/api/test\",\"status\":200,\"durationMs\":%d}\n",i) }
  if err:=file.Close();err!=nil{t.Fatal(err)}
  h:=auditHistoryHandler(path)
  rec:=httptest.NewRecorder()

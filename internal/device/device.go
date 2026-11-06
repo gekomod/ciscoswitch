@@ -212,7 +212,6 @@ func (s *Service) RunCLICommand(cmd string)(string,error){
 func (s *Service) ConfigureStaticRoute(prefix,gateway string,distance int,remove bool)(string,error){
  _,network,e:=net.ParseCIDR(strings.TrimSpace(prefix));if e!=nil{return "",fmt.Errorf("podaj poprawną sieć CIDR, np. 192.168.20.0/24")}
  ip:=net.ParseIP(gateway);if ip==nil||ip.To4()==nil{return "",fmt.Errorf("brama musi być poprawnym adresem IPv4")}
- if !network.IP.Equal(ip.To4().Mask(network.Mask))&&network.Contains(ip){return "",fmt.Errorf("brama nie może być adresem z sieci docelowej")}
  if distance<1||distance>255{return "",fmt.Errorf("dystans administracyjny musi być w zakresie 1–255")}
  command:="ip route "+network.String()+" "+ip.String()
  if distance!=1{command+=" "+strconv.Itoa(distance)}

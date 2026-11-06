@@ -2,6 +2,7 @@ package server
 
 import (
  "errors"
+ "fmt"
  "os"
  "path/filepath"
  "time"
@@ -115,7 +116,7 @@ func TestConfigBackupsHandlerCreatesOnlyNonEmptyRunningConfig(t *testing.T) {
   calls++
   if command != "show running-config" { t.Fatalf("unexpected command %q", command) }
   return "hostname sw1\\n", nil
- }, dir)
+ }, dir, 100)
  rec := httptest.NewRecorder()
  h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/config/backups", nil))
  if rec.Code != http.StatusCreated { t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String()) }
@@ -164,4 +165,23 @@ func TestRunWithPreChangeBackupFailsClosedOnEmptyConfig(t *testing.T) {
  _,err:=runWithPreChangeBackup(t.TempDir(),func(string)(string,error){return "  \n",nil},func()(string,error){changed=true;return "",nil})
  if err==nil { t.Fatal("expected empty configuration error") }
  if changed { t.Fatal("configuration change must not run") }
+}
+
+
+func TestPruneConfigBackupsKeepsNewest(t *testing.T) {
+ dir:=t.TempDir()
+ base:=time.Date(2026,11,6,12,0,0,0,time.UTC)
+ for i:=0;i<4;i++ {
+  if _,err:=writeConfigBackup(dir,fmt.Sprintf("hostname sw%d",i),base.Add(time.Duration(i)*time.Second));err!=nil{t.Fatal(err)}
+ }
+ if err:=pruneConfigBackups(dir,2);err!=nil{t.Fatal(err)}
+ entries,err:=listConfigBackups(dir)
+ if err!=nil{t.Fatal(err)}
+ if len(entries)!=2{t.Fatalf("expected 2 backups, got %d",len(entries))}
+ if entries[0].ID!=base.Add(3*time.Second).Format("20060102T150405.000000000Z") {t.Fatalf("newest=%s",entries[0].ID)}
+ if entries[1].ID!=base.Add(2*time.Second).Format("20060102T150405.000000000Z") {t.Fatalf("second=%s",entries[1].ID)}
+}
+
+func TestPruneConfigBackupsRejectsZeroRetention(t *testing.T) {
+ if err:=pruneConfigBackups(t.TempDir(),0);err==nil{t.Fatal("expected invalid retention error")}
 }

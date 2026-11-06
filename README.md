@@ -34,9 +34,12 @@ SWITCH_HOST=192.168.31.2
 SWITCH_SSH_PORT=22
 SWITCH_SSH_USER=manager
 SWITCH_SSH_PASSWORD=CHANGE_ME
+SWITCH_SSH_HOST_KEY=SHA256:REPLACE_WITH_VERIFIED_FINGERPRINT
 SWITCH_SNMP_COMMUNITY=CHANGE_ME_READONLY
 SWITCH_SNMP_PORT=161
 LISTEN_ADDR=127.0.0.1:8090
+PANEL_USER=admin
+PANEL_PASSWORD=USE_A_RANDOM_PASSWORD_AT_LEAST_16_CHARS
 ```
 
 ## Bezpieczeństwo i ograniczenia
@@ -45,8 +48,17 @@ LISTEN_ADDR=127.0.0.1:8090
 - Sprawdź konfigurację na porcie testowym przed zmianą portów produkcyjnych.
 - Prędkości 10/100/1000 i duplex auto/full/half są oparte na instrukcji AlliedWare Plus dla miedzianych portów RJ-45. Zakres możliwości konkretnego portu zależy od sprzętu.
 - Składnia VLAN/access/trunk jest zgodna z opisami AlliedWare Plus. Dokumentacja referencyjna użyta przy implementacji: Allied Telesis How To Configure Basic Switching Functionality oraz AlliedWare Plus 5.4.6 Command Reference.
-- SSH w tej wersji dopuszcza legacy ssh-rsa i nie weryfikuje klucza hosta. Panel pozostaje domyślnie na localhost.
+- Panel wymaga logowania HTTP Basic: `PANEL_USER` i `PANEL_PASSWORD` (minimum 16 znaków). Bez tych danych nie uruchomi się.
+- Wszystkie połączenia SSH weryfikują SHA256 fingerprint z `SWITCH_SSH_HOST_KEY`. Wartość musi być pobrana z zaufanego źródła; przykładowy placeholder nie zadziała.
+- Panel domyślnie nasłuchuje na localhost. Przy udostępnieniu w sieci używaj wyłącznie za HTTPS (np. reverse proxy) i ogranicz dostęp do sieci zarządzającej. HTTP Basic nie szyfruje poświadczeń.
 - Nie commituj pliku .env, haseł ani community SNMP.
 
-## Następne moduły
-W kolejce: LACP, STP/RSTP, DHCP server i pule, routing, ACL, kopia/odtwarzanie konfiguracji oraz bezpieczne przechowywanie fingerprintu SSH host key.
+## Dodatkowe moduły
+- Diagnostyka systemu: wersja, CPU, pamięć, środowisko, boot.
+- Routing statyczny i testy ping/traceroute.
+- SNMP: diagnostyka agenta i konfiguracja odbiorcy trapów v2c.
+- SSH: podgląd i zarządzanie lokalnymi użytkownikami.
+- DHCP server/pule — składnia wymaga potwierdzenia na konkretnej wersji firmware przed użyciem produkcyjnym.
+
+## Ważne
+Nie wykonano jeszcze testów integracyjnych na fizycznym AT-GS948MX. CI sprawdza składnię JS, testy Go i kompilację, ale nie potwierdza obsługi każdej komendy przez urządzenie.

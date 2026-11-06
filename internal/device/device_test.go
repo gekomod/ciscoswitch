@@ -29,3 +29,15 @@ func TestConfigureVLANRejectsReservedAndInvalidIDs(t *testing.T) {
  s:=New(Config{})
  for _,id:=range []int{0,1,4095} { if _,err:=s.ConfigureVLAN(id,"",false);err==nil {t.Errorf("expected VLAN %d to be rejected",id)} }
 }
+func TestParsePortNumbers(t *testing.T) {
+ got,err:=parsePortNumbers("6,5,6")
+ if err!=nil {t.Fatal(err)}
+ if !reflect.DeepEqual(got,[]int{5,6}) {t.Fatalf("unexpected port list: %v",got)}
+ for _,v:=range []string{"5","1,51","1;shutdown,2",""} {if _,err:=parsePortNumbers(v);err==nil{t.Errorf("expected invalid port list %q",v)}}
+}
+func TestConfigureSTPValidation(t *testing.T) {
+ s:=New(Config{})
+ if _,err:=s.ConfigureSTP("rstp",8192);err==nil{t.Fatal("valid values should pass validation then fail on missing SSH credentials")}
+ if _,err:=s.ConfigureSTP("rapid",8192);err==nil{t.Fatal("invalid STP mode should be rejected")}
+ if _,err:=s.ConfigureSTP("rstp",9000);err==nil{t.Fatal("invalid bridge priority should be rejected")}
+}

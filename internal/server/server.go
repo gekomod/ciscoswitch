@@ -10,6 +10,7 @@ import (
 func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/",http.FileServer(http.Dir("web")))
  m.Handle("/api/config/export", configExportHandler(svc.RunReadOnly))
+ m.Handle("/api/config/compare", configCompareHandler(svc.RunReadOnly))
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
  m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,2048);var q struct{Port string `json:"port"`;Action string `json:"action"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=svc.ConfigurePort(q.Port,q.Action);write(w,v,e)})
  m.HandleFunc("/api/management-dhcp",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,1024);var q struct{Enabled bool `json:"enabled"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=svc.SetManagementDHCP(q.Enabled);write(w,v,e)})
@@ -58,4 +59,64 @@ func configExportHandler(run func(string) (string, error)) http.Handler {
   w.Header().Set("X-Content-Type-Options", "nosniff")
   _, _ = w.Write([]byte(output))
  })
+}
+
+
+type configCompareResult struct {
+ Added []string `json:"added"`
+ Removed []string `json:"removed"`
+ RunningLines int `json:"runningLines"`
+ StartupLines int `json:"startupLines"`
+}
+
+func configCompareHandler(run func(string) (string, error)) http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+  if r.Method != http.MethodGet {
+   http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+   return
+  }
+  running, err := run("show running-config")
+  if err != nil {
+   http.Error(w, "running configuration read failed", http.StatusBadGateway)
+   return
+  }
+  startup, err := run("show startup-config")
+  if err != nil {
+   http.Error(w, "startup configuration read failed", http.StatusBadGateway)
+   return
+  }
+  result := compareConfigLines(running, startup)
+  w.Header().Set("Content-Type", "application/json; charset=utf-8")
+  w.Header().Set("Cache-Control", "no-store")
+  _ = json.NewEncoder(w).Encode(result)
+ })
+}
+
+// compareConfigLines compares line multiplicity, so duplicate directives are handled
+// correctly. Added means present in running-config but absent from startup-config.
+func compareConfigLines(running, startup string) configCompareResult {
+ rLines := nonEmptyConfigLines(running)
+ sLines := nonEmptyConfigLines(startup)
+ counts := make(map[string]int, len(sLines))
+ for _, line := range sLines { counts[line]++ }
+ result := configCompareResult{Added: []string{}, Removed: []string{}, RunningLines: len(rLines), StartupLines: len(sLines)}
+ for _, line := range rLines {
+  if counts[line] > 0 { counts[line]-- } else { result.Added = append(result.Added, line) }
+ }
+ counts = make(map[string]int, len(rLines))
+ for _, line := range rLines { counts[line]++ }
+ for _, line := range sLines {
+  if counts[line] > 0 { counts[line]-- } else { result.Removed = append(result.Removed, line) }
+ }
+ return result
+}
+
+func nonEmptyConfigLines(raw string) []string {
+ lines := strings.Split(strings.ReplaceAll(raw, "\\r\\n", "\\n"), "\\n")
+ out := make([]string, 0, len(lines))
+ for _, line := range lines {
+  line = strings.TrimSpace(line)
+  if line != "" { out = append(out, line) }
+ }
+ return out
 }

@@ -2,6 +2,9 @@ package main
 
 import (
  "bufio"
+ "encoding/json"
+ "path/filepath"
+ "sync"
  "crypto/subtle"
  "log"
  "net/http"
@@ -31,7 +34,7 @@ func main() {
  if panelUser == "" || len(panelPassword) < 16 {
   log.Fatal("Wymagane PANEL_USER oraz PANEL_PASSWORD (minimum 16 znaków); panel nie zostanie uruchomiony bez uwierzytelnienia")
  }
- handler := securityHeaders(basicAuth(mux, panelUser, panelPassword))
+ handler := securityHeaders(auditLog(basicAuth(mux, panelUser, panelPassword), env("AUDIT_LOG_PATH", filepath.Join("data", "audit.jsonl"))))
  log.Printf("CiscoSwitch Manager listening on http://%s (switch=%s, snmp=%s)",addr,cfg.Host,masked(cfg.SNMPCommunity))
  httpServer := &http.Server{
   Addr: addr,
@@ -76,5 +79,47 @@ func basicAuth(next http.Handler, username, password string) http.Handler {
    return
   }
   next.ServeHTTP(w, r)
+ })
+}
+
+
+type auditRecord struct {
+ Timestamp time.Time `json:"timestamp"`
+ Username string `json:"username"`
+ Method string `json:"method"`
+ Path string `json:"path"`
+ Status int `json:"status"`
+ DurationMS int64 `json:"durationMs"`
+}
+
+type statusWriter struct { http.ResponseWriter; status int }
+func (w *statusWriter) WriteHeader(code int) { if w.status==0 {w.status=code}; w.ResponseWriter.WriteHeader(code) }
+func (w *statusWriter) Write(p []byte)(int,error){if w.status==0{w.status=http.StatusOK};return w.ResponseWriter.Write(p)}
+
+var auditMu sync.Mutex
+
+// auditLog records request metadata only; it never stores request bodies, CLI output,
+// passwords, SNMP communities, query strings, or configuration contents.
+func auditLog(next http.Handler, path string) http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request) {
+  if !strings.HasPrefix(r.URL.Path,"/api/") || (r.Method!="POST" && r.Method!="PUT" && r.Method!="PATCH" && r.Method!="DELETE") {
+   next.ServeHTTP(w,r); return
+  }
+  started:=time.Now()
+  sw:=&statusWriter{ResponseWriter:w}
+  next.ServeHTTP(sw,r)
+  status:=sw.status; if status==0 {status=http.StatusOK}
+  rec:=auditRecord{Timestamp:time.Now().UTC(),Username:env("PANEL_USER","unknown"),Method:r.Method,Path:r.URL.Path,Status:status,DurationMS:time.Since(started).Milliseconds()}
+  auditMu.Lock()
+  defer auditMu.Unlock()
+  dir:=filepath.Dir(path)
+  if err:=os.MkdirAll(dir,0700);err!=nil{log.Printf("audit log unavailable: %v",err);return}
+  if err:=os.Chmod(dir,0700);err!=nil{log.Printf("audit directory permissions: %v",err);return}
+  file,err:=os.OpenFile(path,os.O_CREATE|os.O_APPEND|os.O_WRONLY,0600)
+  if err!=nil{log.Printf("audit log unavailable: %v",err);return}
+  if err:=file.Chmod(0600);err!=nil{_ = file.Close();log.Printf("audit file permissions: %v",err);return}
+  encErr:=json.NewEncoder(file).Encode(rec)
+  closeErr:=file.Close()
+  if encErr!=nil{log.Printf("audit write failed: %v",encErr)} else if closeErr!=nil{log.Printf("audit close failed: %v",closeErr)}
  })
 }

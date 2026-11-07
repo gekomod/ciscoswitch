@@ -474,10 +474,12 @@ $('bulk-apply').onclick=async()=>{
  if(payload.mode==='trunk'&&(!Number.isInteger(payload.native)||payload.native<1||payload.native>4094||!parseVlanSelection(payload.allowed)?.length)){alert('Dla trunk podaj poprawny Native VLAN i listę dozwolonych VLAN (np. 10,20 lub 10-20).');return;}
  const button=$('bulk-apply');button.disabled=true;
  try{
-  const previews=await Promise.all(payload.ports.map(async port=>({port,...await api('/api/port/preview',{port,mode:payload.mode,accessVlan:payload.accessVlan,allowed:payload.allowed,native:payload.native,speed:payload.speed,duplex:payload.duplex,description:payload.description})})));
+  const previewResult=await api('/api/ports/preview/bulk',payload);
+  const previews=Array.isArray(previewResult.previews)?previewResult.previews:[];
+  if(previews.length!==payload.ports.length)throw new Error('Podgląd zbiorczy nie zwrócił kompletu portów. Zapis został zablokowany.');
   const warnings=[...new Set(previews.flatMap(item=>Array.isArray(item.warnings)?item.warnings:[]))];
   const currentSummary=previews.map(item=>item.port+': '+(item.current?.mode||'tryb nieznany')+' · VLAN '+(item.current?.defaultVlan||'—')).join('\\n');
-  const summary='Profil '+(payload.mode==='access'?'Access':'Trunk')+' zostanie zastosowany na '+payload.ports.length+' portach:\\n'+payload.ports.join(', ')+'\\n\\nStan bieżący:\\n'+currentSummary+'\\n\\nNowe ustawienia: '+(payload.mode==='access'?'Access VLAN: '+payload.accessVlan:'Native VLAN: '+payload.native+' · dozwolone VLAN: '+payload.allowed)+'\\n\\nKażdy port przeszedł osobny podgląd walidacyjny. Przed zmianą zostanie utworzona kopia konfiguracji.'+(warnings.length?'\\n\\nUwagi: '+warnings.join(' · '):'');
+  const summary='Profil '+(payload.mode==='access'?'Access':'Trunk')+' zostanie zastosowany na '+payload.ports.length+' portach:\\n'+payload.ports.join(', ')+'\\n\\nStan bieżący:\\n'+currentSummary+'\\n\\nNowe ustawienia: '+(payload.mode==='access'?'Access VLAN: '+payload.accessVlan:'Native VLAN: '+payload.native+' · dozwolone VLAN: '+payload.allowed)+'\\n\\nWszystkie porty sprawdzono jednym wspólnym odczytem konfiguracji switcha. Przed zmianą zostanie utworzona kopia konfiguracji.'+(warnings.length?'\\n\\nUwagi: '+warnings.join(' · '):'');
   showFriendlyResult('bulk-output',summary,'Podgląd profilu portów');
   if(!confirm(summary+'\\n\\nZastosować profil?'))return;
   const result=await api('/api/ports/settings/bulk',payload);

@@ -417,3 +417,10 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 #cfg-load-status{margin-top:12px}
 #cfg-load-status.is-error{background:#3a202a;border-color:#70404d;color:#ffabb4}
 :root[data-theme="light"] #cfg-load-status.is-error{background:#fff0f1;border-color:#edc5cb;color:#a83243}
+
+/* Read-only port comparison */
+.port-compare-panel{margin-top:16px}
+.port-compare-panel .form-actions{align-self:end}
+#compare-summary{margin:12px 0}
+#compare-rows td:first-child{min-width:150px}
+:root[data-theme="light"] .port-compare-panel{background:linear-gradient(145deg,#fff,#f7f9fc);border-color:#dce4ed}

@@ -721,6 +721,34 @@ $('create-config-backup').onclick=async()=>{const b=$('create-config-backup');if
 $('compare-config').onclick=async()=>{const box=$('config-diff'),button=$('compare-config');button.disabled=true;box.textContent='Pobieranie i porównywanie konfiguracji…';try{const response=await fetch('/api/config/compare');if(!response.ok)throw new Error('Błąd porównania: HTTP '+response.status);const d=await response.json();const added=Number(d.added)||0,removed=Number(d.removed)||0;box.textContent='Różnice: '+added+' dodanych w running-config · '+removed+' usuniętych względem startup-config · Linie: running '+d.runningLines+' / startup '+d.startupLines+'. '+(added===0&&removed===0?'Konfiguracje są zgodne.':'Szczegółowe linie pominięto, ponieważ mogą zawierać dane poufne.');}catch(e){box.textContent=e.message;}finally{button.disabled=false;}};
 $('save-config').onclick=async()=>{if(!confirm('Zapisać running-config do startup-config?'))return;try{const d=await api('/api/save',{});showFriendlyResult('output',d.output,'Zapis konfiguracji');alert('Polecenie zapisu wysłane.');}catch(x){alert(x.message);}};
 $('run').onclick=async()=>{const command=$('cmd').value;$('output').textContent='Łączenie przez SSH…';try{const d=await api('/api/command',{command});showFriendlyResult('output',d.output,'Diagnostyka urządzenia');}catch(x){showFriendlyResult('output',x.message,'Operacja na switchu');}};load();setInterval(load,15000);refreshSystem();setInterval(refreshSystem,60000);restoreMonitorHistory();refreshConfigBackups();refreshAudit();
+async function loadPanelUsers(){
+ const body=$('panel-users-rows'),status=$('panel-users-status');if(!body)return;
+ try{
+  const data=await api('/api/users');
+  const users=Array.isArray(data.users)?data.users:[];
+  body.innerHTML=users.map(user=>'<tr data-panel-user="'+esc(user.id)+'"><td><b>'+esc(user.username)+'</b><small class="muted">'+(user.id===undefined?'':'Konto panelu')+'</small></td><td><select data-user-role aria-label="Rola użytkownika '+esc(user.username)+'"><option value="viewer" '+(user.role==='viewer'?'selected':'')+'>Podgląd</option><option value="operator" '+(user.role==='operator'?'selected':'')+'>Operator</option><option value="admin" '+(user.role==='admin'?'selected':'')+'>Administrator</option></select></td><td><label class="inline-check"><input type="checkbox" data-user-active '+(user.active?'checked':'')+'> Aktywne</label></td><td><input type="password" data-user-password autocomplete="new-password" minlength="12" placeholder="Nowe hasło (opcjonalnie)" aria-label="Nowe hasło dla '+esc(user.username)+'"></td><td><button class="btn primary" type="button" data-user-save>Zapisz</button></td></tr>').join('')||'<tr><td colspan="5" class="empty">Brak kont użytkowników.</td></tr>';
+  status.textContent='Liczba kont: '+users.length+'. Hasła nie są widoczne w panelu.';
+ }catch(e){status.textContent='Nie udało się pobrać listy kont: '+e.message;body.innerHTML='<tr><td colspan="5" class="empty">Błąd odczytu listy użytkowników.</td></tr>';}
+}
+$('users-refresh')?.addEventListener('click',loadPanelUsers);
+$('panel-user-create')?.addEventListener('click',async()=>{
+ const username=$('panel-user-name').value.trim(),password=$('panel-user-password').value,role=$('panel-user-role').value,button=$('panel-user-create');
+ if(!username||!password){$('panel-users-status').textContent='Podaj login i hasło początkowe.';return;}
+ button.disabled=true;
+ try{await api('/api/users',{username,password,role});$('panel-user-name').value='';$('panel-user-password').value='';$('panel-users-status').textContent='Konto zostało utworzone.';await loadPanelUsers();}
+ catch(e){$('panel-users-status').textContent='Nie udało się utworzyć konta: '+e.message;}
+ finally{button.disabled=false;}
+});
+$('panel-users-rows')?.addEventListener('click',async event=>{
+ const button=event.target.closest('[data-user-save]');if(!button)return;
+ const row=button.closest('[data-panel-user]');if(!row)return;
+ const payload={role:row.querySelector('[data-user-role]').value,active:row.querySelector('[data-user-active]').checked};
+ const password=row.querySelector('[data-user-password]').value;if(password)payload.password=password;
+ button.disabled=true;
+ try{await api('/api/users/'+encodeURIComponent(row.dataset.panelUser),payload,'PATCH');row.querySelector('[data-user-password]').value='';$('panel-users-status').textContent='Zapisano zmiany konta.';await loadPanelUsers();}
+ catch(e){$('panel-users-status').textContent='Nie udało się zapisać konta: '+e.message;}
+ finally{button.disabled=false;}
+});
 async function loadSessionIdentity(){const el=$('session-identity');if(!el)return;try{const d=await api('/api/session');const labels={viewer:'Podgląd',operator:'Operator',admin:'Administrator'};el.textContent=(d.username||'Konto')+' · '+(labels[d.role]||d.role||'');el.title='Zalogowano jako '+(d.username||'konto')+' · rola: '+(d.role||'nieznana');document.body.dataset.role=d.role||'';const panel=document.getElementById('panel-users'),nav=document.getElementById('panel-users-nav');if(panel)panel.hidden=d.role!=='admin';if(nav)nav.hidden=d.role!=='admin';if(d.role==='admin')loadPanelUsers();}catch(_e){el.textContent='Sesja';}}
 loadSessionIdentity();
 $('logout').onclick=async()=>{try{await fetch('/api/logout',{method:'POST',credentials:'same-origin'});}finally{location.href='/login';}};

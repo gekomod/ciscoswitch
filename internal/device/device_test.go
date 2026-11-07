@@ -161,3 +161,11 @@ func TestBuildBulkPortActionCommands(t *testing.T) {
   if _,err:=BuildBulkPortActionCommands(tc.ports,tc.action);err==nil{t.Errorf("expected rejection: %#v",tc)}
  }
 }
+
+func TestBuildBulkPortEdgePortCommands(t *testing.T) {
+ cmds,err:=BuildBulkPortEdgePortCommands([]string{"port1.0.2","port1.0.3","port1.0.2"},true)
+ if err!=nil{t.Fatal(err)}
+ joined:=strings.Join(cmds,"\n")
+ if strings.Count(joined,"interface port1.0.2")!=1||!strings.Contains(joined,"spanning-tree edgeport"){t.Fatalf("unexpected commands: %v",cmds)}
+ if _,err:=BuildBulkPortEdgePortCommands([]string{"bad"},true);err==nil{t.Fatal("expected invalid port rejection")}
+}

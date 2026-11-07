@@ -897,8 +897,7 @@ $('show-vlans').onclick=async()=>{
   const raw=String(d.output||'').trim();
   if(!raw)throw new Error('Switch zwrócił pustą odpowiedź.');
   $('vlan-output').textContent=raw;
-  const ids=[...new Set([...raw.matchAll(/(?:^|\\s)(\\d{1,4})(?=\\s|$)/gm)].map(m=>Number(m[1])).filter(n=>n>=1&&n<=4094))];
-  summary.textContent='Odczyt zakończony. '+(ids.length?'Rozpoznano '+ids.length+' potencjalnych identyfikatorów VLAN.':'Odpowiedź otrzymana; format listy nie pozwala bezpiecznie policzyć VLAN-ów.')+' Szczegółowa odpowiedź urządzenia jest schowana poniżej.';
+  summary.textContent='Odczyt zakończony — switch zwrócił odpowiedź. Nie pokazuję liczby VLAN, ponieważ format odpowiedzi nie został jeszcze zweryfikowany na tym modelu. Pełna odpowiedź urządzenia jest dostępna w szczegółach poniżej.';
  }catch(e){$('vlan-output').textContent='';summary.textContent='Nie udało się odczytać VLAN: '+e.message;}
  finally{button.disabled=false;button.textContent='Pokaż konfigurację VLAN';}
 };

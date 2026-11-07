@@ -223,3 +223,24 @@ func TestMultiUserSessionIsRevokedAfterDisableOrRoleChange(t *testing.T) {
 	rec = httptest.NewRecorder(); h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized { t.Fatalf("disabled account session status=%d", rec.Code) }
 }
+
+func TestPanelUserPasswordResetRevokesExistingSession(t *testing.T) {
+	store, err := openPanelUserStore(filepath.Join(t.TempDir(), "users.json"), "rootadmin", "bootstrap-password", "admin")
+	if err != nil { t.Fatal(err) }
+	created, err := store.create("ops.reset", "original-long-password", "operator")
+	if err != nil { t.Fatal(err) }
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/private", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	h := sessionAuthWithUsers(mux, store)
+	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(`{"username":"ops.reset","password":"original-long-password"}`))
+	req.Header.Set("Origin", "http://panel.local"); req.Host = "panel.local"
+	rec := httptest.NewRecorder(); h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK { t.Fatalf("login status=%d", rec.Code) }
+	cookie := rec.Result().Cookies()[0]
+	newPassword := "replacement-long-password"
+	if _, err := store.update(created.ID, nil, nil, &newPassword); err != nil { t.Fatal(err) }
+	req = httptest.NewRequest(http.MethodGet, "/api/private", nil); req.AddCookie(cookie)
+	rec = httptest.NewRecorder(); h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized { t.Fatalf("session survived password reset: status=%d", rec.Code) }
+	if _, ok := store.authenticate("ops.reset", newPassword); !ok { t.Fatal("new password was not applied") }
+}

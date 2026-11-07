@@ -123,19 +123,33 @@ function portContextLines(output,port){
 }
 function renderPortNetworkContext(){
  const port=$('detail-port')?.value,ctx=portNetworkContext.get(port);
+ const macPattern=/\\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\\b/ig;
  for(const [id,key] of [['detail-vlan-context','vlan'],['detail-mac-context','mac'],['detail-lldp-context','lldp']]){
   const el=$(id);if(!el)continue;
   if(!port){el.textContent='Wybierz port.';continue;}
   if(!ctx){el.textContent='Kliknij „Odczytaj VLAN / MAC / LLDP”.';continue;}
-  const result=ctx[key];if(result.error){el.textContent='Błąd odczytu: '+result.error;continue;}
+  const result=ctx[key];if(result.error){el.textContent='Nie udało się odczytać danych: '+result.error;continue;}
+  const output=String(result.output||'');
   if(key==='vlan'){
-   const parts=String(result.output||'').split('\n\n--- show vlan all ---\n');
-   const vlanRows=portContextLines(parts[1]||'',port);
-   el.textContent=(parts[0]||'Brak szczegółów switchport')+'\n\nCZŁONKOSTWO VLAN — WIERSZE DLA PORTU\n'+(vlanRows.length?vlanRows.join('\n'):'Brak wierszy VLAN dla '+port+'.');
+   const parts=output.split('\\n\\n--- show vlan all ---\\n');
+   const switchport=parts[0]||'';
+   const lines=switchport.split('\\n').filter(Boolean);
+   const vlanLines=portContextLines(parts[1]||'',port);
+   const ids=[...new Set(vlanLines.flatMap(line=>[...line.matchAll(/\\b(?:VLAN\\s*)?(\\d{1,4})\\b/gi)].map(m=>m[1])).filter(n=>Number(n)>=1&&Number(n)<=4094))];
+   const mode=(switchport.match(/TRYB:\\s*([^\\n]+)/i)||[])[1]||'Brak danych';
+   const native=(switchport.match(/DEFAULT \\/ NATIVE VLAN:\\s*([^\\n]+)/i)||[])[1]||'Brak danych';
+   const allowed=(switchport.match(/DOZWOLONE VLAN:\\s*([^\\n]+)/i)||[])[1]||'Brak danych';
+   el.textContent='Port: '+port+'\\nTryb: '+mode+'\\nNative / PVID: '+native+'\\nDozwolone VLAN: '+allowed+'\\nWpisy członkostwa: '+vlanLines.length+(ids.length?'\\nRozpoznane identyfikatory VLAN: '+ids.join(', '):'');
    continue;
   }
-  const lines=portContextLines(result.output,port);
-  el.textContent=lines.length?lines.join('\n'):'Brak wierszy z dokładnym identyfikatorem '+port+'.\\n\\nSurowa odpowiedź switcha:\\n'+String(result.output||'(brak danych)').slice(0,6000);
+  const lines=portContextLines(output,port);
+  if(key==='mac'){
+   const macs=[...new Set(lines.flatMap(line=>line.match(macPattern)||[]).map(v=>v.toUpperCase()))];
+   el.textContent=macs.length?'Urządzenia wykryte na porcie '+port+': '+macs.length+'\\n'+macs.slice(0,20).join('\\n'):'Brak rozpoznanych adresów MAC dla tego portu.';
+   continue;
+  }
+  const names=[...new Set(lines.map(line=>line.trim()).filter(Boolean).map(line=>line.replace(/\\s+/g,' ').slice(0,100)))];
+  el.textContent=names.length?'Sąsiedzi LLDP przypisani do portu '+port+': '+names.length+'\\n'+names.slice(0,8).join('\\n'):'Nie wykryto sąsiada LLDP na tym porcie.';
  }
 }
 async function loadPortNetworkContext(){
@@ -153,14 +167,9 @@ async function loadPortNetworkContext(){
    'PORT: '+switchport.port,
    'TRYB: '+(switchport.mode||'nieznany'),
    'DEFAULT / NATIVE VLAN: '+(switchport.defaultVlan||'brak danych'),
-   'INGRESS FILTER: '+(switchport.ingressFilter||'brak danych'),
-   'TYPY RAMEK: '+(switchport.acceptableFrameTypes||'brak danych'),
-   'DOZWOLONE VLAN: '+((switchport.configuredVlans||[]).join(', ')||'brak danych'),
-   '',
-   'SUROWE DANE — show interface switchport',
-   switchport.raw||'(brak)'
+   'DOZWOLONE VLAN: '+((switchport.configuredVlans||[]).join(', ')||'brak danych')
   ];
-  const ctx={vlan:{output:vlanLines.join('\n')+'\n\n--- show vlan all ---\n'+(vlans.output||'')},mac:{output:mac.output||''},lldp:{output:lldp.output||''}};
+  const ctx={vlan:{output:vlanLines.join('\\n')+'\\n\\n--- show vlan all ---\\n'+(vlans.output||'')},mac:{output:mac.output||''},lldp:{output:lldp.output||''}};
   portNetworkContext.set(port,ctx);renderPortNetworkContext();
  }catch(e){
   portNetworkContext.set(port,{vlan:{error:e.message},mac:{error:e.message},lldp:{error:e.message}});

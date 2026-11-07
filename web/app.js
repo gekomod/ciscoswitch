@@ -99,7 +99,15 @@ function renderPortQuality(){
 }
 function renderCounterHistory(){const rows=$('counter-history-rows'),rank=$('counter-error-rank');if(!rows||!rank)return;const records=[...counterHistory].sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));const errors=records.reduce((s,x)=>s+(Number(x.errorRxDelta)||0)+(Number(x.errorTxDelta)||0),0),discards=records.reduce((s,x)=>s+(Number(x.discardRxDelta)||0)+(Number(x.discardTxDelta)||0),0);$('counter-history-events').textContent=records.length;$('counter-history-errors').textContent=fmtCount(errors);$('counter-history-discards').textContent=fmtCount(discards);rows.innerHTML=records.length?records.slice(0,100).map(x=>'<tr><td>'+esc(new Date(x.timestamp).toLocaleString())+'</td><td><b>'+esc(x.port)+'</b></td><td>'+fmtCount(x.errorRxDelta)+'</td><td>'+fmtCount(x.errorTxDelta)+'</td><td>'+fmtCount(x.discardRxDelta)+'</td><td>'+fmtCount(x.discardTxDelta)+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">Nie wykryto jeszcze przyrostu błędów ani discard.</td></tr>';const totals=new Map();for(const x of records){const v=totals.get(x.port)||{errors:0,discards:0,events:0,last:x.timestamp};v.errors+=(Number(x.errorRxDelta)||0)+(Number(x.errorTxDelta)||0);v.discards+=(Number(x.discardRxDelta)||0)+(Number(x.discardTxDelta)||0);v.events++;if(new Date(x.timestamp)>new Date(v.last))v.last=x.timestamp;totals.set(x.port,v);}const top=[...totals.entries()].sort((a,b)=>(b[1].errors+b[1].discards)-(a[1].errors+a[1].discards)).slice(0,10);rank.innerHTML=top.length?top.map(([p,v])=>'<tr><td><b>'+esc(p)+'</b></td><td>'+fmtCount(v.errors)+'</td><td>'+fmtCount(v.discards)+'</td><td>'+v.events+'</td><td>'+esc(new Date(v.last).toLocaleString())+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">Ranking pojawi się po pierwszym przyroście liczników.</td></tr>';}
 
-function renderEvents(){const el=$('monitor-events');if(el)el.innerHTML=recentEvents.slice(0,12).map(x=>'<div class="event-row is-'+esc(x.type)+'"><i></i><span>'+esc(x.message)+'</span><small>'+esc(x.at)+'</small></div>').join('');}
+function renderEvents(){
+ const el=$('monitor-events');if(!el)return;
+ const counts={danger:0,warning:0,info:0,success:0};
+ for(const event of recentEvents){if(Object.prototype.hasOwnProperty.call(counts,event.type))counts[event.type]++;}
+ for(const [id,value] of [['alert-danger-count',counts.danger],['alert-warning-count',counts.warning],['alert-info-count',counts.info],['alert-total-count',recentEvents.length]]){const node=$(id);if(node)node.textContent=String(value);}
+ const filter=$('alert-filter')?.value||'all';
+ const visible=recentEvents.filter(x=>filter==='all'||x.type===filter).slice(0,100);
+ el.innerHTML=visible.length?visible.map(x=>'<div class="event-row is-'+esc(x.type)+'"><i></i><span>'+esc(x.message)+'</span><small>'+esc(x.at)+'</small></div>').join(''):'<div class="empty">Brak zdarzeń dla wybranego poziomu.</div>';
+}
 function persistMonitorRecord(record){fetch('/api/monitor/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(record),keepalive:true}).catch(()=>{});}
 function addEvent(message,type='info',persist=true){const now=new Date();recentEvents.unshift({message,at:now.toLocaleTimeString(),timestamp:now.toISOString(),type});recentEvents=recentEvents.slice(0,12);renderEvents();if(persist)persistMonitorRecord({kind:'event',message,type});}
 async function restoreMonitorHistory(){try{const d=await api('/api/monitor/history');portHistory=d.portEvents||[];counterHistory=d.counterEvents||[];renderPortHistory();renderCounterHistory();renderPortQuality();recentEvents=(d.events||[]).slice(-12).reverse().map(x=>({message:x.message,type:x.type,at:new Date(x.timestamp).toLocaleString()}));trafficHistory=(d.samples||[]).slice(-30).map(x=>({rx:Number(x.rx)||0,tx:Number(x.tx)||0}));
@@ -366,6 +374,8 @@ async function refreshSystem(){const button=$('refresh-system');button.disabled=
  }catch(e){for(const id of ['sys-version','sys-cpu','sys-memory','sys-temperature','sys-fans','sys-power','sys-boot'])$(id).textContent='Błąd odczytu';$('system-health').dataset.loaded='false';}
  finally{button.disabled=false;button.textContent='Odśwież parametry';}}
 $('refresh-system').onclick=refreshSystem;
+$('alert-filter')?.addEventListener('change',renderEvents);
+$('alert-refresh')?.addEventListener('click',async()=>{const b=$('alert-refresh');b.disabled=true;try{await restoreMonitorHistory();}finally{b.disabled=false;}});
 
 const vlanSelectedPorts=new Set();
 function updateVLANSelection(){const count=$('vlan-select-count');if(count)count.textContent='Zaznaczono: '+vlanSelectedPorts.size;const use=$('vlan-use-selected');if(use)use.disabled=vlanSelectedPorts.size===0;const apply=$('vlan-apply-membership');if(apply)apply.disabled=vlanSelectedPorts.size===0;}

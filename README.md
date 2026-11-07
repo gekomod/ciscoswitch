@@ -50,6 +50,22 @@ PANEL_PASSWORD=USE_A_RANDOM_PASSWORD_AT_LEAST_16_CHARS
 AUDIT_LOG_PATH=data/audit.jsonl
 ```
 
+## Błąd SSH: niezgodny klucz hosta
+
+Komunikat `oczekiwano SHA256:REPLACE_WITH_VERIFIED_FINGERPRINT` oznacza, że w lokalnym pliku `.env` pozostała wartość przykładowa. Nie jest to błąd hasła SSH ani SNMP.
+
+1. Zweryfikuj odcisk klucza SSH switcha niezależnym, zaufanym kanałem (np. konsola lokalna urządzenia i dokumentacja/konfiguracja jego serwera SSH). Sam komunikat błędu nie dowodzi autentyczności klucza.
+2. Po potwierdzeniu odcisku wpisz go w **lokalnym** `.env` jako `SWITCH_SSH_HOST_KEY=SHA256:... ` (bez spacji na końcu).
+3. Uruchom ponownie proces aplikacji, ponieważ `.env` jest odczytywany podczas startu. Dla `go run .` zatrzymaj proces i uruchom ponownie; dla usługi systemd uruchom ponownie rzeczywistą nazwę usługi.
+
+Możesz podejrzeć odcisk prezentowany przez urządzenie z sieci zarządzającej (to **nie** zastępuje niezależnej weryfikacji):
+
+```bash
+ssh-keyscan -T 5 -p 22 -t rsa,ecdsa,ed25519 192.168.31.2 2>/dev/null | ssh-keygen -lf - -E sha256
+```
+
+Jeśli pojawi się kilka odcisków, upewnij się, który algorytm klucza hosta jest negocjowany przez aplikację. Nie ustawiaj `ssh.InsecureIgnoreHostKey`, nie wyłączaj kontroli odcisku i nie zapisuj lokalnego `.env` do GitHub.
+
 ## Bezpieczeństwo i ograniczenia
 - Wyłączanie portów jest domyślnie zablokowane; świadome odblokowanie wymaga `ALLOW_PORT_SHUTDOWN=true`. Nie ustawiaj tej opcji bez lokalnego planu odzyskania dostępu.
 - Zmiany klienta DHCP na interfejsie zarządzającym VLAN 1 są domyślnie zablokowane; odblokowanie wymaga `ALLOW_MANAGEMENT_DHCP_CHANGE=true` i zapewnienia alternatywnego dostępu.

@@ -150,7 +150,7 @@ function renderMap(){
  const visible=latestPorts.filter(p=>filter==='all'||(p.oper||'unknown')===filter);
  el.innerHTML=visible.map(p=>{
   const state=['up','down'].includes(p.oper)?p.oper:'unknown';
-  const label=(p.name||String(p.index)).replace(/^port1\\.0\\./,'');
+  const label=(p.name||String(p.index)).replace(/^port1\.0\./,'');
   const speed=p.speed||'Prędkość nieznana';
   const admin=p.admin||'unknown';
   return '<button type="button" class="map-port '+(state==='up'?'is-up':state==='down'?'is-down':'is-unknown')+'" data-map-port="'+esc(p.name)+'" aria-label="'+esc(p.name)+', link '+esc(state)+', administracyjnie '+esc(admin)+', '+esc(speed)+'" title="'+esc(p.name)+' · link '+esc(state)+' · admin '+esc(admin)+' · '+esc(speed)+'"><b>'+esc(label)+'</b><small>'+esc(speed.replace(' Mb/s','M'))+'</small></button>';

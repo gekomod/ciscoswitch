@@ -144,7 +144,7 @@ func (s *panelUserStore) saveLocked(users map[string]panelUserRecord) error {
 	return os.Chmod(s.path, 0600)
 }
 
-func (s *panelUserStore) sessionValid(username, role string) bool {
+func (s *panelUserStore) sessionValid(session panelSession) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, user := range s.users {

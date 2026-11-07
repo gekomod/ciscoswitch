@@ -280,3 +280,24 @@ func TestEdgePortChangeRejectsProtectedPortBeforeBackupOrSSH(t *testing.T) {
  if rec.Code != http.StatusBadRequest { t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String()) }
  if !strings.Contains(rec.Body.String(), "chroniony przez PROTECTED_PORTS") { t.Fatalf("unexpected response: %s", rec.Body.String()) }
 }
+
+func TestSwitchportDetailsHandlerReturnsParsedExactPort(t *testing.T) {
+ calls := 0
+ raw := "Interface name : port1.0.1\nSwitchport mode : access\nDefault Vlan : 2\nConfigured Vlans : 2\n\nInterface name : port1.0.10\nSwitchport mode : trunk\nDefault Vlan : 1\nConfigured Vlans : 1 4 5\n"
+ h := switchportDetailsHandler(func(command string)(string,error) {
+  calls++
+  if command != "show interface switchport" { t.Fatalf("unexpected command %q",command) }
+  return raw,nil
+ })
+ rec:=httptest.NewRecorder()
+ h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/port/switchport?port=port1.0.10",nil))
+ if rec.Code!=http.StatusOK { t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String()) }
+ if calls!=1 { t.Fatalf("read calls=%d",calls) }
+ if !strings.Contains(rec.Body.String(),"\"mode\":\"trunk\"") || !strings.Contains(rec.Body.String(),"\"configuredVlans\":[1,4,5]") { t.Fatalf("unexpected JSON: %s",rec.Body.String()) }
+}
+func TestSwitchportDetailsHandlerRejectsUnknownPortBlock(t *testing.T) {
+ h:=switchportDetailsHandler(func(string)(string,error){return "Interface name : port1.0.10\nSwitchport mode : trunk\n",""})
+ rec:=httptest.NewRecorder()
+ h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/port/switchport?port=port1.0.1",nil))
+ if rec.Code!=http.StatusNotFound { t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String()) }
+}

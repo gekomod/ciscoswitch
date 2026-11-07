@@ -646,16 +646,26 @@ async function inspectVLAN(){
   const members=new Map(),knownPorts=new Set(latestPorts.map(p=>p.name.toLowerCase()));
   for(const m of raw.matchAll(/(port\\d+\\.\\d+\\.\\d+)\\s*\\(([ut])\\)/gi)){const name=m[1].toLowerCase();if(knownPorts.has(name))members.set(name,m[2].toLowerCase());}
   $('vlan-inspect-raw').textContent=raw;
-  const ports=latestPorts.map(p=>{const mode=members.get(p.name)||'none';return '<div class="vlan-port-cell '+(mode==='u'?'is-untagged':mode==='t'?'is-tagged':'is-unknown')+'"><b>'+esc(p.name.replace(/^port1\.0\./,''))+'</b><small>'+(mode==='u'?'UNTAGGED':mode==='t'?'TAGGED':'NIEUSTALONY')+'</small><label class="vlan-port-select"><input type="checkbox" data-vlan-select="'+esc(p.name)+'"> Zaznacz</label><button type="button" class="vlan-port-config" data-vlan-port="'+esc(p.name)+'" aria-label="Konfiguruj port '+esc(p.name)+'">Konfiguruj</button></div>';});
+  const ports=latestPorts.map(p=>{const mode=members.get(p.name)||'unknown';return '<div class="vlan-port-cell '+(mode==='u'?'is-untagged':mode==='t'?'is-tagged':'is-unknown')+'" data-vlan-state="'+mode+'" data-vlan-port-name="'+esc(p.name.toLowerCase())+'"><b>'+esc(p.name.replace(/^port1\\.0\\./,''))+'</b><small>'+(mode==='u'?'UNTAGGED':mode==='t'?'TAGGED':'NIEUSTALONY')+'</small><label class="vlan-port-select"><input type="checkbox" data-vlan-select="'+esc(p.name)+'"> Zaznacz</label><button type="button" class="vlan-port-config" data-vlan-port="'+esc(p.name)+'" aria-label="Konfiguruj port '+esc(p.name)+'">Konfiguruj</button></div>';});
   map.innerHTML=ports.join('')||'<p class="empty">Brak portów.</p>';
+  applyVLANPortFilters();
   const tagged=[...members.values()].filter(v=>v==='t').length,untagged=[...members.values()].filter(v=>v==='u').length;
   const unknown=latestPorts.length-members.size;status.textContent=members.size?'VLAN '+id+': rozpoznano '+members.size+' przypisań ('+tagged+' tagged, '+untagged+' untagged). Porty bez dopasowania: '+unknown+' — ich członkostwo jest nieustalone, nie oznacza to braku VLAN.':'Odczytano odpowiedź VLAN '+id+', ale parser nie rozpoznał formatu członkostwa. Wszystkie porty mają stan nieustalony; sprawdź szczegóły odpowiedzi poniżej.';
  }catch(e){$('vlan-inspect-raw').textContent='';status.textContent='Nie udało się wiarygodnie odczytać VLAN: '+e.message;map.innerHTML='<p class="empty">Brak aktualnych danych — mapa VLAN nie została zaktualizowana.</p>';}
 }
+
+function applyVLANPortFilters(){
+ const root=$('vlan-port-map'),query=String($('vlan-port-search')?.value||'').trim().toLowerCase(),state=$('vlan-state-filter')?.value||'all';
+ const cells=[...root.querySelectorAll('.vlan-port-cell')];let visible=0,tagged=0,untagged=0,unknown=0;
+ for(const cell of cells){const mode=cell.dataset.vlanState||'unknown',name=cell.dataset.vlanPortName||'',matchState=state==='all'||mode===state,matchName=!query||name.includes(query);const show=matchState&&matchName;cell.hidden=!show;if(show){visible++;if(mode==='t')tagged++;else if(mode==='u')untagged++;else unknown++;}}
+ const summary=$('vlan-map-count');if(summary)summary.textContent=cells.length?'Widoczne: '+visible+' / '+cells.length+' · Tagged: '+tagged+' · Untagged: '+untagged+' · Nieustalone: '+unknown:'Brak aktualnego odczytu.';
+}
+$('vlan-port-search').addEventListener('input',applyVLANPortFilters);
+$('vlan-state-filter').addEventListener('change',applyVLANPortFilters);
 $('inspect-vlan').onclick=inspectVLAN;
 $('vlan-port-map').addEventListener('click',e=>{const button=e.target.closest('[data-vlan-port]');if(!button)return;openPortDialog(button.dataset.vlanPort);});
 $('vlan-port-map').addEventListener('change',e=>{const input=e.target.closest('[data-vlan-select]');if(!input)return;if(input.checked)vlanSelectedPorts.add(input.dataset.vlanSelect);else vlanSelectedPorts.delete(input.dataset.vlanSelect);updateVLANSelection();});
-$('vlan-select-all').onclick=()=>{for(const input of $('vlan-port-map').querySelectorAll('[data-vlan-select]')){input.checked=true;vlanSelectedPorts.add(input.dataset.vlanSelect);}updateVLANSelection();};
+$('vlan-select-all').onclick=()=>{for(const cell of $('vlan-port-map').querySelectorAll('.vlan-port-cell:not([hidden])')){const input=cell.querySelector('[data-vlan-select]');if(input){input.checked=true;vlanSelectedPorts.add(input.dataset.vlanSelect);}}updateVLANSelection();};
 $('vlan-select-clear').onclick=()=>{vlanSelectedPorts.clear();for(const input of $('vlan-port-map').querySelectorAll('[data-vlan-select]'))input.checked=false;updateVLANSelection();};
 
 async function applyVLANMembership(){

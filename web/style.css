@@ -437,3 +437,5 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 
 /* VLAN inventory: readable status first, device output on demand. */
 .vlan-raw-details{margin-top:12px;border:1px solid var(--border,rgba(148,163,184,.2));border-radius:12px;padding:12px 14px;background:var(--panel-soft,rgba(148,163,184,.04))}.vlan-raw-details summary{cursor:pointer;color:var(--muted,#94a3b8);font-size:12px;font-weight:650}.vlan-raw-details[open] summary{margin-bottom:10px}.vlan-raw-details pre{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}.vlan-raw-details+#unused{display:none}
+
+.vlan-map-filters{display:grid;grid-template-columns:minmax(180px,1fr) minmax(180px,240px) minmax(220px,1.5fr);gap:10px;align-items:end;margin:14px 0}.vlan-map-filters label{display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--muted)}.vlan-map-filters input,.vlan-map-filters select{width:100%;min-width:0}.vlan-map-filters .note{margin:0;min-height:38px;display:flex;align-items:center}.vlan-port-cell[hidden]{display:none!important}@media(max-width:720px){.vlan-map-filters{grid-template-columns:1fr}.vlan-map-filters .note{min-height:32px}}

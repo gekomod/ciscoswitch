@@ -208,8 +208,8 @@ func configExportHandler(run func(string) (string, error)) http.Handler {
 
 
 type configCompareResult struct {
- Added []string `json:"added"`
- Removed []string `json:"removed"`
+ Added int `json:"added"`
+ Removed int `json:"removed"`
  RunningLines int `json:"runningLines"`
  StartupLines int `json:"startupLines"`
 }
@@ -244,14 +244,14 @@ func compareConfigLines(running, startup string) configCompareResult {
  sLines := nonEmptyConfigLines(startup)
  counts := make(map[string]int, len(sLines))
  for _, line := range sLines { counts[line]++ }
- result := configCompareResult{Added: []string{}, Removed: []string{}, RunningLines: len(rLines), StartupLines: len(sLines)}
+ result := configCompareResult{Added: 0, Removed: 0, RunningLines: len(rLines), StartupLines: len(sLines)}
  for _, line := range rLines {
-  if counts[line] > 0 { counts[line]-- } else { result.Added = append(result.Added, line) }
+  if counts[line] > 0 { counts[line]-- } else { result.Added++ }
  }
  counts = make(map[string]int, len(rLines))
  for _, line := range rLines { counts[line]++ }
  for _, line := range sLines {
-  if counts[line] > 0 { counts[line]-- } else { result.Removed = append(result.Removed, line) }
+  if counts[line] > 0 { counts[line]-- } else { result.Removed++ }
  }
  return result
 }
@@ -468,9 +468,9 @@ func configBackupCompareHandler(run func(string) (string, error), dir string) ht
    SHA256: digest,
    BackupLines: len(nonEmptyConfigLines(string(data))),
    CurrentLines: len(nonEmptyConfigLines(current)),
-   AddedInCurrent: len(diff.Added),
-   RemovedFromCurrent: len(diff.Removed),
-   Identical: len(diff.Added) == 0 && len(diff.Removed) == 0,
+   AddedInCurrent: diff.Added,
+   RemovedFromCurrent: diff.Removed,
+   Identical: diff.Added == 0 && diff.Removed == 0,
    ComparedAt: time.Now().UTC(),
   }
   w.Header().Set("Content-Type", "application/json; charset=utf-8")

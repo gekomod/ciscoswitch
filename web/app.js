@@ -539,11 +539,60 @@ function parseARP(raw){
  for(const line of String(raw||'').split(/\r?\n/)){const ip=line.match(ipPattern),mac=line.match(macPattern);if(!ip||!mac)continue;const key=normalizeMAC(mac[0]);if(key)out.set(key,[...(out.get(key)||[]),ip[0]]);}
  return out;
 }
+function parseLLDPDetails(raw){
+ const lines=String(raw||'').replace(/\\r/g,'').split('\\n'),records=[];
+ const labels=[
+  ['systemName',/^(?:neighbor\\s+)?(?:system\\s+name|sys(?:tem)?\\s+name)\\s*[:=]\\s*(.+)$/i],
+  ['chassisId',/^(?:neighbor\\s+)?chassis\\s+id\\s*[:=]\\s*(.+)$/i],
+  ['portId',/^(?:neighbor\\s+)?(?:port\\s+id|port\\s+identifier)\\s*[:=]\\s*(.+)$/i],
+  ['portDescription',/^(?:neighbor\\s+)?port\\s+description\\s*[:=]\\s*(.+)$/i],
+  ['systemDescription',/^(?:neighbor\\s+)?system\\s+description\\s*[:=]\\s*(.+)$/i],
+  ['capabilities',/^(?:system\\s+)?capabilities\\s*[:=]\\s*(.+)$/i]
+ ];
+ let current=null;
+ const finish=()=>{if(current&&(current.localPort||current.systemName||current.chassisId||current.portId)){current.key=(current.chassisId||current.systemName||current.portId||current.localPort||'').toLowerCase();records.push(current);}current=null;};
+ for(let i=0;i<lines.length;i++){
+  const line=lines[i].trim();if(!line)continue;
+  const local=line.match(/(?:local\\s+(?:port|interface)(?:\\s+(?:id|name))?|local\\s+port)\\s*[:=]\\s*(port\\d+\\.\\d+\\.\\d+)/i);
+  const portOnLine=line.match(/\\b(port\\d+\\.\\d+\\.\\d+)\\b/i);
+  const isHeader=/local\\s+(?:port|interface)/i.test(line)&&/(?:chassis|system\\s+name|neighbor)/i.test(line);
+  if(local||(!isHeader&&portOnLine&&/neighbor|chassis|system name/i.test(line))){
+   if(current)finish();
+   current={localPort:(local||portOnLine)[1].toLowerCase(),systemName:'',chassisId:'',portId:'',portDescription:'',systemDescription:'',capabilities:''};
+  }
+  if(!current&&portOnLine){current={localPort:portOnLine[1].toLowerCase(),systemName:'',chassisId:'',portId:'',portDescription:'',systemDescription:'',capabilities:''};}
+  if(current){
+   for(const [key,pattern] of labels){const m=line.match(pattern);if(m)current[key]=m[1].trim();}
+   // Some firmware emits the local interface and remote system name in one row.
+   if(portOnLine&&line.includes(portOnLine[1])&&!current.systemName){
+    const tokens=line.split(/\\s{2,}/).map(x=>x.trim()).filter(Boolean);
+    if(tokens.length>=3){const name=tokens.find((v,n)=>n>0&&!/^port\\d+\\./i.test(v)&&!/^([0-9a-f]{2}[:-]){5}/i.test(v));if(name)current.systemName=name;}
+   }
+  }
+  if(/^[-=]{4,}$/.test(line)||/^total\\s+neighbors?/i.test(line))finish();
+ }
+ finish();
+ const seen=new Set();return records.filter(r=>{const id=[r.localPort,r.key].join('|');if(seen.has(id))return false;seen.add(id);return true;});
+}
 function parseLLDP(raw){
- const byPort=new Map(),lines=String(raw||'').split(/\r?\n/);
- for(let i=0;i<lines.length;i++){const m=lines[i].match(/\bport\d+\.\d+\.\d+\b/i);if(!m)continue;const port=m[0];let block=lines.slice(Math.max(0,i-3),Math.min(lines.length,i+8)).join(' · ').replace(/\s+/g,' ').trim();if(block.length>260)block=block.slice(0,260)+'…';const list=byPort.get(port)||[];if(!list.includes(block))list.push(block);byPort.set(port,list);}
+ const byPort=new Map();
+ for(const item of parseLLDPDetails(raw)){
+  const label=item.systemName||item.chassisId||item.portDescription||item.portId||'Sąsiad LLDP wykryty';
+  const detail=[label,item.portId?'port '+item.portId:''].filter(Boolean).join(' · ');
+  const list=byPort.get(item.localPort)||[];if(!list.includes(detail))list.push(detail);byPort.set(item.localPort,list);
+ }
+ // Fallback: keep visibility of LLDP observations even when firmware uses an unknown layout,
+ // but never expose a CLI line as user-facing text.
+ if(!byPort.size){
+  for(const m of String(raw||'').matchAll(/\\b(port\\d+\\.\\d+\\.\\d+)\\b/ig)){
+   const port=m[1].toLowerCase(),list=byPort.get(port)||[];
+   if(!list.includes('Sąsiad LLDP wykryty — szczegóły nieznane'))list.push('Sąsiad LLDP wykryty — szczegóły nieznane');
+   byPort.set(port,list);
+  }
+ }
  return byPort;
 }
+
 function classifyNeighbor(text){
  const value=String(text||'').toLowerCase();
  const rules=[

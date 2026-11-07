@@ -157,9 +157,21 @@ function runPortAudit(){
 }
 $('run-port-audit').onclick=async()=>{
  const button=$('run-port-audit');button.disabled=true;button.textContent='Odświeżam dane…';
- try{await load();if(!latestPorts.length)throw new Error('Nie ma danych portów do audytu.');runPortAudit();}
- catch(e){$('port-audit-status').textContent='Audyt nie został wykonany: '+e.message;}
- finally{button.disabled=false;button.textContent='Uruchom audyt';}
+ $('port-audit-status').textContent='Pobieranie świeżego odczytu SNMP…';
+ try{
+  const d=await api('/api/status');
+  if(!d.reachable)throw new Error('Switch jest nieosiągalny — wynik nie może być uznany za aktualny.');
+  if(!Array.isArray(d.ports)||!d.ports.length)throw new Error('Odczyt nie zawiera listy portów.');
+  const freshPorts=sorted(d.ports);
+  if(!freshPorts.every(p=>p&&p.name))throw new Error('Odczyt portów jest niekompletny.');
+  latestPorts=freshPorts;
+  $('port-audit-updated').textContent='Odczyt: '+new Date().toLocaleTimeString();
+  runPortAudit();
+ }catch(e){
+  $('port-audit-summary').innerHTML='<div class="metric"><span>Porty sprawdzone</span><b>—</b></div><div class="metric"><span>Wymagają uwagi</span><b>—</b></div><div class="metric"><span>Informacyjne</span><b>—</b></div>';
+  $('port-audit-rows').innerHTML='<tr><td colspan="5" class="empty">Brak aktualnych danych — audyt nie został wykonany.</td></tr>';
+  $('port-audit-status').textContent='Audyt przerwany: '+e.message;
+ }finally{button.disabled=false;button.textContent='Uruchom audyt';}
 };
 function compareValue(value){return value===undefined||value===null||value===''?'Brak danych':String(value);}
 function comparePortRows(a,b){

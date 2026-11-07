@@ -283,13 +283,13 @@ $('bulk-apply').onclick=async()=>{
  try{
   const preview=await api('/api/port/preview',{port:payload.ports[0],mode:payload.mode,accessVlan:payload.accessVlan,allowed:payload.allowed,native:payload.native,speed:payload.speed,duplex:payload.duplex,description:payload.description});
   const summary='PORTY: '+payload.ports.join(', ')+'\n\\nUSTAWIENIA WZORCOWE:\\n'+preview.commands.slice(1,-1).join('\n')+'\n\\nPrzed zmianą zostanie zapisana kopia running-config. Zastosować profil?';
-  out.textContent=summary;if(!confirm(summary))return;
+  showFriendlyResult('bulk-output',summary,'Podgląd profilu portów');if(!confirm('Zastosować profil na '+payload.ports.length+' portach?'))return;
   const result=await api('/api/ports/settings/bulk',payload);
-  out.textContent=result.output||'Konfiguracja przekazana do switcha.';
+  showFriendlyResult('bulk-output',result.output,'Konfiguracja portów');
   addEvent('Zastosowano profil portów: '+payload.ports.join(', '));
   alert('Polecenia wysłane. Zweryfikuj stan portów i VLAN.');
   await load();
- }catch(e){out.textContent='BŁĄD: '+e.message;alert(e.message);}
+ }catch(e){showFriendlyResult('bulk-output',e.message,'Konfiguracja portów');alert(e.message);}
  finally{button.disabled=false;}
 };
 $('bulk-admin-apply').onclick=async()=>{
@@ -301,13 +301,13 @@ $('bulk-admin-apply').onclick=async()=>{
  const warning=action==='disable'?'\n\nUWAGA: wyłączenie może odciąć urządzenia lub uplink. Serwer musi mieć ALLOW_PORT_SHUTDOWN=true.':'';
  const summary=(action==='enable'?'WŁĄCZYĆ':'WYŁĄCZYĆ')+' porty: '+ports.join(', ')+warning+'\n\nPrzed zmianą zostanie wykonana kopia konfiguracji. Kontynuować?';
  if(!confirm(summary))return;
- button.disabled=true;out.textContent='Sprawdzanie zabezpieczeń i wykonywanie operacji…';
+ button.disabled=true;showFriendlyResult('bulk-admin-output','Operacja '+(action==='enable'?'włączania':'wyłączania')+' '+ports.length+' portów.','Operacja na portach');
  try{
   const result=await api('/api/ports/action/bulk',{ports,action});
-  out.textContent=result.output||'Polecenia przekazane do switcha.';
+  showFriendlyResult('bulk-admin-output',result.output,'Operacja na portach');
   addEvent((action==='enable'?'Włączono':'Wyłączono')+' porty: '+ports.join(', '),action==='enable'?'success':'warning');
   await load();
- }catch(e){out.textContent='BŁĄD: '+e.message;alert(e.message);}
+ }catch(e){showFriendlyResult('bulk-admin-output',e.message,'Operacja na portach');alert(e.message);}
  finally{button.disabled=false;}
 };
 $('bulk-edge-apply').onclick=async()=>{
@@ -318,17 +318,17 @@ $('bulk-edge-apply').onclick=async()=>{
  const ports=numbers.map(n=>'port1.0.'+n);
  const summary=(enabled?'WŁĄCZYĆ':'WYŁĄCZYĆ')+' EdgePort na: '+ports.join(', ')+'.\n\nNie obejmuj uplinków, LACP ani połączeń switch-switch. Przed zmianą zostanie wykonana kopia konfiguracji. Kontynuować?';
  if(!confirm(summary))return;
- button.disabled=true;out.textContent='Sprawdzanie zabezpieczeń i wykonywanie…';
+ button.disabled=true;showFriendlyResult('bulk-edge-output','Operacja EdgePort dla '+ports.length+' portów.','Operacja EdgePort');
  try{
   const result=await api('/api/ports/edgeport/bulk',{ports,enabled});
-  out.textContent=result.output||'Polecenia przekazane do switcha.';
+  showFriendlyResult('bulk-edge-output',result.output,'Operacja EdgePort');
   addEvent((enabled?'Włączono':'Wyłączono')+' EdgePort: '+ports.join(', '),'warning');
   await load();
- }catch(e){out.textContent='BŁĄD: '+e.message;alert(e.message);}
+ }catch(e){showFriendlyResult('bulk-edge-output',e.message,'Operacja EdgePort');alert(e.message);}
  finally{button.disabled=false;}
 };
-$('lacp-create').onclick=async()=>{const group=Number($('lacp-group').value),ports=$('lacp-ports').value,mode=$('lacp-mode').value;if(!confirm('Utworzyć LACP group '+group+' na portach '+ports+'? Porty powinny być wcześniej skonfigurowane identycznie po obu stronach łącza.'))return;try{const d=await api('/api/lacp',{group,ports,mode,delete:false});$('lacp-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
-$('lacp-delete').onclick=async()=>{const group=Number($('lacp-group').value),ports=$('lacp-ports').value;if(!confirm('Usunąć konfigurację channel-group z portów '+ports+'?'))return;try{const d=await api('/api/lacp',{group,ports,mode:$('lacp-mode').value,delete:true});$('lacp-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
+$('lacp-create').onclick=async()=>{const group=Number($('lacp-group').value),ports=$('lacp-ports').value,mode=$('lacp-mode').value;if(!confirm('Utworzyć LACP group '+group+' na portach '+ports+'? Porty powinny być wcześniej skonfigurowane identycznie po obu stronach łącza.'))return;try{const d=await api('/api/lacp',{group,ports,mode,delete:false});showFriendlyResult('lacp-output',d.output,'Operacja LACP');}catch(e){alert(e.message);}};
+$('lacp-delete').onclick=async()=>{const group=Number($('lacp-group').value),ports=$('lacp-ports').value;if(!confirm('Usunąć konfigurację channel-group z portów '+ports+'?'))return;try{const d=await api('/api/lacp',{group,ports,mode:$('lacp-mode').value,delete:true});showFriendlyResult('lacp-output',d.output,'Operacja LACP');}catch(e){alert(e.message);}};
 function parseLACPDetail(raw){
  const groups=[];let current=null;
  for(const line of String(raw||'').split(/\r?\n/)){
@@ -377,7 +377,7 @@ $('show-lacp').onclick=async()=>{
  }
 };
 $('apply-stp').onclick=async()=>{const mode=$('stp-mode').value,priority=Number($('stp-priority').value);if(!confirm('Zmienić globalny tryb STP na '+mode.toUpperCase()+' i priorytet bridge na '+priority+'?'))return;try{const d=await api('/api/stp',{mode,priority});showFriendlyResult('stp-output',d.output,'Operacja STP');}catch(e){alert(e.message);}};
-$('show-stp').onclick=async()=>{try{const d=await api('/api/command',{command:'show spanning-tree'});$('stp-output').textContent=d.output||'Brak danych';}catch(e){$('stp-output').textContent=e.message;}};
+$('show-stp').onclick=async()=>{try{const d=await api('/api/command',{command:'show spanning-tree'});showFriendlyResult('stp-output',d.output,'Stan STP');}catch(e){$('stp-output').textContent=e.message;}};
 $('edgeport-toggle').onchange=async e=>{const port=$('edgeport-port').value,enabled=e.target.checked;if(!port){alert('Wybierz port edge.');e.target.checked=false;return;}if(!confirm((enabled?'Włączyć':'Wyłączyć')+' edgeport na '+port+'? Włączaj wyłącznie na portach końcowych.')){e.target.checked=!enabled;return;}try{const d=await api('/api/edgeport',{port,enabled});showFriendlyResult('stp-output',d.output,'Operacja STP');}catch(x){e.target.checked=!enabled;alert(x.message);}};
 
 function openPortDialog(port){

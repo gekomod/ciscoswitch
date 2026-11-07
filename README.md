@@ -110,3 +110,7 @@ Panel pozwala ręcznie tworzyć kopie `running-config` na serwerze, przeglądać
 
 ### Inspektor portu / switchport
 W szczegółach wybranego portu przycisk „Odczytaj VLAN / MAC / LLDP” pobiera `show interface switchport` i pokazuje osobno tryb access/trunk, Default VLAN (native/PVID), ingress filter, typy ramek oraz listę skonfigurowanych VLAN-ów. Parser dopasowuje pełną nazwę interfejsu, a nie fragment numeru portu; brakujące pola pozostają oznaczone jako brak danych. Surowy blok CLI pozostaje widoczny do diagnostyki. Odczyt jest tylko do odczytu i nie zmienia konfiguracji. Dane pochodzą z polecenia `show interface switchport`; status linku i liczniki nadal pochodzą z dotychczasowego SNMP/IF-MIB.
+
+
+### Centrum alarmów
+Panel agreguje zapisane zdarzenia monitoringu w jednym widoku, pokazuje liczniki według poziomu i umożliwia filtrowanie historii. Zdarzenia powstają z odczytów SNMP wykonywanych podczas działania panelu; zamknięta przeglądarka nie prowadzi samodzielnego pollingu.

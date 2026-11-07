@@ -118,3 +118,7 @@ body{background:#f4f6f9;color:var(--text)}.sidebar{background:#fff;border-right:
 .sidebar .nav[hidden],.nav-search-empty[hidden]{display:none}
 
 .bulk-port-panel{margin:18px 0}.bulk-port-panel .form-grid{margin-top:16px}.bulk-port-panel pre{white-space:pre-wrap;overflow-wrap:anywhere}
+
+.bulk-admin-panel{border:1px solid var(--border);background:var(--panel)}
+.bulk-admin-panel .form-grid{margin-top:14px}
+.bulk-admin-panel pre{white-space:pre-wrap;overflow-wrap:anywhere}

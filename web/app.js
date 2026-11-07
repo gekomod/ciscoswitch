@@ -36,7 +36,7 @@ function initThemeToggle(){
  });
 }
 initThemeToggle();
-async function api(path,body,method){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);let r;try{r=await fetch(path,{method:method||(body===undefined?'GET':'POST'),headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store',signal:controller.signal});}catch(e){if(e.name==='AbortError')throw Error('Przekroczono limit czasu odpowiedzi API (30 s): '+path);throw e;}finally{clearTimeout(timer);}const d=await r.json().catch(()=>({error:'Nieprawidłowa odpowiedź API'}));if(r.status===401){location.href='/login';throw Error('Sesja wygasła — zaloguj się ponownie.');}if(!r.ok)throw Error(d.error||'Błąd API');return d;}
+async function api(path,body,method){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);let r;try{r=await fetch(path,{method:method||(body===undefined?'GET':'POST'),headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store',signal:controller.signal});}catch(e){if(e.name==='AbortError')throw Error('Przekroczono limit czasu odpowiedzi API (30 s): '+path);throw e;}finally{clearTimeout(timer);}const raw=await r.text();let d={};try{d=raw?JSON.parse(raw):{};}catch(_e){d={error:raw||'Nieprawidłowa odpowiedź API'};}if(r.status===401){location.href='/login';throw Error('Sesja wygasła — zaloguj się ponownie.');}if(!r.ok)throw Error(d.error||'Błąd API');return d;}
 
 function activatePage(hash){
  const main=document.querySelector('.main');if(!main)return;

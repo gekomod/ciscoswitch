@@ -303,13 +303,33 @@ async function refreshSystem(){const button=$('refresh-system');button.disabled=
 $('refresh-system').onclick=refreshSystem;
 
 const vlanSelectedPorts=new Set();
-function updateVLANSelection(){const count=$('vlan-select-count');if(count)count.textContent='Zaznaczono: '+vlanSelectedPorts.size;const use=$('vlan-use-selected');if(use)use.disabled=vlanSelectedPorts.size===0;}
+function updateVLANSelection(){const count=$('vlan-select-count');if(count)count.textContent='Zaznaczono: '+vlanSelectedPorts.size;const use=$('vlan-use-selected');if(use)use.disabled=vlanSelectedPorts.size===0;const apply=$('vlan-apply-membership');if(apply)apply.disabled=vlanSelectedPorts.size===0;}
 async function inspectVLAN(){const id=Number($('vlan-inspect-id').value);if(!Number.isInteger(id)||id<1||id>4094){alert('VLAN ID musi być w zakresie 1–4094.');return;}const box=$('vlan-inspect-raw'),map=$('vlan-port-map');box.textContent='Odczyt VLAN '+id+'…';map.innerHTML='';try{const d=await api('/api/command',{command:'show vlan '+id});const raw=d.output||'';box.textContent=raw||'Brak odpowiedzi CLI';const members=new Map();for(const m of raw.matchAll(/(port\d+\.\d+\.\d+)\s*\(([ut])\)/gi))members.set(m[1],m[2].toLowerCase());const ports=latestPorts.map(p=>{const mode=members.get(p.name)||'none';return '<div class="vlan-port-cell '+(mode==='u'?'is-untagged':mode==='t'?'is-tagged':'is-none')+'"><b>'+esc(p.name.replace(/^port1\.0\./,''))+'</b><small>'+(mode==='u'?'UNTAGGED':mode==='t'?'TAGGED':'—')+'</small><label class="vlan-port-select"><input type="checkbox" data-vlan-select="'+esc(p.name)+'" '+(vlanSelectedPorts.has(p.name)?'checked':'')+'> Zaznacz</label><button type="button" class="vlan-port-config" data-vlan-port="'+esc(p.name)+'" aria-label="Konfiguruj port '+esc(p.name)+'">Konfiguruj</button></div>';});map.innerHTML=ports.join('')||'<p class="empty">Najpierw odczytaj porty SNMP.</p>';if(members.size===0)map.insertAdjacentHTML('beforeend','<p class="note">Nie rozpoznano członków portów w odpowiedzi CLI. Sprawdź surowy wynik powyżej.</p>');}catch(e){box.textContent=e.message;map.innerHTML='<p class="empty">Nie udało się pobrać członkostwa VLAN.</p>';}}
 $('inspect-vlan').onclick=inspectVLAN;
 $('vlan-port-map').addEventListener('click',e=>{const button=e.target.closest('[data-vlan-port]');if(!button)return;openPortDialog(button.dataset.vlanPort);});
 $('vlan-port-map').addEventListener('change',e=>{const input=e.target.closest('[data-vlan-select]');if(!input)return;if(input.checked)vlanSelectedPorts.add(input.dataset.vlanSelect);else vlanSelectedPorts.delete(input.dataset.vlanSelect);updateVLANSelection();});
 $('vlan-select-all').onclick=()=>{for(const input of $('vlan-port-map').querySelectorAll('[data-vlan-select]')){input.checked=true;vlanSelectedPorts.add(input.dataset.vlanSelect);}updateVLANSelection();};
 $('vlan-select-clear').onclick=()=>{vlanSelectedPorts.clear();for(const input of $('vlan-port-map').querySelectorAll('[data-vlan-select]'))input.checked=false;updateVLANSelection();};
+
+async function applyVLANMembership(){
+ const ports=[...vlanSelectedPorts].sort(),vlan=Number($('vlan-inspect-id').value),membership=$('vlan-membership-mode').value,output=$('vlan-membership-output'),button=$('vlan-apply-membership');
+ if(!ports.length){alert('Zaznacz co najmniej jeden port.');return;}
+ if(!Number.isInteger(vlan)||vlan<1||vlan>4094){alert('VLAN ID musi być w zakresie 1–4094.');return;}
+ const payload={ports,vlan,membership};button.disabled=true;output.textContent='Sprawdzanie aktualnej konfiguracji portów…';
+ try{
+  const preview=await api('/api/vlan/ports/preview',payload);
+  const summary='PODGLĄD — bez zmian na switchu\n\n'+preview.commands.join('\n')+'\n\n'+preview.warnings.join('\n');
+  output.textContent=summary;
+  if(!confirm(summary+'\n\nCzy wykonać te komendy?'))return;
+  const result=await api('/api/vlan/ports/apply',payload);
+  output.textContent='WYNIK\n'+(result.output||'Komendy przekazane.')+'\n\nOdczytaj ponownie VLAN, aby zweryfikować członkostwo.';
+  addEvent('Zmieniono członkostwo VLAN '+vlan+' na portach '+ports.join(', '));
+  alert('Komendy przekazane. Odczytaj ponownie VLAN i sprawdź stan portów.');
+  await inspectVLAN();
+ }catch(e){output.textContent='Operacja zablokowana lub nieudana: '+e.message;alert(e.message);}
+ finally{button.disabled=vlanSelectedPorts.size===0;}
+}
+$('vlan-apply-membership').onclick=applyVLANMembership;
 $('vlan-use-selected').onclick=()=>{const nums=[...vlanSelectedPorts].map(name=>Number(name.match(/\.(\d+)$/)?.[1])).filter(n=>Number.isInteger(n)&&n>=1&&n<=52).sort((a,b)=>a-b);if(!nums.length){alert('Nie znaleziono poprawnych numerów zaznaczonych portów.');return;}$('bulk-ports').value=nums.join(',');$('bulk-port-settings').scrollIntoView({behavior:'smooth',block:'center'});$('bulk-ports').focus();};
 let topologyData={rows:[],raw:{}};
 const ouiVendors={

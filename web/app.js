@@ -382,9 +382,9 @@ $('show-lacp').onclick=async()=>{
   $('lacp-diagnostics').innerHTML='<div class="empty">Brak danych LACP do przedstawienia. Sprawdź obsługę poleceń przez firmware i konfigurację agregacji.</div>';
  }
 };
-$('apply-stp').onclick=async()=>{const mode=$('stp-mode').value,priority=Number($('stp-priority').value);if(!confirm('Zmienić globalny tryb STP na '+mode.toUpperCase()+' i priorytet bridge na '+priority+'?'))return;try{const d=await api('/api/stp',{mode,priority});$('stp-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
+$('apply-stp').onclick=async()=>{const mode=$('stp-mode').value,priority=Number($('stp-priority').value);if(!confirm('Zmienić globalny tryb STP na '+mode.toUpperCase()+' i priorytet bridge na '+priority+'?'))return;try{const d=await api('/api/stp',{mode,priority});showFriendlyResult('stp-output',d.output,'Operacja STP');}catch(e){alert(e.message);}};
 $('show-stp').onclick=async()=>{try{const d=await api('/api/command',{command:'show spanning-tree'});$('stp-output').textContent=d.output||'Brak danych';}catch(e){$('stp-output').textContent=e.message;}};
-$('edgeport-toggle').onchange=async e=>{const port=$('edgeport-port').value,enabled=e.target.checked;if(!port){alert('Wybierz port edge.');e.target.checked=false;return;}if(!confirm((enabled?'Włączyć':'Wyłączyć')+' edgeport na '+port+'? Włączaj wyłącznie na portach końcowych.')){e.target.checked=!enabled;return;}try{const d=await api('/api/edgeport',{port,enabled});$('stp-output').textContent=d.output||'Polecenie przekazane';}catch(x){e.target.checked=!enabled;alert(x.message);}};
+$('edgeport-toggle').onchange=async e=>{const port=$('edgeport-port').value,enabled=e.target.checked;if(!port){alert('Wybierz port edge.');e.target.checked=false;return;}if(!confirm((enabled?'Włączyć':'Wyłączyć')+' edgeport na '+port+'? Włączaj wyłącznie na portach końcowych.')){e.target.checked=!enabled;return;}try{const d=await api('/api/edgeport',{port,enabled});showFriendlyResult('stp-output',d.output,'Operacja STP');}catch(x){e.target.checked=!enabled;alert(x.message);}};
 
 function openPortDialog(port){
  const dialog=$('port-dialog');if(!dialog)return;
@@ -603,7 +603,7 @@ function filterARP(){if($('l3-arp'))showFriendlyResult('l3-arp',arpTableText,'S�
 async function configureStaticRoute(remove){const q={prefix:$('route-prefix').value.trim(),gateway:$('route-gateway').value.trim(),distance:Number($('route-distance').value),delete:remove};const action=remove?'usunąć':'dodać';if(!confirm('Czy na pewno '+action+' trasę '+q.prefix+' przez '+q.gateway+'? Zmiana może wpłynąć na łączność z przełącznikiem.'))return;try{const d=await api('/api/route/static',q);showFriendlyResult('probe-output',d.output,'Konfiguracja trasy');await refreshL3();}catch(e){alert(e.message);}}
 $('route-add').onclick=()=>configureStaticRoute(false);
 $('route-delete').onclick=()=>configureStaticRoute(true);
-async function runProbe(kind){const target=$('probe-target').value.trim();$('probe-output').textContent=(kind==='ping'?'Ping':'Traceroute')+' '+target+'…';try{const d=await api('/api/network/probe',{kind,target});showFriendlyResult('probe-output',d.output,'Wynik testu łączności');}catch(e){$('probe-output').textContent=e.message;}}
+async function runProbe(kind){const target=$('probe-target').value.trim();$('probe-output').textContent=(kind==='ping'?'Ping':'Traceroute')+' '+target+'…';try{const d=await api('/api/network/probe',{kind,target});showFriendlyResult('probe-output',d.output,'Wynik testu łączności');}catch(e){showFriendlyResult('probe-output',e.message,'Test łączności');}}
 $('probe-ping').onclick=()=>runProbe('ping');
 $('probe-trace').onclick=()=>runProbe('traceroute');
 
@@ -621,11 +621,11 @@ async function refreshSSH(){
 }
 
 $('ssh-refresh').onclick=refreshSSH;
-async function changeSSHUser(remove){const q={username:$('ssh-new-user').value.trim(),password:$('ssh-new-password').value,privilege:Number($('ssh-new-privilege').value),delete:remove};if(!q.username){alert('Wpisz login.');return;}if(!remove&&!q.password){alert('Wpisz nowe hasło.');return;}if(!confirm((remove?'Usunąć':'Utworzyć lub zaktualizować')+' konto '+q.username+'?'))return;const b=remove?$('ssh-user-delete'):$('ssh-user-save');b.disabled=true;try{const d=await api('/api/ssh/user',q);showFriendlyResult('ssh-action-output',d.output,'Zarządzanie kontem SSH');$('ssh-new-password').value='';await refreshSSH();}catch(e){$('ssh-action-output').textContent=e.message;}finally{b.disabled=false;}}
+async function changeSSHUser(remove){const q={username:$('ssh-new-user').value.trim(),password:$('ssh-new-password').value,privilege:Number($('ssh-new-privilege').value),delete:remove};if(!q.username){alert('Wpisz login.');return;}if(!remove&&!q.password){alert('Wpisz nowe hasło.');return;}if(!confirm((remove?'Usunąć':'Utworzyć lub zaktualizować')+' konto '+q.username+'?'))return;const b=remove?$('ssh-user-delete'):$('ssh-user-save');b.disabled=true;try{const d=await api('/api/ssh/user',q);showFriendlyResult('ssh-action-output',d.output,'Zarządzanie kontem SSH');$('ssh-new-password').value='';await refreshSSH();}catch(e){showFriendlyResult('ssh-action-output',e.message,'Konto SSH');}finally{b.disabled=false;}}
 $('ssh-user-save').onclick=()=>changeSSHUser(false);
 $('ssh-user-delete').onclick=()=>changeSSHUser(true);
 
-async function changeSNMPTrap(remove){const q={address:$('snmp-trap-ip').value.trim(),community:$('snmp-trap-community').value,delete:remove};if(!q.community){alert('Wpisz istniejącą community SNMP.');return;}if(!confirm((remove?'Usunąć':'Dodać')+' odbiorcę Trap '+q.address+' dla SNMPv2c?'))return;const b=remove?$('snmp-trap-remove'):$('snmp-trap-add');b.disabled=true;try{const d=await api('/api/snmp/trap-host',q);showFriendlyResult('snmp-action-output',d.output,'Konfiguracja powiadomień SNMP');await refreshSNMP();}catch(e){$('snmp-action-output').textContent=e.message;}finally{b.disabled=false;}}
+async function changeSNMPTrap(remove){const q={address:$('snmp-trap-ip').value.trim(),community:$('snmp-trap-community').value,delete:remove};if(!q.community){alert('Wpisz istniejącą community SNMP.');return;}if(!confirm((remove?'Usunąć':'Dodać')+' odbiorcę Trap '+q.address+' dla SNMPv2c?'))return;const b=remove?$('snmp-trap-remove'):$('snmp-trap-add');b.disabled=true;try{const d=await api('/api/snmp/trap-host',q);showFriendlyResult('snmp-action-output',d.output,'Konfiguracja powiadomień SNMP');await refreshSNMP();}catch(e){showFriendlyResult('snmp-action-output',e.message,'Operacja SNMP');}finally{b.disabled=false;}}
 $('snmp-trap-add').onclick=()=>changeSNMPTrap(false);
 $('snmp-trap-remove').onclick=()=>changeSNMPTrap(true);
 async function changeSNMPv3User(remove){
@@ -635,7 +635,7 @@ async function changeSNMPv3User(remove){
  if(!confirm((remove?'Usunąć':'Utworzyć')+' użytkownika SNMPv3 '+q.username+(remove?'?':' z SHA + AES (authPriv)?')))return;
  const b=remove?$('snmp-v3-remove'):$('snmp-v3-add');b.disabled=true;
  try{const d=await api('/api/snmp/v3-user',q);showFriendlyResult('snmp-v3-output',d.output,'Użytkownik SNMPv3');$('snmp-v3-auth').value='';$('snmp-v3-privacy').value='';await refreshSNMP();}
- catch(e){$('snmp-v3-output').textContent=e.message;}
+ catch(e){showFriendlyResult('snmp-v3-output',e.message,'Użytkownik SNMPv3');}
  finally{b.disabled=false;}
 }
 $('snmp-v3-add').onclick=()=>changeSNMPv3User(false);
@@ -646,7 +646,7 @@ async function changeSNMPv3Trap(remove){
  if(!confirm((remove?'Usunąć':'Dodać')+' odbiorcę Trap SNMPv3 '+q.address+' ('+q.username+')?'))return;
  const b=remove?$('snmp-v3-trap-remove'):$('snmp-v3-trap-add');b.disabled=true;
  try{const d=await api('/api/snmp/v3-trap-host',q);showFriendlyResult('snmp-v3-trap-output',d.output,'Odbiorca Trap SNMPv3');await refreshSNMP();}
- catch(e){$('snmp-v3-trap-output').textContent=e.message;}
+ catch(e){showFriendlyResult('snmp-v3-trap-output',e.message,'Odbiorca Trap SNMPv3');}
  finally{b.disabled=false;}
 }
 $('snmp-v3-trap-add').onclick=()=>changeSNMPv3Trap(false);
@@ -677,10 +677,20 @@ $('mac-filter').addEventListener('input',filterFDB);
 $('load-lldp').onclick=async()=>{try{const d=await api('/api/command',{command:'show lldp neighbors'});showFriendlyResult('lldp-output',d.output,'Sąsiedzi sieciowi');}catch(e){showFriendlyResult('lldp-output',e.message,'Sąsiedzi sieciowi');}};
 
 $('load-logs').onclick=()=>loadDiagnostic('show log tail 30','logs-output');
-$('create-vlan').onclick=async()=>{const id=Number($('vlan-id').value),name=$('vlan-name').value;try{const p=await api('/api/vlan/preview',{id,name,delete:false});const summary='PODGLĄD — bez zmian na switchu\\n\\n'+p.commands.join('\n')+'\n\\n'+p.warnings.join('\n');$('vlan-output').textContent=summary;if(!confirm(summary+'\n\\nWysłać te komendy do przełącznika?'))return;const d=await api('/api/vlan',{id,name,delete:false});showFriendlyResult('vlan-output',d.output,'Operacja VLAN');alert('Polecenie utworzenia VLAN wysłane. Zweryfikuj listę VLAN.');}catch(e){alert(e.message);}};
-$('delete-vlan').onclick=async()=>{const id=Number($('vlan-id').value);try{const p=await api('/api/vlan/preview',{id,delete:true});const summary='PODGLĄD — bez zmian na switchu\\n\\n'+p.commands.join('\n')+'\n\\n'+p.warnings.join('\n');$('vlan-output').textContent=summary;if(!confirm(summary+'\n\\nCzy na pewno wykonać?'))return;const d=await api('/api/vlan',{id,delete:true});showFriendlyResult('vlan-output',d.output,'Operacja VLAN');}catch(e){alert(e.message);}};
-$('show-vlans').onclick=async()=>{try{const d=await api('/api/command',{command:'show vlan all'});$('vlan-output').textContent=d.output||'Brak danych';}catch(e){$('vlan-output').textContent=e.message;}};
-$('apply-port-settings').onclick=async()=>{const payload={port:$('cfg-port').value,mode:$('cfg-mode').value,accessVlan:Number($('cfg-access-vlan').value),allowed:$('cfg-allowed').value,native:Number($('cfg-native').value),speed:$('cfg-speed').value,duplex:$('cfg-duplex').value,description:$('cfg-description').value};if(!payload.port){alert('Wybierz port.');return;}try{const p=await api('/api/port/preview',payload);const summary='PODGLĄD — bez zmian na switchu\\n\\n'+p.commands.join('\n')+'\n\\n'+p.warnings.join('\n');$('output').textContent=summary;if(!confirm(summary+'\n\\nWysłać te komendy do przełącznika?'))return;const d=await api('/api/port/settings',payload);showFriendlyResult('output',d.output,'Zmiana konfiguracji portu');addEvent('Zmieniono konfigurację '+payload.port);alert('Komendy przekazane. Zweryfikuj konfigurację portu w CLI.');$('port-dialog').close();await load();}catch(e){alert(e.message);}};
+$('create-vlan').onclick=async()=>{
+ const id=Number($('vlan-id').value),name=$('vlan-name').value.trim();
+ try{const p=await api('/api/vlan/preview',{id,name,delete:false});const summary='Utworzenie VLAN '+id+(name?' („'+name+'”)':'')+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\\n\\nUwagi: '+p.warnings.join(' · '):'');showFriendlyResult('vlan-output',summary,'Podgląd VLAN');if(!confirm(summary+'\\n\\nZastosować zmianę?'))return;const d=await api('/api/vlan',{id,name,delete:false});showFriendlyResult('vlan-output',d.output,'Utworzenie VLAN');alert('Zlecenie utworzenia VLAN przekazane. Odśwież listę, aby potwierdzić stan.');}catch(e){showFriendlyResult('vlan-output',e.message,'Operacja VLAN');}
+};
+$('delete-vlan').onclick=async()=>{
+ const id=Number($('vlan-id').value);
+ try{const p=await api('/api/vlan/preview',{id,delete:true});const summary='Usunięcie VLAN '+id+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\\n\\nUwagi: '+p.warnings.join(' · '):'');showFriendlyResult('vlan-output',summary,'Podgląd usunięcia VLAN');if(!confirm(summary+'\\n\\nCzy na pewno usunąć VLAN?'))return;const d=await api('/api/vlan',{id,delete:true});showFriendlyResult('vlan-output',d.output,'Usunięcie VLAN');}catch(e){showFriendlyResult('vlan-output',e.message,'Operacja VLAN');}
+};
+$('show-vlans').onclick=async()=>{try{const d=await api('/api/command',{command:'show vlan all'});showFriendlyResult('vlan-output',d.output,'Lista VLAN');}catch(e){showFriendlyResult('vlan-output',e.message,'Lista VLAN');}};
+$('apply-port-settings').onclick=async()=>{
+ const payload={port:$('cfg-port').value,mode:$('cfg-mode').value,accessVlan:Number($('cfg-access-vlan').value),allowed:$('cfg-allowed').value,native:Number($('cfg-native').value),speed:$('cfg-speed').value,duplex:$('cfg-duplex').value,description:$('cfg-description').value};
+ if(!payload.port){alert('Wybierz port.');return;}
+ try{const p=await api('/api/port/preview',payload);const summary='Zmiana ustawień portu '+payload.port+'. Tryb: '+(payload.mode==='access'?'Access':'Trunk')+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\\n\\nUwagi: '+p.warnings.join(' · '):'');showFriendlyResult('output',summary,'Podgląd portu');if(!confirm(summary+'\\n\\nZastosować konfigurację?'))return;const d=await api('/api/port/settings',payload);showFriendlyResult('output',d.output,'Konfiguracja portu');addEvent('Zmieniono konfigurację '+payload.port);alert('Zlecenie konfiguracji portu przekazane.');$('port-dialog').close();await load();}catch(e){showFriendlyResult('output',e.message,'Konfiguracja portu');}
+};
 $('detail-port').addEventListener('change',renderPortDetail);
 $('load-port-network').addEventListener('click',loadPortNetworkContext);
 $('port-map').addEventListener('click',e=>{const b=e.target.closest('[data-map-port]');if(b)openPortDiagnostics(b.dataset.mapPort);});
@@ -696,7 +706,7 @@ $('config-backups').addEventListener('click',async event=>{const button=event.ta
 $('create-config-backup').onclick=async()=>{const b=$('create-config-backup');if(!confirm('Pobrać running-config i zapisać lokalną kopię na serwerze panelu? Plik może zawierać hasła i inne dane poufne.'))return;b.disabled=true;try{const r=await fetch('/api/config/backups',{method:'POST'});if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();$('config-diff').textContent='Utworzono kopię '+d.id+'\nSHA256: '+d.sha256;await refreshConfigBackups();}catch(e){$('config-diff').textContent='Nie udało się utworzyć kopii: '+e.message;}finally{b.disabled=false;}};
 $('compare-config').onclick=async()=>{const box=$('config-diff'),button=$('compare-config');button.disabled=true;box.textContent='Pobieranie i porównywanie konfiguracji…';try{const response=await fetch('/api/config/compare');if(!response.ok)throw new Error('Błąd porównania: HTTP '+response.status);const d=await response.json();const added=Number(d.added)||0,removed=Number(d.removed)||0;box.textContent='Różnice: '+added+' dodanych w running-config · '+removed+' usuniętych względem startup-config · Linie: running '+d.runningLines+' / startup '+d.startupLines+'. '+(added===0&&removed===0?'Konfiguracje są zgodne.':'Szczegółowe linie pominięto, ponieważ mogą zawierać dane poufne.');}catch(e){box.textContent=e.message;}finally{button.disabled=false;}};
 $('save-config').onclick=async()=>{if(!confirm('Zapisać running-config do startup-config?'))return;try{const d=await api('/api/save',{});showFriendlyResult('output',d.output,'Zapis konfiguracji');alert('Polecenie zapisu wysłane.');}catch(x){alert(x.message);}};
-$('run').onclick=async()=>{const command=$('cmd').value;$('output').textContent='Łączenie przez SSH…';try{const d=await api('/api/command',{command});showFriendlyResult('output',d.output,'Diagnostyka urządzenia');}catch(x){$('output').textContent=x.message;}};load();setInterval(load,15000);restoreMonitorHistory();refreshConfigBackups();refreshAudit();
+$('run').onclick=async()=>{const command=$('cmd').value;$('output').textContent='Łączenie przez SSH…';try{const d=await api('/api/command',{command});showFriendlyResult('output',d.output,'Diagnostyka urządzenia');}catch(x){showFriendlyResult('output',x.message,'Operacja na switchu');}};load();setInterval(load,15000);restoreMonitorHistory();refreshConfigBackups();refreshAudit();
 async function loadSessionIdentity(){const el=$('session-identity');if(!el)return;try{const d=await api('/api/session');const labels={viewer:'Podgląd',operator:'Operator',admin:'Administrator'};el.textContent=(d.username||'Konto')+' · '+(labels[d.role]||d.role||'');el.title='Zalogowano jako '+(d.username||'konto')+' · rola: '+(d.role||'nieznana');}catch(_e){el.textContent='Sesja';}}
 loadSessionIdentity();
 $('logout').onclick=async()=>{try{await fetch('/api/logout',{method:'POST',credentials:'same-origin'});}finally{location.href='/login';}};

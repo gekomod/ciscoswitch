@@ -1,3 +1,13 @@
+function showFriendlyResult(id,raw,label){
+ const el=$(id);if(!el)return;
+ const value=String(raw||'').trim();
+ const lines=value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+ const failed=!value||/timed out|permission denied|authentication failed|not supported|error:/i.test(value);
+ const empty=/no entries|no records|not found|empty|brak wpis|no .* found/i.test(value);
+ const count=lines.filter(x=>!/^[-=+| ]+$/.test(x)&&!/^\s*(vlan|port|interface|address|protocol|destination|neighbor|mac)\b/i.test(x)).length;
+ el.classList.add('friendly-result');
+ el.innerHTML='<div class="friendly-result-icon '+(failed?'is-muted':empty?'is-muted':'is-ok')+'">'+(failed?'—':empty?'○':'✓')+'</div><div class="friendly-result-copy"><b>'+esc(failed?'Nie udało się odczytać':empty?'Brak aktywnych wpisów':label+' — odczytano')+'</b><span>'+esc(failed?'Sprawdź łączność z urządzeniem i uprawnienia odczytu.':empty?'Switch nie zgłosił obecnie danych w tej kategorii.':'Odczyt zakończony poprawnie. Wykryto '+count+' pozycji.')+'</span></div><span class="friendly-result-count">'+(failed||empty?'—':fmtCount(count))+'</span>';
+}
 const $=id=>document.getElementById(id);let latestPorts=[];let portNetworkContext=new Map();let trafficHistory=[];let previousCounters=null;let previousAt=0;let previousPortCounters=new Map();let portRates=new Map();
 const portTrafficHistory=new Map();let recentEvents=[];let portHistory=[];let counterHistory=[];let previousPortStates=new Map();let previousErrorCounters=new Map();let previousReachable=null;let hasPortBaseline=false;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -571,12 +581,24 @@ async function refreshTopology(){
 $('refresh-topology').onclick=refreshTopology;
 $('topology-filter').addEventListener('input',renderTopology);$('topology-class-filter').addEventListener('change',renderTopology);
 $('topology-rows').addEventListener('click',e=>{const b=e.target.closest('[data-topology-port]');if(b)openPortDiagnostics(b.dataset.topologyPort);});
-async function refreshDHCP(){for(const [cmd,id] of [['show ip dhcp server summary','dhcp-summary'],['show ip dhcp binding','dhcp-bindings']]){try{const d=await api('/api/command',{command:cmd});$(id).textContent=d.output||'Brak danych';}catch(e){$(id).textContent=e.message;}}}
+async function refreshDHCP(){
+ for(const [cmd,id,label] of [['show ip dhcp server summary','dhcp-summary','Usługa DHCP'],['show ip dhcp binding','dhcp-bindings','Dzierżawy DHCP']]){
+  try{const d=await api('/api/command',{command:cmd});showFriendlyResult(id,d.output,label);}
+  catch(e){showFriendlyResult(id,e.message,label);}
+ }
+}
 $('dhcp-refresh').onclick=refreshDHCP;
 
+
 let arpTableText='';
-async function refreshL3(){for(const [cmd,id] of [['show ip interface brief','l3-interfaces'],['show ip route','l3-routes'],['show arp','l3-arp']]){try{const d=await api('/api/command',{command:cmd});const out=d.output||'Brak danych zwróconych przez switch.';$(id).textContent=out;if(id==='l3-arp'){arpTableText=out;filterARP();}}catch(e){$(id).textContent=e.message;if(id==='l3-arp'){arpTableText=e.message;filterARP();}}}}
-function filterARP(){const q=$('arp-filter').value.trim().toLowerCase();$('l3-arp').textContent=q?arpTableText.split(/\r?\n/).filter(x=>x.toLowerCase().includes(q)).join('\n')||'Brak pasujących wpisów.':arpTableText;}
+async function refreshL3(){
+ for(const [cmd,id,label] of [['show ip interface brief','l3-interfaces','Interfejsy IP'],['show ip route','l3-routes','Trasy routingu'],['show arp','l3-arp','Sąsiedzi ARP']]){
+  try{const d=await api('/api/command',{command:cmd});showFriendlyResult(id,d.output,label);}
+  catch(e){showFriendlyResult(id,e.message,label);}
+ }
+}
+function filterARP(){if($('l3-arp'))showFriendlyResult('l3-arp',arpTableText,'Sąsiedzi ARP');}
+
 
 async function configureStaticRoute(remove){const q={prefix:$('route-prefix').value.trim(),gateway:$('route-gateway').value.trim(),distance:Number($('route-distance').value),delete:remove};const action=remove?'usunąć':'dodać';if(!confirm('Czy na pewno '+action+' trasę '+q.prefix+' przez '+q.gateway+'? Zmiana może wpłynąć na łączność z przełącznikiem.'))return;try{const d=await api('/api/route/static',q);$('probe-output').textContent=d.output||'Polecenie przekazane.';await refreshL3();}catch(e){alert(e.message);}}
 $('route-add').onclick=()=>configureStaticRoute(false);
@@ -585,10 +607,19 @@ async function runProbe(kind){const target=$('probe-target').value.trim();$('pro
 $('probe-ping').onclick=()=>runProbe('ping');
 $('probe-trace').onclick=()=>runProbe('traceroute');
 
-async function refreshSNMP(){const jobs=[['show snmp-server','snmp-agent'],['show snmp-server community','snmp-communities'],['show snmp-server user','snmp-users'],['show counter snmp-server','snmp-counters'],['show running-config snmp','snmp-running']];for(const [command,id] of jobs){try{const d=await api('/api/command',{command});$(id).textContent=d.output||'Brak danych zwróconych przez switch.';}catch(e){$(id).textContent=e.message;}}}
+async function refreshSNMP(){
+ const jobs=[['show snmp-server','snmp-agent','Agent SNMP'],['show snmp-server community','snmp-communities','Dostęp SNMP'],['show snmp-server user','snmp-users','Użytkownicy SNMPv3'],['show counter snmp-server','snmp-counters','Statystyki SNMP'],['show running-config snmp','snmp-running','Ustawienia SNMP']];
+ for(const [command,id,label] of jobs){try{const d=await api('/api/command',{command});showFriendlyResult(id,d.output,label);}catch(e){showFriendlyResult(id,e.message,label);}}
+}
+
 $('snmp-refresh').onclick=refreshSNMP;
 
-async function refreshSSH(){for(const [command,id] of [['show users','ssh-users'],['show ssh server','ssh-status'],['show running-config ssh','ssh-config']]){try{const d=await api('/api/command',{command});$(id).textContent=d.output||'Brak danych.';}catch(e){$(id).textContent=e.message;}}}
+async function refreshSSH(){
+ for(const [command,id,label] of [['show users','ssh-users','Konta i sesje'],['show ssh server','ssh-status','Usługa SSH'],['show running-config ssh','ssh-config','Ustawienia SSH']]){
+  try{const d=await api('/api/command',{command});showFriendlyResult(id,d.output,label);}catch(e){showFriendlyResult(id,e.message,label);}
+ }
+}
+
 $('ssh-refresh').onclick=refreshSSH;
 async function changeSSHUser(remove){const q={username:$('ssh-new-user').value.trim(),password:$('ssh-new-password').value,privilege:Number($('ssh-new-privilege').value),delete:remove};if(!q.username){alert('Wpisz login.');return;}if(!remove&&!q.password){alert('Wpisz nowe hasło.');return;}if(!confirm((remove?'Usunąć':'Utworzyć lub zaktualizować')+' konto '+q.username+'?'))return;const b=remove?$('ssh-user-delete'):$('ssh-user-save');b.disabled=true;try{const d=await api('/api/ssh/user',q);$('ssh-action-output').textContent=d.output||'Polecenie przekazane.';$('ssh-new-password').value='';await refreshSSH();}catch(e){$('ssh-action-output').textContent=e.message;}finally{b.disabled=false;}}
 $('ssh-user-save').onclick=()=>changeSSHUser(false);
@@ -627,15 +658,23 @@ $('arp-filter').addEventListener('input',filterARP);
 
 $('dhcp-create').onclick=async()=>{const q={name:$('dhcp-name').value,network:$('dhcp-network').value,mask:$('dhcp-mask').value,low:$('dhcp-low').value,high:$('dhcp-high').value,router:$('dhcp-router').value,dns:$('dhcp-dns').value,enable:true};if(!confirm('Utworzyć pulę DHCP '+q.name+' i włączyć usługę DHCP Server? Upewnij się, że nie działa drugi serwer DHCP w tej sieci.'))return;const b=$('dhcp-create');b.disabled=true;try{const d=await api('/api/dhcp/pool',q);$('dhcp-summary').textContent=d.output||'Polecenia konfiguracji wysłane. Odczytaj status DHCP.';await refreshDHCP();}catch(e){alert(e.message);}finally{b.disabled=false;}};
 
-async function loadDiagnostic(command,target){$(target).textContent='Pobieranie przez SSH…';try{const d=await api('/api/command',{command});$(target).textContent=d.output||'Brak danych';}catch(e){$(target).textContent=e.message;}}
-$('load-system').onclick=async()=>{await loadDiagnostic('show system','system-output');const env=await api('/api/command',{command:'show system environment'}).catch(e=>({error:e.message}));$('system-output').textContent+='\n\n--- show system environment ---\n'+(env.output||env.error||'Brak danych');};
+async function loadDiagnostic(command,target){
+ const label=command.includes('log')?'Zdarzenia systemowe':'Informacje o urządzeniu';
+ try{const d=await api('/api/command',{command});showFriendlyResult(target,d.output,label);}
+ catch(e){showFriendlyResult(target,e.message,label);}
+}
+$('load-system').onclick=async()=>{await loadDiagnostic('show system','system-output');};
 
 let macFDBText='';
-async function refreshFDB(){try{const d=await api('/api/command',{command:'show mac address-table'});macFDBText=d.output||'';$('mac-output').textContent=macFDBText;$('mac-table-output').textContent=macFDBText||'Switch nie zwrócił wpisów FDB.';filterFDB();}catch(e){$('mac-output').textContent=e.message;$('mac-table-output').textContent=e.message;}}
-function filterFDB(){const q=$('mac-filter').value.trim().toLowerCase();const lines=macFDBText.split(/\r?\n/);$('mac-table-output').textContent=q?lines.filter(x=>x.toLowerCase().includes(q)).join('\n')||'Brak pasujących wpisów.':macFDBText||'Brak danych.';}
+async function refreshFDB(){
+ try{const d=await api('/api/command',{command:'show mac address-table'});macFDBText=d.output||'';showFriendlyResult('mac-output',macFDBText,'Tablica urządzeń MAC');showFriendlyResult('mac-table-output',macFDBText,'Urządzenia w sieci');}
+ catch(e){showFriendlyResult('mac-output',e.message,'Tablica urządzeń MAC');showFriendlyResult('mac-table-output',e.message,'Urządzenia w sieci');}
+}
+function filterFDB(){if($('mac-table-output'))showFriendlyResult('mac-table-output',macFDBText,'Urządzenia w sieci');}
+
 $('load-mac').onclick=refreshFDB;
 $('mac-filter').addEventListener('input',filterFDB);
-$('load-lldp').onclick=async()=>{try{const d=await api('/api/command',{command:'show lldp neighbors'});$('lldp-output').textContent=d.output||'Brak wykrytych sąsiadów LLDP.';}catch(e){$('lldp-output').textContent=e.message;}};
+$('load-lldp').onclick=async()=>{try{const d=await api('/api/command',{command:'show lldp neighbors'});showFriendlyResult('lldp-output',d.output,'Sąsiedzi sieciowi');}catch(e){showFriendlyResult('lldp-output',e.message,'Sąsiedzi sieciowi');}};
 
 $('load-logs').onclick=()=>loadDiagnostic('show log tail 30','logs-output');
 $('create-vlan').onclick=async()=>{const id=Number($('vlan-id').value),name=$('vlan-name').value;try{const p=await api('/api/vlan/preview',{id,name,delete:false});const summary='PODGLĄD — bez zmian na switchu\\n\\n'+p.commands.join('\n')+'\n\\n'+p.warnings.join('\n');$('vlan-output').textContent=summary;if(!confirm(summary+'\n\\nWysłać te komendy do przełącznika?'))return;const d=await api('/api/vlan',{id,name,delete:false});$('vlan-output').textContent=d.output||'Polecenie przekazane';alert('Polecenie utworzenia VLAN wysłane. Zweryfikuj listę VLAN.');}catch(e){alert(e.message);}};

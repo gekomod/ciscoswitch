@@ -39,11 +39,14 @@ func main() {
  server.Register(mux,svc)
  panelUser, panelPassword := os.Getenv("PANEL_USER"), os.Getenv("PANEL_PASSWORD")
  if panelUser == "" || len(panelPassword) < 8 {
-  log.Fatal("Wymagane PANEL_USER oraz PANEL_PASSWORD (minimum 8 znaków); panel nie zostanie uruchomiony bez uwierzytelnienia")
+  log.Fatal("Wymagane PANEL_USER oraz PANEL_PASSWORD (minimum 8 znaków) do utworzenia konta początkowego")
  }
  panelRole := env("PANEL_ROLE", "admin")
  if !validPanelRole(panelRole) { log.Fatalf("Nieprawidłowy PANEL_ROLE: dozwolone wartości to viewer, operator, admin") }
- handler := securityHeaders(sessionAuth(auditLog(mux, env("AUDIT_LOG_PATH", filepath.Join("data", "audit.jsonl"))), panelUser, panelPassword))
+ users, err := openPanelUserStore(env("PANEL_USERS_PATH", filepath.Join("data", "users.json")), panelUser, panelPassword, panelRole)
+ if err != nil { log.Fatalf("Nie można uruchomić rejestru użytkowników: %v", err) }
+ registerPanelUserRoutes(mux, users)
+ handler := securityHeaders(sessionAuthWithUsers(auditLog(mux, env("AUDIT_LOG_PATH", filepath.Join("data", "audit.jsonl"))), users))
  log.Printf("CiscoSwitch Manager listening on http://%s (switch=%s, snmp-version=%s, community=%s)",addr,cfg.Host,snmpMode(cfg),masked(cfg.SNMPCommunity))
  httpServer := &http.Server{
   Addr: addr,
@@ -106,7 +109,7 @@ type panelIdentity struct { Username string; Role string }
 
 func validPanelRole(role string) bool { return role=="viewer" || role=="operator" || role=="admin" }
 func roleAllows(role, method, path string) bool {
- if role=="admin" { return true }
+ if strings.HasPrefix(path, "/api/users") && role != "admin" { return false }; if role=="admin" { return true }
  if role=="viewer" && (path=="/api/config/export" || path=="/api/config/backups/download" || path=="/api/audit") { return false }
  if method==http.MethodGet || method==http.MethodHead || method==http.MethodOptions { return true }
  safePost := path=="/api/network/probe" || strings.HasSuffix(path,"/preview")
@@ -117,70 +120,90 @@ func sessionAuth(next http.Handler, username, password string) http.Handler {
  return sessionAuthWithRole(next,username,password,env("PANEL_ROLE","admin"))
 }
 func sessionAuthWithRole(next http.Handler, username, password, role string) http.Handler {
- sessions:=&panelSessions{values:make(map[string]panelSession)}
- return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request) {
-  path:=r.URL.Path
-  if path=="/login" || path=="/login/" {
-   if r.Method!=http.MethodGet && r.Method!=http.MethodHead {http.Error(w,"method not allowed",405);return}
-   r.URL.Path="/login.html"
-   next.ServeHTTP(w,r);return
-  }
-  if path=="/login.css" || path=="/login.js" {
-   next.ServeHTTP(w,r);return
-  }
-  if path=="/api/login" {
-   if r.Method!=http.MethodPost {http.Error(w,"method not allowed",405);return}
-   if !sameOrigin(r) {http.Error(w,"forbidden origin",http.StatusForbidden);return}
-   r.Body=http.MaxBytesReader(w,r.Body,2048)
-   var credentials struct { Username string `json:"username"`; Password string `json:"password"` }
-   if json.NewDecoder(r.Body).Decode(&credentials)!=nil {http.Error(w,"invalid credentials",http.StatusUnauthorized);return}
-   userOK:=subtle.ConstantTimeCompare([]byte(credentials.Username),[]byte(username))==1
-   passOK:=subtle.ConstantTimeCompare([]byte(credentials.Password),[]byte(password))==1
-   if !userOK || !passOK {w.Header().Set("Cache-Control","no-store");http.Error(w,"Nieprawidłowy login lub hasło.",http.StatusUnauthorized);return}
-   token,err:=sessions.create(credentials.Username,role)
-   if err!=nil {http.Error(w,"Nie można utworzyć sesji.",http.StatusInternalServerError);return}
-   http.SetCookie(w,&http.Cookie{Name:panelSessionCookie,Value:token,Path:"/",HttpOnly:true,Secure:r.TLS!=nil||strings.EqualFold(r.Header.Get("X-Forwarded-Proto"),"https"),SameSite:http.SameSiteStrictMode,MaxAge:int(panelSessionTTL.Seconds())})
-   w.Header().Set("Content-Type","application/json")
-   w.Header().Set("Cache-Control","no-store")
-   _=json.NewEncoder(w).Encode(map[string]any{"ok":true,"expiresIn":int(panelSessionTTL.Seconds()),"username":credentials.Username,"role":role})
-   return
-  }
-  if path=="/api/logout" {
-   if r.Method!=http.MethodPost {http.Error(w,"method not allowed",405);return}
-   if !sameOrigin(r) {http.Error(w,"forbidden origin",http.StatusForbidden);return}
-   cookie,err:=r.Cookie(panelSessionCookie)
-   if err==nil {sessions.revoke(cookie.Value)}
-   clearPanelCookie(w,r)
-   w.Header().Set("Content-Type","application/json")
-   _=json.NewEncoder(w).Encode(map[string]bool{"ok":true})
-   return
-  }
-  cookie,err:=r.Cookie(panelSessionCookie)
-  session,valid:=panelSession{},false
-  if err==nil { session,valid=sessions.get(cookie.Value) }
-  if !valid {
-   w.Header().Set("Cache-Control","no-store")
-   if strings.HasPrefix(path,"/api/") {http.Error(w,"session expired",http.StatusUnauthorized);return}
-   http.Redirect(w,r,"/login",http.StatusSeeOther);return
-  }
-  if !sameOrigin(r) {http.Error(w,"forbidden origin",http.StatusForbidden);return}
-  if path=="/api/session" {
-   if r.Method!=http.MethodGet {http.Error(w,"method not allowed",http.StatusMethodNotAllowed);return}
-   w.Header().Set("Content-Type","application/json")
-   w.Header().Set("Cache-Control","no-store")
-   _=json.NewEncoder(w).Encode(map[string]string{"username":session.username,"role":session.role})
-   return
-  }
-  if strings.HasPrefix(path,"/api/") && !roleAllows(session.role,r.Method,path) {
-   w.Header().Set("Content-Type","application/json")
-   w.Header().Set("Cache-Control","no-store")
-   w.WriteHeader(http.StatusForbidden)
-   _=json.NewEncoder(w).Encode(map[string]string{"error":"Brak uprawnień do wykonania tej operacji."})
-   return
-  }
-  ctx:=context.WithValue(r.Context(),identityContextKey{},panelIdentity{Username:session.username,Role:session.role})
-  next.ServeHTTP(w,r.WithContext(ctx))
- })
+	return sessionAuthWithAuthenticator(next, func(candidateUser, candidatePassword string) (string, string, bool) {
+		userOK := subtle.ConstantTimeCompare([]byte(candidateUser), []byte(username)) == 1
+		passOK := subtle.ConstantTimeCompare([]byte(candidatePassword), []byte(password)) == 1
+		return username, role, userOK && passOK
+	})
+}
+
+func sessionAuthWithUsers(next http.Handler, users *panelUserStore) http.Handler {
+	return sessionAuthWithAuthenticator(next, func(username, password string) (string, string, bool) {
+		user, ok := users.authenticate(username, password)
+		if !ok {
+			return "", "", false
+		}
+		return user.Username, user.Role, true
+	})
+}
+
+func sessionAuthWithAuthenticator(next http.Handler, authenticate func(string, string) (string, string, bool)) http.Handler {
+	sessions := &panelSessions{values: make(map[string]panelSession)}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if path == "/login" || path == "/login/" {
+			if r.Method != http.MethodGet && r.Method != http.MethodHead { http.Error(w, "method not allowed", 405); return }
+			r.URL.Path = "/login.html"
+			next.ServeHTTP(w, r)
+			return
+		}
+		if path == "/login.css" || path == "/login.js" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if path == "/api/login" {
+			if r.Method != http.MethodPost { http.Error(w, "method not allowed", 405); return }
+			if !sameOrigin(r) { http.Error(w, "forbidden origin", http.StatusForbidden); return }
+			r.Body = http.MaxBytesReader(w, r.Body, 2048)
+			var credentials struct { Username string `json:"username"`; Password string `json:"password"` }
+			if json.NewDecoder(r.Body).Decode(&credentials) != nil { http.Error(w, "invalid credentials", http.StatusUnauthorized); return }
+			username, role, ok := authenticate(credentials.Username, credentials.Password)
+			if !ok { w.Header().Set("Cache-Control", "no-store"); http.Error(w, "Nieprawidłowy login lub hasło.", http.StatusUnauthorized); return }
+			token, err := sessions.create(username, role)
+			if err != nil { http.Error(w, "Nie można utworzyć sesji.", http.StatusInternalServerError); return }
+			http.SetCookie(w, &http.Cookie{Name: panelSessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"), SameSite: http.SameSiteStrictMode, MaxAge: int(panelSessionTTL.Seconds())})
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "no-store")
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "expiresIn": int(panelSessionTTL.Seconds()), "username": username, "role": role})
+			return
+		}
+		if path == "/api/logout" {
+			if r.Method != http.MethodPost { http.Error(w, "method not allowed", 405); return }
+			if !sameOrigin(r) { http.Error(w, "forbidden origin", http.StatusForbidden); return }
+			cookie, err := r.Cookie(panelSessionCookie)
+			if err == nil { sessions.revoke(cookie.Value) }
+			clearPanelCookie(w, r)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+			return
+		}
+		cookie, err := r.Cookie(panelSessionCookie)
+		session, valid := panelSession{}, false
+		if err == nil { session, valid = sessions.get(cookie.Value) }
+		if !valid {
+			w.Header().Set("Cache-Control", "no-store")
+			if strings.HasPrefix(path, "/api/") { http.Error(w, "session expired", http.StatusUnauthorized); return }
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		if !sameOrigin(r) { http.Error(w, "forbidden origin", http.StatusForbidden); return }
+		if path == "/api/session" {
+			if r.Method != http.MethodGet { http.Error(w, "method not allowed", http.StatusMethodNotAllowed); return }
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "no-store")
+			_ = json.NewEncoder(w).Encode(map[string]string{"username": session.username, "role": session.role})
+			return
+		}
+		if strings.HasPrefix(path, "/api/") && !roleAllows(session.role, r.Method, path) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "no-store")
+			w.WriteHeader(http.StatusForbidden)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Brak uprawnień do wykonania tej operacji."})
+			return
+		}
+		ctx := context.WithValue(r.Context(), identityContextKey{}, panelIdentity{Username: session.username, Role: session.role})
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 func sameOrigin(r *http.Request) bool {
  if r.Method==http.MethodGet || r.Method==http.MethodHead || r.Method==http.MethodOptions {return true}

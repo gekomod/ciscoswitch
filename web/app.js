@@ -178,6 +178,48 @@ $('refresh-system').onclick=refreshSystem;
 
 async function inspectVLAN(){const id=Number($('vlan-inspect-id').value);if(!Number.isInteger(id)||id<1||id>4094){alert('VLAN ID musi być w zakresie 1–4094.');return;}const box=$('vlan-inspect-raw'),map=$('vlan-port-map');box.textContent='Odczyt VLAN '+id+'…';map.innerHTML='';try{const d=await api('/api/command',{command:'show vlan '+id});const raw=d.output||'';box.textContent=raw||'Brak odpowiedzi CLI';const members=new Map();for(const m of raw.matchAll(/(port\d+\.\d+\.\d+)\s*\(([ut])\)/gi))members.set(m[1],m[2].toLowerCase());const ports=latestPorts.map(p=>{const mode=members.get(p.name)||'none';return '<div class="vlan-port-cell '+(mode==='u'?'is-untagged':mode==='t'?'is-tagged':'is-none')+'"><b>'+esc(p.name.replace(/^port1\.0\./,''))+'</b><small>'+(mode==='u'?'UNTAGGED':mode==='t'?'TAGGED':'—')+'</small></div>';});map.innerHTML=ports.join('')||'<p class="empty">Najpierw odczytaj porty SNMP.</p>';if(members.size===0)map.insertAdjacentHTML('beforeend','<p class="note">Nie rozpoznano członków portów w odpowiedzi CLI. Sprawdź surowy wynik powyżej.</p>');}catch(e){box.textContent=e.message;map.innerHTML='<p class="empty">Nie udało się pobrać członkostwa VLAN.</p>';}}
 $('inspect-vlan').onclick=inspectVLAN;
+let topologyData={rows:[],raw:{}};
+function normalizeMAC(value){const hex=String(value||'').replace(/[^0-9a-f]/gi,'').toLowerCase();return hex.length===12?hex.match(/.{2}/g).join(':'):'';}
+function parseFDB(raw){
+ const rows=[],macPattern=/(?:[0-9a-f]{4}\.){2}[0-9a-f]{4}|(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}|\b[0-9a-f]{12}\b/ig,portPattern=/\bport\d+\.\d+\.\d+\b/i;
+ for(const line of String(raw||'').split(/\r?\n/)){const mm=line.match(macPattern),pm=line.match(portPattern);if(!mm||!pm)continue;const mac=normalizeMAC(mm[0]);if(!mac)continue;const nums=line.match(/\b\d{1,4}\b/g)||[];rows.push({mac,port:pm[0],vlan:nums.length?nums[0]:'',source:line.trim()});}
+ return rows;
+}
+function parseARP(raw){
+ const out=new Map(),ipPattern=/\b(?:\d{1,3}\.){3}\d{1,3}\b/g,macPattern=/(?:[0-9a-f]{4}\.){2}[0-9a-f]{4}|(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}|\b[0-9a-f]{12}\b/i;
+ for(const line of String(raw||'').split(/\r?\n/)){const ip=line.match(ipPattern),mac=line.match(macPattern);if(!ip||!mac)continue;const key=normalizeMAC(mac[0]);if(key)out.set(key,[...(out.get(key)||[]),ip[0]]);}
+ return out;
+}
+function parseLLDP(raw){
+ const byPort=new Map(),lines=String(raw||'').split(/\r?\n/);
+ for(let i=0;i<lines.length;i++){const m=lines[i].match(/\bport\d+\.\d+\.\d+\b/i);if(!m)continue;const port=m[0];let block=lines.slice(Math.max(0,i-3),Math.min(lines.length,i+8)).join(' · ').replace(/\s+/g,' ').trim();if(block.length>260)block=block.slice(0,260)+'…';const list=byPort.get(port)||[];if(!list.includes(block))list.push(block);byPort.set(port,list);}
+ return byPort;
+}
+function renderTopology(){
+ const q=$('topology-filter').value.trim().toLowerCase(),rows=topologyData.rows.filter(r=>[r.port,r.link,r.vlans,r.macs,r.ips,r.lldp].join(' ').toLowerCase().includes(q));
+ $('topology-rows').innerHTML=rows.length?rows.map(r=>'<tr><td><button class="port-diagnostic-link" data-topology-port="'+esc(r.port)+'">'+esc(r.port)+'</button></td><td><span class="state '+(r.link==='up'?'up':r.link==='down'?'down':'unknown')+'">'+esc(r.link)+'</span></td><td>'+esc(r.vlans||'—')+'</td><td>'+esc(r.macs||'—')+'</td><td>'+esc(r.ips||'—')+'</td><td>'+esc(r.lldp||'—')+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">Brak danych pasujących do filtra.</td></tr>';
+}
+async function refreshTopology(){
+ const button=$('refresh-topology');button.disabled=true;button.textContent='Skanowanie…';$('topology-status').textContent='Pobieranie tablic FDB, ARP, LLDP i VLAN…';
+ const commands=[['fdb','show mac address-table'],['arp','show arp'],['lldp','show lldp neighbors'],['vlan','show vlan all'],['switchport','show interface switchport']];
+ try{
+  const results=await Promise.all(commands.map(async([key,command])=>{try{const d=await api('/api/command',{command});return [key,{output:d.output||''}];}catch(e){return [key,{error:e.message,output:''}];}}));
+  const raw=Object.fromEntries(results);topologyData.raw=raw;
+  for(const key of ['fdb','arp','lldp','vlan'])$('topology-raw-'+key).textContent=raw[key].error?'Błąd: '+raw[key].error:raw[key].output||'Brak danych.';
+  const fdb=parseFDB(raw.fdb.output),arp=parseARP(raw.arp.output),lldp=parseLLDP(raw.lldp.output),byPort=new Map();
+  for(const p of latestPorts)byPort.set(p.name,{port:p.name,link:p.oper||'unknown',vlans:new Set(),macs:new Set(),ips:new Set(),neighbors:new Set()});
+  for(const entry of fdb){if(!byPort.has(entry.port))byPort.set(entry.port,{port:entry.port,link:'unknown',vlans:new Set(),macs:new Set(),ips:new Set(),neighbors:new Set()});const row=byPort.get(entry.port);row.macs.add(entry.mac);if(entry.vlan)row.vlans.add(entry.vlan);for(const ip of arp.get(entry.mac)||[])row.ips.add(ip);}
+  for(const [port,items] of lldp){if(!byPort.has(port))byPort.set(port,{port,link:'unknown',vlans:new Set(),macs:new Set(),ips:new Set(),neighbors:new Set()});for(const item of items)byPort.get(port).neighbors.add(item);}
+  topologyData.rows=[...byPort.values()].map(r=>({port:r.port,link:r.link,vlans:[...r.vlans].join(', '),macs:[...r.macs].join(', '),ips:[...r.ips].join(', '),lldp:[...r.neighbors].join(' | ')})).sort((a,b)=>natural(a.port,b.port));
+  $('topology-port-count').textContent=topologyData.rows.length;$('topology-mac-count').textContent=fdb.length;$('topology-ip-count').textContent=[...arp.values()].reduce((n,x)=>n+x.length,0);$('topology-lldp-count').textContent=[...lldp.values()].reduce((n,x)=>n+x.length,0);
+  const errors=results.filter(x=>x[1].error).map(x=>x[0]+': '+x[1].error);
+  $('topology-status').textContent='Odczyt '+new Date().toLocaleString()+' · FDB: '+fdb.length+' wpisów · ARP: '+[...arp.values()].reduce((n,x)=>n+x.length,0)+' adresów · LLDP: '+[...lldp.values()].reduce((n,x)=>n+x.length,0)+' obserwacji'+(errors.length?' · Błędy: '+errors.join('; '):'');
+  renderTopology();
+ }finally{button.disabled=false;button.textContent='Skanuj ponownie';}
+}
+$('refresh-topology').onclick=refreshTopology;
+$('topology-filter').addEventListener('input',renderTopology);
+$('topology-rows').addEventListener('click',e=>{const b=e.target.closest('[data-topology-port]');if(b)openPortDiagnostics(b.dataset.topologyPort);});
 async function refreshDHCP(){for(const [cmd,id] of [['show ip dhcp server summary','dhcp-summary'],['show ip dhcp binding','dhcp-bindings']]){try{const d=await api('/api/command',{command:cmd});$(id).textContent=d.output||'Brak danych';}catch(e){$(id).textContent=e.message;}}}
 $('dhcp-refresh').onclick=refreshDHCP;
 

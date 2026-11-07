@@ -116,3 +116,5 @@ body{background:#f4f6f9;color:var(--text)}.sidebar{background:#fff;border-right:
 .nav-search-wrap:focus-within{border-color:#4b91d8;box-shadow:0 0 0 3px #398fe922}
 .nav-search-empty{padding:10px 12px;color:#8196b0;font-size:11px}
 .sidebar .nav[hidden],.nav-search-empty[hidden]{display:none}
+
+.bulk-port-panel{margin:18px 0}.bulk-port-panel .form-grid{margin-top:16px}.bulk-port-panel pre{white-space:pre-wrap;overflow-wrap:anywhere}

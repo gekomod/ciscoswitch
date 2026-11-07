@@ -32,6 +32,7 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/api/monitor/history", monitorHistoryHandler(filepath.Join("data", "monitor-history.jsonl")))
  m.Handle("/api/monitor/stream", monitorStreamHandler())
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
+ m.Handle("/api/ports/protection", protectedPortsHandler())
  m.HandleFunc("/api/port/preview",func(w http.ResponseWriter,r *http.Request){
  if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
  r.Body=http.MaxBytesReader(w,r.Body,4096)
@@ -540,6 +541,36 @@ func pruneConfigBackups(dir string, keep int) error {
 // interface carries its own management session. Protected ports remain immutable.
 func portShutdownEnabled() bool { return strings.EqualFold(strings.TrimSpace(os.Getenv("ALLOW_PORT_SHUTDOWN")), "true") }
 func managementDHCPChangeEnabled() bool { return strings.EqualFold(strings.TrimSpace(os.Getenv("ALLOW_MANAGEMENT_DHCP_CHANGE")), "true") }
+func protectedPortNames() []string {
+ seen:=map[string]bool{}
+ ports:=[]string{}
+ for _,item:=range strings.Split(os.Getenv("PROTECTED_PORTS"),",") {
+  name:=strings.TrimSpace(item)
+  if name=="" || !device.IsValidPort(name) { continue }
+  key:=strings.ToLower(name)
+  if seen[key] { continue }
+  seen[key]=true
+  ports=append(ports,key)
+ }
+ sort.Strings(ports)
+ return ports
+}
+
+func protectedPortsHandler() http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request) {
+  if r.Method!=http.MethodGet { http.Error(w,"method not allowed",http.StatusMethodNotAllowed); return }
+  ports:=protectedPortNames()
+  w.Header().Set("Content-Type","application/json")
+  w.Header().Set("Cache-Control","no-store")
+  _=json.NewEncoder(w).Encode(map[string]any{
+   "configured":len(ports)>0,
+   "ports":ports,
+   "count":len(ports),
+   "automaticDetection":false,
+  })
+ })
+}
+
 func isProtectedPort(name string) bool {
  name=strings.TrimSpace(name)
  if name=="" { return false }

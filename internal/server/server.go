@@ -546,7 +546,9 @@ func protectedPortNames() []string {
  ports:=[]string{}
  for _,item:=range strings.Split(os.Getenv("PROTECTED_PORTS"),",") {
   name:=strings.TrimSpace(item)
-  if name=="" || !device.IsValidPort(name) { continue }
+  if !strings.HasPrefix(strings.ToLower(name),"port1.0.") { continue }
+  number,err:=strconv.Atoi(name[len("port1.0."):])
+  if err!=nil || number<1 || number>52 { continue }
   key:=strings.ToLower(name)
   if seen[key] { continue }
   seen[key]=true

@@ -284,7 +284,7 @@ function parseLACPDetail(raw){
 }
 function renderLACPDetail(raw){
  const host=$('lacp-diagnostics'),groups=parseLACPDetail(raw);
- if(!groups.length){host.innerHTML='<div class="empty">Nie rozpoznano struktury agregatorów w odpowiedzi. Sprawdź surowy wynik poniżej; parser nie będzie zgadywał stanu.</div>';return;}
+ if(!groups.length){host.innerHTML='<div class="empty">Switch zwrócił dane, ale ich format nie pozwala wiarygodnie odczytać agregatorów. Nie pokazujemy surowego tekstu.</div>';return;}
  host.innerHTML=groups.map(g=>{
   const synced=g.members.filter(x=>x.state==='synchronized').length,unsynced=g.members.length-synced;
   const rows=g.members.map(m=>'<tr><td><b>'+esc(m.port)+'</b></td><td><span class="state '+(m.state==='synchronized'?'up':'unknown')+'">'+esc(m.state)+'</span></td></tr>').join('');
@@ -292,26 +292,27 @@ function renderLACPDetail(raw){
  }).join('');
 }
 $('show-lacp').onclick=async()=>{
- $('lacp-diagnostics').innerHTML='<div class="empty">Sprawdzam dostępne widoki agregacji…</div>';
+ const status=$('lacp-status');
+ $('lacp-diagnostics').innerHTML='<div class="empty">Odczytuję stan agregacji…</div>';
+ status.textContent='Odczyt danych z przełącznika…';
  const commands=['show etherchannel detail','show etherchannel summary','show etherchannel'];
- const attempts=[];
  let selected=null;
  for(const command of commands){
   try{
    const d=await api('/api/command',{command});
    const output=String(d.output||'').trim();
-   attempts.push('### '+command+'\n'+(output||'(pusta odpowiedź)'));
    if(output&&!/(invalid input|unknown command|unrecognized command|incomplete command|ambiguous command|polecenie niedozwolone)/i.test(output)){
     selected={command,output};break;
    }
-  }catch(e){attempts.push('### '+command+'\n'+e.message);}
+  }catch(e){}
  }
- $('lacp-output').textContent=attempts.join('\n\n');
+ $('lacp-output').textContent='';
  if(selected){
-  $('lacp-diagnostics').innerHTML='<div class="lacp-source">Źródło danych: <b>'+esc(selected.command)+'</b></div>';
+  status.textContent='Odczyt zakończony.';
   renderLACPDetail(selected.output);
  }else{
-  $('lacp-diagnostics').innerHTML='<div class="empty">Nie udało się uzyskać obsługiwanej odpowiedzi żadnym z trzech poleceń. Sprawdź surowe wyniki poniżej.</div>';
+  status.textContent='Switch nie zwrócił rozpoznawalnego statusu agregacji.';
+  $('lacp-diagnostics').innerHTML='<div class="empty">Brak danych LACP do przedstawienia. Sprawdź obsługę poleceń przez firmware i konfigurację agregacji.</div>';
  }
 };
 $('apply-stp').onclick=async()=>{const mode=$('stp-mode').value,priority=Number($('stp-priority').value);if(!confirm('Zmienić globalny tryb STP na '+mode.toUpperCase()+' i priorytet bridge na '+priority+'?'))return;try{const d=await api('/api/stp',{mode,priority});$('stp-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
@@ -336,7 +337,34 @@ $('dashboard-ports').onclick=()=>{history.replaceState(null,'','#ports-section')
 $('dashboard-vlans').onclick=()=>$('show-vlans').click();
 window.addEventListener('resize',drawTraffic);
 $('detail-port').onchange=renderPortDetail;$('port-history-select').onchange=renderPortHistory;
-async function refreshSystem(){const button=$('refresh-system');button.disabled=true;button.textContent='Odczytuję…';try{const d=await api('/api/system');for(const [key,id] of Object.entries({version:'sys-version',cpu:'sys-cpu',memory:'sys-memory',environment:'sys-environment',boot:'sys-boot'}))$(id).textContent=d[key]||'Brak danych';}catch(e){for(const id of ['sys-version','sys-cpu','sys-memory','sys-environment','sys-boot'])$(id).textContent='Błąd: '+e.message;}finally{button.disabled=false;button.textContent='Odczytaj ponownie';}}
+function metricValue(raw,patterns,suffix=''){
+ const text=String(raw||'');
+ for(const pattern of patterns){const m=text.match(pattern);if(m)return m[1]+suffix;}
+ return 'Brak danych';
+}
+function systemMetric(raw,kind){
+ const t=String(raw||'');
+ if(kind==='cpu')return metricValue(t,[/(?:CPU|processor)(?:\s+utilization|\s+usage|\s+load)?[^0-9%]{0,30}(\d+(?:\.\d+)?)\s*%/i,/(\d+(?:\.\d+)?)\s*%\s*(?:CPU|utili[sz]ation)/i],'%');
+ if(kind==='memory')return metricValue(t,[/(?:memory|mem(?:ory)?)[^\n]{0,70}?(\d+(?:\.\d+)?)\s*%/i,/(\d+(?:\.\d+)?)\s*%\s*(?:used|utili[sz]ed)/i],'%');
+ if(kind==='temperature')return metricValue(t,[/(?:temperature|temp)[^0-9\n]{0,30}(-?\d+(?:\.\d+)?)\s*(?:°\s*)?C\b/i,/(-?\d+(?:\.\d+)?)\s*°\s*C\b/i],' °C');
+ if(kind==='fans'){const matches=[...t.matchAll(/(?:fan|ventilator)[^\n]{0,50}?(\d{2,5})\s*(?:RPM|r\/min)/gi)];return matches.length?matches.map(m=>m[1]+' RPM').join(' · '):metricValue(t,[/(?:fan|ventilator)[^\n]{0,50}\b(OK|正常|normal|failed|fault)\b/i]);}
+ if(kind==='power'){const lines=t.split(/\r?\n/).filter(x=>/(?:power supply|psu|zasilacz)/i.test(x));return lines.length?lines.map(x=>/\b(ok|normal|present|active)\b/i.test(x)?'Sprawny':/\b(fail|fault|absent|not present)\b/i.test(x)?'Błąd / brak':'Status nierozpoznany').join(' · '):'Brak danych';}
+ if(kind==='boot')return metricValue(t,[/(?:uptime|up time)\s*[:=]?\s*([^\n]+)/i,/(?:system up for)\s+([^\n]+)/i,/(?:last reboot|boot time)\s*[:=]?\s*([^\n]+)/i]);
+ return 'Brak danych';
+}
+async function refreshSystem(){const button=$('refresh-system');button.disabled=true;button.textContent='Odczytuję…';try{
+ const d=await api('/api/system');
+ const version=String(d.version||'').split(/\r?\n/).find(x=>/(?:version|alliedware|firmware|release)/i.test(x));
+ $('sys-version').textContent=version?version.trim():'Brak danych';
+ $('sys-cpu').textContent=systemMetric(d.cpu,'cpu');
+ $('sys-memory').textContent=systemMetric(d.memory,'memory');
+ $('sys-temperature').textContent=systemMetric(d.environment,'temperature');
+ $('sys-fans').textContent=systemMetric(d.environment,'fans');
+ $('sys-power').textContent=systemMetric(d.environment,'power');
+ $('sys-boot').textContent=systemMetric(d.boot,'boot');
+ $('system-health').dataset.loaded='true';
+ }catch(e){for(const id of ['sys-version','sys-cpu','sys-memory','sys-temperature','sys-fans','sys-power','sys-boot'])$(id).textContent='Błąd odczytu';$('system-health').dataset.loaded='false';}
+ finally{button.disabled=false;button.textContent='Odśwież parametry';}}
 $('refresh-system').onclick=refreshSystem;
 
 const vlanSelectedPorts=new Set();

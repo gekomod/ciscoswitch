@@ -283,8 +283,8 @@ func (s *panelUserStore) update(id string, role *string, active *bool, password 
 		}
 	}
 	updatedAt := time.Now().UTC()
-\tif !updatedAt.After(user.UpdatedAt) { updatedAt = user.UpdatedAt.Add(time.Nanosecond) }
-\tuser.UpdatedAt = updatedAt
+	if !updatedAt.After(user.UpdatedAt) { updatedAt = user.UpdatedAt.Add(time.Nanosecond) }
+	user.UpdatedAt = updatedAt
 	next := make(map[string]panelUserRecord, len(s.users))
 	for key, value := range s.users {
 		next[key] = value

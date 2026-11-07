@@ -52,3 +52,6 @@ body{background:#f4f6f9;color:var(--text)}.sidebar{background:#fff;border-right:
 .port-dialog .note{margin-top:16px}
 .sidebar .nav{white-space:nowrap}
 @media(max-width:650px){.port-dialog{padding:17px}.port-dialog .port-form{grid-template-columns:1fr}}
+
+/* Port quality assessment */
+.quality-score{display:inline-flex;min-width:68px;justify-content:center;padding:5px 9px;border-radius:8px;font-weight:750;font-variant-numeric:tabular-nums;background:var(--soft)}.quality-score.good{color:var(--green)}.quality-score.warn{color:#a66b08;background:#fff4d8}.quality-score.bad{color:var(--red);background:#ffe8e8}

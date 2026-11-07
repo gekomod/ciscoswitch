@@ -169,3 +169,47 @@ func TestBuildBulkPortEdgePortCommands(t *testing.T) {
  if strings.Count(joined,"interface port1.0.2")!=1||!strings.Contains(joined,"spanning-tree edgeport"){t.Fatalf("unexpected commands: %v",cmds)}
  if _,err:=BuildBulkPortEdgePortCommands([]string{"bad"},true);err==nil{t.Fatal("expected invalid port rejection")}
 }
+
+func TestBuildVLANPortMembershipCommandsPreservesExistingTrunk(t *testing.T) {
+ config := `interface port1.0.5
+ switchport
+ switchport mode trunk
+ switchport trunk allowed vlan add 10,20
+ switchport trunk native vlan 1
+!
+interface port1.0.6
+ switchport
+ switchport mode trunk
+ switchport trunk native vlan 10
+!`
+ cmds,err:=BuildVLANPortMembershipCommands(config,[]string{"port1.0.5"},30,"tagged")
+ if err!=nil{t.Fatal(err)}
+ joined:=strings.Join(cmds,"\n")
+ if !strings.Contains(joined,"switchport trunk allowed vlan add 30"){t.Fatalf("missing tagged add: %v",cmds)}
+ if strings.Contains(joined,"allowed vlan none"){t.Fatalf("must preserve existing trunk VLANs: %v",cmds)}
+ if _,err:=BuildVLANPortMembershipCommands(config,[]string{"port1.0.6"},10,"tagged");err==nil{t.Fatal("native VLAN cannot also be added as tagged")}
+}
+func TestBuildVLANPortMembershipCommandsAccessOnlyForUntagged(t *testing.T) {
+ config := `interface port1.0.5
+ switchport
+ switchport mode access
+ switchport access vlan 20
+!
+interface port1.0.6
+ switchport
+ switchport mode trunk
+ switchport trunk native vlan 1
+!`
+ cmds,err:=BuildVLANPortMembershipCommands(config,[]string{"port1.0.5"},30,"untagged")
+ if err!=nil{t.Fatal(err)}
+ if !strings.Contains(strings.Join(cmds,"\n"),"switchport access vlan 30"){t.Fatalf("missing access VLAN assignment: %v",cmds)}
+ if _,err:=BuildVLANPortMembershipCommands(config,[]string{"port1.0.6"},30,"untagged");err==nil{t.Fatal("must not silently convert trunk to access")}
+}
+func TestBuildVLANPortMembershipCommandsRejectsInvalidAndRoutedPorts(t *testing.T) {
+ config := `interface port1.0.5
+ no switchport
+!`
+ for _,tc:=range []struct{ports []string;vlan int;membership string}{{[]string{"port1.0.5"},30,"untagged"},{[]string{"bad"},30,"tagged"},{[]string{"port1.0.5"},4095,"tagged"},{[]string{"port1.0.5"},30,"native"}} {
+  if _,err:=BuildVLANPortMembershipCommands(config,tc.ports,tc.vlan,tc.membership);err==nil{t.Errorf("expected rejection: %#v",tc)}
+ }
+}

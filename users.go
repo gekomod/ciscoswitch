@@ -170,7 +170,8 @@ func (s *panelUserStore) authenticate(username, password string) (panelUserRecor
 		_ = bcrypt.CompareHashAndPassword([]byte("$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"), []byte(password))
 		return panelUserRecord{}, false
 	}
-	if !found.Active || bcrypt.CompareHashAndPassword([]byte(found.PasswordHash), []byte(password)) != nil {
+	passwordErr := bcrypt.CompareHashAndPassword([]byte(found.PasswordHash), []byte(password))
+	if !found.Active || passwordErr != nil {
 		return panelUserRecord{}, false
 	}
 	return found, true

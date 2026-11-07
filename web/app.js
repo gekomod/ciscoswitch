@@ -114,7 +114,7 @@ function initNavigationSearch(){
 }
 initNavigationSearch();
 
-function syncPortChoices(){for(const id of ['cfg-port','edgeport-port','detail-port','bulk-source-port']){const sel=$(id),old=sel.value;sel.innerHTML=latestPorts.map(p=>'<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>').join('');if([...sel.options].some(o=>o.value===old))sel.value=old;}}
+function syncPortChoices(){for(const id of ['cfg-port','edgeport-port','detail-port','bulk-source-port','compare-port-a','compare-port-b']){const sel=$(id),old=sel.value;sel.innerHTML=latestPorts.map(p=>'<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>').join('');if([...sel.options].some(o=>o.value===old))sel.value=old;}}
 $('bulk-profile').onchange=()=>{
  const profile=$('bulk-profile').value;
  if(!profile)return;
@@ -137,6 +137,50 @@ $('bulk-mode').onchange=()=>{
  $('bulk-access-vlan').disabled=trunk;
  $('bulk-allowed').disabled=!trunk;
  $('bulk-native').disabled=!trunk;
+};
+
+function compareValue(value){return value===undefined||value===null||value===''?'Brak danych':String(value);}
+function comparePortRows(a,b){
+ const fields=[
+  ['Tryb portu',a.config?.mode,b.config?.mode],
+  ['Access / Native VLAN',a.config?.defaultVlan,b.config?.defaultVlan],
+  ['Dozwolone VLAN',Array.isArray(a.config?.configuredVlans)?a.config.configuredVlans.join(', '):undefined,Array.isArray(b.config?.configuredVlans)?b.config.configuredVlans.join(', '):undefined],
+  ['Administracyjnie',a.status?.admin,b.status?.admin],
+  ['Stan linku',a.status?.oper,b.status?.oper],
+  ['Prędkość',a.status?.speed,b.status?.speed],
+  ['Duplex',a.status?.duplex,b.status?.duplex],
+  ['Opis',a.status?.description,b.status?.description]
+ ];
+ const body=$('compare-rows');
+ body.innerHTML=fields.map(([label,av,bv])=>{
+  const left=compareValue(av),right=compareValue(bv);
+  const known=left!=='Brak danych'&&right!=='Brak danych';
+  const same=known&&left.toLowerCase()===right.toLowerCase();
+  const result=!known?'<span class="state unknown">Brak danych</span>':same?'<span class="state up">Zgodne</span>':'<span class="state down">Różnica</span>';
+  return '<tr><td><b>'+esc(label)+'</b></td><td>'+esc(left)+'</td><td>'+esc(right)+'</td><td>'+result+'</td></tr>';
+ }).join('');
+ const differences=fields.filter(([,av,bv])=>av!==undefined&&bv!==undefined&&String(av).toLowerCase()!==String(bv).toLowerCase()).length;
+ const missing=fields.filter(([,av,bv])=>av===undefined||bv===undefined||av===null||bv===null||av===''||bv==='').length;
+ $('compare-summary').textContent='Porównanie zakończone: '+differences+' wykrytych różnic · '+missing+' parametrów bez kompletu danych. Brak danych nie jest traktowany jako zgodność.';
+}
+$('compare-ports').onclick=async()=>{
+ const portA=$('compare-port-a').value,portB=$('compare-port-b').value,button=$('compare-ports');
+ if(!portA||!portB){alert('Wybierz oba porty.');return;}
+ if(portA===portB){alert('Wybierz dwa różne porty.');return;}
+ button.disabled=true;$('compare-summary').textContent='Odczytuję konfiguracje '+portA+' i '+portB+'…';
+ $('compare-rows').innerHTML='<tr><td colspan="4" class="empty">Pobieranie danych ze switcha…</td></tr>';
+ try{
+  const [ca,cb]=await Promise.all([
+   api('/api/port/switchport?port='+encodeURIComponent(portA)),
+   api('/api/port/switchport?port='+encodeURIComponent(portB))
+  ]);
+  const sa=latestPorts.find(p=>p.name===portA)||{},sb=latestPorts.find(p=>p.name===portB)||{};
+  comparePortRows({config:ca,status:sa},{config:cb,status:sb});
+ }catch(e){
+  $('compare-summary').textContent='Nie udało się odczytać obu konfiguracji: '+e.message;
+  $('compare-rows').innerHTML='<tr><td colspan="4" class="empty">Porównanie niekompletne. Sprawdź dostępność odczytu switchport.</td></tr>';
+ }
+ finally{button.disabled=false;}
 };
 $('bulk-copy-source').onclick=async()=>{
  const port=$('bulk-source-port').value,button=$('bulk-copy-source');

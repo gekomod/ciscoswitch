@@ -70,7 +70,7 @@ func securityHeaders(next http.Handler)http.Handler{return http.HandlerFunc(func
 const panelSessionCookie = "switch_panel_session"
 const panelSessionTTL = 12 * time.Hour
 
-type panelSession struct { expires time.Time; username string; role string }
+type panelSession struct { expires time.Time; issuedAt time.Time; username string; role string }
 type panelSessions struct {
  mu sync.Mutex
  values map[string]panelSession
@@ -84,7 +84,7 @@ func (s *panelSessions) create(username, role string) (string,error) {
  if s.values==nil{s.values=make(map[string]panelSession)}
  now:=time.Now()
  for key,value:=range s.values{if now.After(value.expires){delete(s.values,key)}}
- s.values[token]=panelSession{expires:now.Add(panelSessionTTL), username:username, role:role}
+ s.values[token]=panelSession{expires:now.Add(panelSessionTTL), issuedAt:now, username:username, role:role}
  s.mu.Unlock()
  return token,nil
 }
@@ -137,7 +137,7 @@ func sessionAuthWithAuthenticator(next http.Handler, authenticate func(string, s
 	return sessionAuthWithAuthenticatorAndValidator(next, authenticate, nil)
 }
 
-func sessionAuthWithAuthenticatorAndValidator(next http.Handler, authenticate func(string, string) (string, string, bool), validate func(string, string) bool) http.Handler {
+func sessionAuthWithAuthenticatorAndValidator(next http.Handler, authenticate func(string, string) (string, string, bool), validate func(panelSession) bool) http.Handler {
 	sessions := &panelSessions{values: make(map[string]panelSession)}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -180,7 +180,7 @@ func sessionAuthWithAuthenticatorAndValidator(next http.Handler, authenticate fu
 		cookie, err := r.Cookie(panelSessionCookie)
 		session, valid := panelSession{}, false
 		if err == nil { session, valid = sessions.get(cookie.Value) }
-		if valid && validate != nil && !validate(session.username, session.role) {
+		if valid && validate != nil && !validate(session) {
 			if err == nil { sessions.revoke(cookie.Value) }
 			valid = false
 			clearPanelCookie(w, r)

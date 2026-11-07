@@ -62,6 +62,7 @@ func openPanelUserStore(path, bootstrapUsername, bootstrapPassword, bootstrapRol
 		if len(store.users) == 0 {
 			return nil, errors.New("rejestr użytkowników jest pusty; odmowa automatycznego nadpisania")
 		}
+		activeAdmins := 0
 		for id, user := range store.users {
 			if id == "" || user.ID != id || !panelUsernamePattern.MatchString(user.Username) || !validPanelRole(user.Role) || user.PasswordHash == "" {
 				return nil, fmt.Errorf("nieprawidłowy wpis użytkownika %q", id)
@@ -141,6 +142,17 @@ func (s *panelUserStore) saveLocked(users map[string]panelUserRecord) error {
 	return os.Chmod(s.path, 0600)
 }
 
+func (s *panelUserStore) sessionValid(username, role string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, user := range s.users {
+		if strings.EqualFold(user.Username, username) {
+			return user.Active && user.Role == role
+		}
+	}
+	return false
+}
+
 func (s *panelUserStore) authenticate(username, password string) (panelUserRecord, bool) {
 	s.mu.RLock()
 	var found panelUserRecord
@@ -153,7 +165,7 @@ func (s *panelUserStore) authenticate(username, password string) (panelUserRecor
 	s.mu.RUnlock()
 	if found.ID == "" {
 		// Keep the missing-user path close to the bcrypt cost of a real login.
-		_ = bcrypt.CompareHashAndPassword([]byte("$2a$10$7EqJtq98hPqEX7fNZaFWoO5z6qK6n6X1q3u7J7n5vQ9g2P2mM6q6K"), []byte(password))
+		_ = bcrypt.CompareHashAndPassword([]byte("$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"), []byte(password))
 		return panelUserRecord{}, false
 	}
 	if !found.Active || bcrypt.CompareHashAndPassword([]byte(found.PasswordHash), []byte(password)) != nil {

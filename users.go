@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -60,10 +61,15 @@ func openPanelUserStore(path, bootstrapUsername, bootstrapPassword, bootstrapRol
 			return nil, errors.New("rejestr użytkowników jest pusty; odmowa automatycznego nadpisania")
 		}
 		activeAdmins := 0
+		seenUsernames := make(map[string]bool, len(store.users))
 		for id, user := range store.users {
 			if id == "" || user.ID != id || !panelUsernamePattern.MatchString(user.Username) || !validPanelRole(user.Role) || user.PasswordHash == "" {
 				return nil, fmt.Errorf("nieprawidłowy wpis użytkownika %q", id)
 			}
+			key := strings.ToLower(user.Username)
+			if seenUsernames[key] { return nil, fmt.Errorf("powtórzony login użytkownika %q", user.Username) }
+			seenUsernames[key] = true
+			if _, err := bcrypt.Cost([]byte(user.PasswordHash)); err != nil { return nil, fmt.Errorf("nieprawidłowy hash hasła użytkownika %q", user.Username) }
 			if user.Active && user.Role == "admin" { activeAdmins++ }
 		}
 		if activeAdmins == 0 { return nil, errors.New("rejestr nie zawiera aktywnego administratora; start zablokowany") }
@@ -188,6 +194,7 @@ func (s *panelUserStore) list() []panelUserPublic {
 	for _, user := range s.users {
 		result = append(result, publicPanelUser(user))
 	}
+	sort.Slice(result, func(i, j int) bool { return strings.ToLower(result[i].Username) < strings.ToLower(result[j].Username) })
 	return result
 }
 

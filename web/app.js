@@ -3,6 +3,29 @@ const portTrafficHistory=new Map();let recentEvents=[];let portHistory=[];let co
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const natural=(a,b)=>String(a??'').localeCompare(String(b??''),'en',{numeric:true,sensitivity:'base'});
 const sorted=ports=>[...ports].sort((a,b)=>natural(a.name,b.name)||Number(a.index)-Number(b.index));
+function initThemeToggle(){
+ const button=$('theme-toggle');
+ const root=document.documentElement;
+ let saved='dark';
+ try{saved=localStorage.getItem('switch-panel-theme')||'dark';}catch(_e){}
+ const apply=theme=>{
+  const light=theme==='light';
+  root.dataset.theme=light?'light':'dark';
+  if(button){
+   button.textContent=light?'☾ Ciemny motyw':'☼ Jasny motyw';
+   button.setAttribute('aria-label',light?'Przełącz na ciemny motyw':'Przełącz na jasny motyw');
+   button.setAttribute('aria-pressed',String(light));
+   button.title=light?'Włącz ciemny motyw':'Włącz jasny motyw';
+  }
+ };
+ apply(saved);
+ if(button)button.addEventListener('click',()=>{
+  const next=root.dataset.theme==='light'?'dark':'light';
+  apply(next);
+  try{localStorage.setItem('switch-panel-theme',next);}catch(_e){}
+ });
+}
+initThemeToggle();
 async function api(path,body){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);let r;try{r=await fetch(path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store',signal:controller.signal});}catch(e){if(e.name==='AbortError')throw Error('Przekroczono limit czasu odpowiedzi API (30 s): '+path);throw e;}finally{clearTimeout(timer);}const d=await r.json().catch(()=>({error:'Nieprawidłowa odpowiedź API'}));if(r.status===401){location.href='/login';throw Error('Sesja wygasła — zaloguj się ponownie.');}if(!r.ok)throw Error(d.error||'Błąd API');return d;}
 
 function activatePage(hash){

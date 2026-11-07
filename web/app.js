@@ -1,4 +1,4 @@
-const $=id=>document.getElementById(id);let latestPorts=[];let trafficHistory=[];let previousCounters=null;let previousAt=0;let previousPortCounters=new Map();let portRates=new Map();
+const $=id=>document.getElementById(id);let latestPorts=[];let portNetworkContext=new Map();let trafficHistory=[];let previousCounters=null;let previousAt=0;let previousPortCounters=new Map();let portRates=new Map();
 const portTrafficHistory=new Map();let recentEvents=[];let portHistory=[];let counterHistory=[];let previousPortStates=new Map();let previousErrorCounters=new Map();let previousReachable=null;let hasPortBaseline=false;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const natural=(a,b)=>String(a??'').localeCompare(String(b??''),'en',{numeric:true,sensitivity:'base'});
@@ -68,6 +68,34 @@ async function restoreMonitorHistory(){try{const d=await api('/api/monitor/histo
 function recordStatusEvents(d){if(previousReachable!==null&&d.reachable!==previousReachable)addEvent(d.reachable?'Połączenie SNMP zostało przywrócone':'Utracono połączenie SNMP',d.reachable?'success':'danger');if(d.reachable){if(hasPortBaseline){for(const p of latestPorts){const oldState=previousPortStates.get(p.name);if(oldState&&oldState!==p.oper){addEvent(p.name+': link '+oldState.toUpperCase()+' → '+String(p.oper||'unknown').toUpperCase(),p.oper==='up'?'success':'danger');if((oldState==='up'||oldState==='down')&&(p.oper==='up'||p.oper==='down')){persistMonitorRecord({kind:'port',port:p.name,state:p.oper});portHistory.push({port:p.name,state:p.oper,timestamp:new Date().toISOString()});renderPortHistory();renderPortDetail();}}const old=previousErrorCounters.get(p.name);if(old){const inErrors=Number(p.inErrors||0),outErrors=Number(p.outErrors||0),inDiscards=Number(p.inDiscards||0),outDiscards=Number(p.outDiscards||0),errorRXDelta=inErrors-old.inErrors,errorTXDelta=outErrors-old.outErrors,discardRXDelta=inDiscards-old.inDiscards,discardTXDelta=outDiscards-old.outDiscards;if(errorRXDelta>0||errorTXDelta>0||discardRXDelta>0||discardTXDelta>0){const parts=[];if(errorRXDelta>0)parts.push('RX +'+errorRXDelta+' błędów');if(errorTXDelta>0)parts.push('TX +'+errorTXDelta+' błędów');if(discardRXDelta>0)parts.push('RX +'+discardRXDelta+' discard');if(discardTXDelta>0)parts.push('TX +'+discardTXDelta+' discard');addEvent(p.name+': '+parts.join(', '),'warning');const rec={kind:'counter',port:p.name,errorRxDelta:Math.max(0,errorRXDelta),errorTxDelta:Math.max(0,errorTXDelta),discardRxDelta:Math.max(0,discardRXDelta),discardTxDelta:Math.max(0,discardTXDelta),errorRxTotal:inErrors,errorTxTotal:outErrors,discardRxTotal:inDiscards,discardTxTotal:outDiscards};persistMonitorRecord(rec);counterHistory.push({...rec,timestamp:new Date().toISOString()});counterHistory=counterHistory.slice(-2000);renderCounterHistory();renderPortDetail();}}}}previousPortStates=new Map(latestPorts.map(p=>[p.name,p.oper]));previousErrorCounters=new Map(latestPorts.map(p=>[p.name,{inErrors:Number(p.inErrors||0),outErrors:Number(p.outErrors||0),inDiscards:Number(p.inDiscards||0),outDiscards:Number(p.outDiscards||0)}]));hasPortBaseline=true;}previousReachable=d.reachable;}
 function renderMap(){const el=$('port-map');if(!el)return;el.innerHTML=latestPorts.map(p=>{const state=p.oper||'unknown',label=(p.name||String(p.index)).replace(/^port1\.0\./,'');return '<button class="map-port '+(state==='up'?'is-up':state==='down'?'is-down':'is-unknown')+'" data-map-port="'+esc(p.name)+'" title="'+esc(p.name)+' · '+esc(state)+'"><b>'+esc(label)+'</b><small>'+(p.speed||'—').replace(' Mb/s','M')+'</small></button>';}).join('')||'<div class="empty">Brak interfejsów SNMP.</div>';}
 function fmtCount(v){const n=Number(v||0);return Number.isFinite(n)?new Intl.NumberFormat('pl-PL',{notation:n>999999?'compact':'standard',maximumFractionDigits:1}).format(n):'—';}
+function portContextLines(output,port){
+ const lines=String(output||'').split(/\\r?\\n/),escaped=port.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\function renderPortDetail(){'),full=new RegExp(escaped+'(?![0-9])','i');
+ const short=port.replace(/^port/,'');const compact=new RegExp('(^|[^0-9])'+short.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\function renderPortDetail(){')+'([^0-9]|$)','i');
+ return lines.filter(line=>full.test(line)||compact.test(line)).slice(0,40);
+}
+function renderPortNetworkContext(){
+ const port=$('detail-port')?.value,ctx=portNetworkContext.get(port);
+ for(const [id,key] of [['detail-vlan-context','vlan'],['detail-mac-context','mac'],['detail-lldp-context','lldp']]){
+  const el=$(id);if(!el)continue;
+  if(!port){el.textContent='Wybierz port.';continue;}
+  if(!ctx){el.textContent='Kliknij „Odczytaj VLAN / MAC / LLDP”.';continue;}
+  const result=ctx[key];if(result.error){el.textContent='Błąd odczytu: '+result.error;continue;}
+  const lines=portContextLines(result.output,port);
+  el.textContent=lines.length?lines.join('\\n'):'Brak wierszy z dokładnym identyfikatorem '+port+'.\\n\\nSurowa odpowiedź switcha:\\n'+String(result.output||'(brak danych)').slice(0,6000);
+ }
+}
+async function loadPortNetworkContext(){
+ const port=$('detail-port')?.value;if(!port){alert('Wybierz port.');return;}
+ const button=$('load-port-network');button.disabled=true;button.textContent='Odczyt…';
+ for(const id of ['detail-vlan-context','detail-mac-context','detail-lldp-context'])$(id).textContent='Pobieranie danych ze switcha…';
+ const commands=[['switchport','show interface switchport'],['vlans','show vlan all'],['mac','show mac address-table'],['lldp','show lldp neighbors']];
+ try{
+  const results=await Promise.all(commands.map(async([key,command])=>{try{return [key,{output:(await api('/api/command',{command})).output||''}];}catch(e){return [key,{error:e.message}];}}));
+  const all=Object.fromEntries(results),ctx={vlan:{output:[all.switchport?.output,all.vlans?.output].filter(Boolean).join('\\n\\n--- show vlan all ---\\n')},mac:all.mac,lldp:all.lldp};
+  if(all.switchport?.error)ctx.vlan.error=all.switchport.error;if(all.vlans?.error)ctx.vlan.error=(ctx.vlan.error?ctx.vlan.error+'; ':'')+all.vlans.error;
+  portNetworkContext.set(port,ctx);renderPortNetworkContext();
+ }finally{button.disabled=false;button.textContent='Odczytaj VLAN / MAC / LLDP';}
+}
 function renderPortDetail(){
  const name=$('detail-port')?.value,p=latestPorts.find(x=>x.name===name);
  if(!p){if($('detail-summary'))$('detail-summary').textContent='Wybierz port do diagnostyki.';return;}
@@ -221,7 +249,7 @@ $('create-vlan').onclick=async()=>{const id=Number($('vlan-id').value),name=$('v
 $('delete-vlan').onclick=async()=>{const id=Number($('vlan-id').value);try{const p=await api('/api/vlan/preview',{id,delete:true});const summary='PODGLĄD — bez zmian na switchu\\n\\n'+p.commands.join('\\n')+'\\n\\n'+p.warnings.join('\\n');$('vlan-output').textContent=summary;if(!confirm(summary+'\\n\\nCzy na pewno wykonać?'))return;const d=await api('/api/vlan',{id,delete:true});$('vlan-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
 $('show-vlans').onclick=async()=>{try{const d=await api('/api/command',{command:'show vlan all'});$('vlan-output').textContent=d.output||'Brak danych';}catch(e){$('vlan-output').textContent=e.message;}};
 $('apply-port-settings').onclick=async()=>{const payload={port:$('cfg-port').value,mode:$('cfg-mode').value,accessVlan:Number($('cfg-access-vlan').value),allowed:$('cfg-allowed').value,native:Number($('cfg-native').value),speed:$('cfg-speed').value,duplex:$('cfg-duplex').value,description:$('cfg-description').value};if(!payload.port){alert('Wybierz port.');return;}try{const p=await api('/api/port/preview',payload);const summary='PODGLĄD — bez zmian na switchu\\n\\n'+p.commands.join('\\n')+'\\n\\n'+p.warnings.join('\\n');$('output').textContent=summary;if(!confirm(summary+'\\n\\nWysłać te komendy do przełącznika?'))return;const d=await api('/api/port/settings',payload);$('output').textContent=d.output||'Polecenie przekazane';addEvent('Zmieniono konfigurację '+payload.port);alert('Komendy przekazane. Zweryfikuj konfigurację portu w CLI.');$('port-dialog').close();await load();}catch(e){alert(e.message);}};
-$('detail-port').addEventListener('change',renderPortDetail);
+$('detail-port').addEventListener('change',renderPortDetail);\n$('load-port-network').addEventListener('click',loadPortNetworkContext);
 $('port-map').addEventListener('click',e=>{const b=e.target.closest('[data-map-port]');if(b)openPortDiagnostics(b.dataset.mapPort);});
 $('top-ports').addEventListener('click',e=>{const b=e.target.closest('[data-diagnostic-port]');if(b)openPortDiagnostics(b.dataset.diagnosticPort);});
 $('port-traffic-rows').addEventListener('click',e=>{const b=e.target.closest('[data-diagnostic-port]');if(b)openPortDiagnostics(b.dataset.diagnosticPort);});

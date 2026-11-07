@@ -136,3 +136,16 @@ func TestBuildSNMPv3TrapHostRejectsUnsafeInput(t *testing.T) {
   if _,err:=BuildSNMPv3TrapHostCommands(v[0],v[1],false);err==nil{t.Errorf("expected invalid trap target to be rejected: %#v",v)}
  }
 }
+
+func TestBuildBulkPortSettingsCommands(t *testing.T) {
+ cmds,err:=BuildBulkPortSettingsCommands([]string{"port1.0.5","port1.0.6","port1.0.5"},"access",10,"",1,"auto","auto","BIURO")
+ if err!=nil{t.Fatal(err)}
+ joined:=strings.Join(cmds,"\n")
+ if strings.Count(joined,"interface port1.0.5")!=1||strings.Count(joined,"interface port1.0.6")!=1{t.Fatalf("ports not deduplicated: %v",cmds)}
+ if cmds[0]!="configure terminal"||cmds[len(cmds)-1]!="end"{t.Fatalf("missing config context: %v",cmds)}
+}
+func TestBuildBulkPortSettingsCommandsRejectsInvalidBatch(t *testing.T) {
+ for _,ports:=range [][]string{{},{"port1.0.5","bad port"}} {
+  if _,err:=BuildBulkPortSettingsCommands(ports,"access",10,"",1,"auto","auto","");err==nil{t.Errorf("expected invalid batch to fail: %v",ports)}
+ }
+}

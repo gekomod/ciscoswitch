@@ -296,7 +296,7 @@ func TestSwitchportDetailsHandlerReturnsParsedExactPort(t *testing.T) {
  if !strings.Contains(rec.Body.String(),"\"mode\":\"trunk\"") || !strings.Contains(rec.Body.String(),"\"configuredVlans\":[1,4,5]") { t.Fatalf("unexpected JSON: %s",rec.Body.String()) }
 }
 func TestSwitchportDetailsHandlerRejectsUnknownPortBlock(t *testing.T) {
- h:=switchportDetailsHandler(func(string)(string,error){return "Interface name : port1.0.10\nSwitchport mode : trunk\n",""})
+ h:=switchportDetailsHandler(func(string)(string,error){return "Interface name : port1.0.10\nSwitchport mode : trunk\n",nil})
  rec:=httptest.NewRecorder()
  h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/port/switchport?port=port1.0.1",nil))
  if rec.Code!=http.StatusNotFound { t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String()) }

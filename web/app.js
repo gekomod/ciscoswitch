@@ -881,7 +881,19 @@ $('delete-vlan').onclick=async()=>{
  const id=Number($('vlan-id').value);
  try{const p=await api('/api/vlan/preview',{id,delete:true});const summary='Usunięcie VLAN '+id+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\\n\\nUwagi: '+p.warnings.join(' · '):'');showFriendlyResult('vlan-output',summary,'Podgląd usunięcia VLAN');if(!confirm(summary+'\\n\\nCzy na pewno usunąć VLAN?'))return;const d=await api('/api/vlan',{id,delete:true});showFriendlyResult('vlan-output',d.output,'Usunięcie VLAN');}catch(e){showFriendlyResult('vlan-output',e.message,'Operacja VLAN');}
 };
-$('show-vlans').onclick=async()=>{try{const d=await api('/api/command',{command:'show vlan all'});showFriendlyResult('vlan-output',d.output,'Lista VLAN');}catch(e){showFriendlyResult('vlan-output',e.message,'Lista VLAN');}};
+$('show-vlans').onclick=async()=>{
+ const button=$('show-vlans'),summary=$('vlan-list-summary');
+ button.disabled=true;button.textContent='Odczyt…';summary.textContent='Pobieranie listy VLAN ze switcha…';
+ try{
+  const d=await api('/api/command',{command:'show vlan all'});
+  const raw=String(d.output||'').trim();
+  if(!raw)throw new Error('Switch zwrócił pustą odpowiedź.');
+  $('vlan-output').textContent=raw;
+  const ids=[...new Set([...raw.matchAll(/(?:^|\\s)(\\d{1,4})(?=\\s|$)/gm)].map(m=>Number(m[1])).filter(n=>n>=1&&n<=4094))];
+  summary.textContent='Odczyt zakończony. '+(ids.length?'Rozpoznano '+ids.length+' potencjalnych identyfikatorów VLAN.':'Odpowiedź otrzymana; format listy nie pozwala bezpiecznie policzyć VLAN-ów.')+' Szczegółowa odpowiedź urządzenia jest schowana poniżej.';
+ }catch(e){$('vlan-output').textContent='';summary.textContent='Nie udało się odczytać VLAN: '+e.message;}
+ finally{button.disabled=false;button.textContent='Pokaż konfigurację VLAN';}
+};
 $('apply-port-settings').onclick=async()=>{
  const payload={port:$('cfg-port').value,mode:$('cfg-mode').value,accessVlan:Number($('cfg-access-vlan').value),allowed:$('cfg-allowed').value,native:Number($('cfg-native').value),speed:$('cfg-speed').value,duplex:$('cfg-duplex').value,description:$('cfg-description').value};
  if(!payload.port){alert('Wybierz port.');return;}

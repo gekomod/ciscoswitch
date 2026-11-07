@@ -257,3 +257,19 @@ body{background:radial-gradient(ellipse at 78% -20%,rgba(44,104,165,.19),transpa
 .nav:focus-visible,.btn:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #71b8ff;outline-offset:2px}
 @media(max-width:1100px){.sidebar{width:230px}.main{margin-left:230px;padding:0 24px 36px}}
 @media(max-width:760px){.sidebar{position:relative;width:auto;height:auto;inset:auto;padding:12px}.brand{padding-bottom:12px}.sidebar-nav-scroll{max-height:210px}.main{margin:0;padding:0 14px 30px}.topbar{position:relative;height:auto;min-height:58px;gap:10px;flex-wrap:wrap;padding:10px 0}.top-actions{flex-wrap:wrap;gap:6px}.welcome{padding:25px 0 18px;align-items:flex-start;flex-direction:column}.welcome h1{font-size:27px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Friendly status cards: never expose device CLI payloads in normal views */
+.friendly-result{display:flex!important;align-items:center;gap:13px;min-height:66px;padding:13px 15px!important;margin:10px 0;border:1px solid #29435c!important;border-radius:12px;background:linear-gradient(110deg,#12253a,#101b29)!important;color:#dce9f6!important;white-space:normal!important;font:inherit!important;line-height:1.45}
+.friendly-result-icon{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:10px;background:#153e34;color:#58d9a7;font-size:18px;font-weight:800}
+.friendly-result-icon.is-muted{background:#293747;color:#a7b8ca}
+.friendly-result-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:3px}
+.friendly-result-copy b{font-size:12px;color:#edf5fc}
+.friendly-result-copy span{font-size:11px;color:#9eb2c8;white-space:normal}
+.friendly-result-count{font-size:19px;font-weight:750;color:#9bcaff;font-variant-numeric:tabular-nums}
+#diagnostics .cli-row{display:none!important}
+#diagnostics #output{display:none!important}
+#diagnostics .diag-grid,#diagnostics .neighbor-tools{display:none!important}
+#diagnostics .quick-actions{display:flex;flex-wrap:wrap}
+#diagnostics .quick-actions .btn{min-height:38px}
+#diagnostics .panel pre,#diagnostics pre{display:none!important}
+@media(max-width:600px){.friendly-result{gap:9px;padding:11px!important}.friendly-result-count{font-size:16px}}

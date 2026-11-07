@@ -188,3 +188,26 @@ func TestMultiUserLoginAndAdminOnlyUserAPI(t *testing.T) {
 	if rec.Code != http.StatusCreated { t.Fatalf("admin create user status=%d body=%s", rec.Code, rec.Body.String()) }
 	if strings.Contains(rec.Body.String(), "passwordHash") { t.Fatal("create response leaked password hash") }
 }
+
+func TestMultiUserSessionIsRevokedAfterDisableOrRoleChange(t *testing.T) {
+	store, err := openPanelUserStore(filepath.Join(t.TempDir(), "users.json"), "rootadmin", "bootstrap-password", "admin")
+	if err != nil { t.Fatal(err) }
+	created, err := store.create("ops.account", "operator-long-password", "operator")
+	if err != nil { t.Fatal(err) }
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/private", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	h := sessionAuthWithUsers(mux, store)
+	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(`{"username":"ops.account","password":"operator-long-password"}`))
+	req.Header.Set("Origin", "http://panel.local"); req.Host = "panel.local"
+	rec := httptest.NewRecorder(); h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK { t.Fatalf("login status=%d", rec.Code) }
+	cookie := rec.Result().Cookies()[0]
+	req = httptest.NewRequest(http.MethodGet, "/api/private", nil); req.AddCookie(cookie)
+	rec = httptest.NewRecorder(); h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent { t.Fatalf("initial session status=%d", rec.Code) }
+	disabled := false
+	if _, err := store.update(created.ID, nil, &disabled, nil); err != nil { t.Fatal(err) }
+	req = httptest.NewRequest(http.MethodGet, "/api/private", nil); req.AddCookie(cookie)
+	rec = httptest.NewRecorder(); h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized { t.Fatalf("disabled account session status=%d", rec.Code) }
+}

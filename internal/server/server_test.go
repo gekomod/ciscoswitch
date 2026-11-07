@@ -411,3 +411,47 @@ func TestSwitchportDetailsHandlerRejectsUnknownPortBlock(t *testing.T) {
  h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/port/switchport?port=port1.0.1",nil))
  if rec.Code!=http.StatusNotFound { t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String()) }
 }
+
+
+func TestBulkPortPreviewUsesSingleSwitchReadAndReturnsEveryPort(t *testing.T) {
+ calls := 0
+ raw := "Interface name : port1.0.1\nSwitchport mode : access\nDefault Vlan : 10\nConfigured Vlans : 10\n\nInterface name : port1.0.2\nSwitchport mode : trunk\nDefault Vlan : 1\nConfigured Vlans : 1 10 20\n"
+ h := bulkPortPreviewHandler(func(command string)(string,error) {
+  calls++
+  if command != "show interface switchport" { t.Fatalf("unexpected command %q",command) }
+  return raw,nil
+ })
+ body := strings.NewReader(`{"ports":["port1.0.1","port1.0.2"],"mode":"trunk","accessVlan":10,"allowed":"1,10,20","native":1,"speed":"auto","duplex":"auto","description":""}`)
+ rec := httptest.NewRecorder()
+ h.ServeHTTP(rec,httptest.NewRequest(http.MethodPost,"/api/ports/preview/bulk",body))
+ if rec.Code != http.StatusOK { t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String()) }
+ if calls != 1 { t.Fatalf("switch reads=%d want 1",calls) }
+ var result struct { Previews []bulkPortPreviewItem `json:"previews"`; Applies bool `json:"applies"`; ReadOperations int `json:"readOperations"` }
+ if err:=json.Unmarshal(rec.Body.Bytes(),&result);err!=nil { t.Fatal(err) }
+ if len(result.Previews)!=2 || result.Applies || result.ReadOperations!=1 { t.Fatalf("unexpected result: %+v",result) }
+ if result.Previews[0].Current["defaultVlan"]!="10" || result.Previews[1].Current["mode"]!="trunk" { t.Fatalf("incorrect port state: %+v",result.Previews) }
+ if rec.Header().Get("Cache-Control")!="no-store" { t.Fatal("expected no-store") }
+ if strings.Contains(rec.Body.String(),"Interface name") { t.Fatalf("raw CLI output leaked: %s",rec.Body.String()) }
+}
+
+func TestBulkPortPreviewBlocksProtectedPortsBeforeSwitchRead(t *testing.T) {
+ t.Setenv("PROTECTED_PORTS","port1.0.49")
+ called:=false
+ h:=bulkPortPreviewHandler(func(string)(string,error){called=true;return "",nil})
+ body:=strings.NewReader(`{"ports":["port1.0.49"],"mode":"access","accessVlan":10,"speed":"auto","duplex":"auto"}`)
+ rec:=httptest.NewRecorder()
+ h.ServeHTTP(rec,httptest.NewRequest(http.MethodPost,"/api/ports/preview/bulk",body))
+ if rec.Code!=http.StatusBadRequest { t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String()) }
+ if called { t.Fatal("protected port preview must not query switch") }
+}
+
+func TestBulkPortPreviewFailsClosedWhenAnyPortCannotBeParsed(t *testing.T) {
+ calls:=0
+ h:=bulkPortPreviewHandler(func(string)(string,error){calls++;return "Interface name : port1.0.1\nSwitchport mode : access\nDefault Vlan : 10\nConfigured Vlans : 10\n",nil})
+ body:=strings.NewReader(`{"ports":["port1.0.1","port1.0.2"],"mode":"access","accessVlan":10,"speed":"auto","duplex":"auto"}`)
+ rec:=httptest.NewRecorder()
+ h.ServeHTTP(rec,httptest.NewRequest(http.MethodPost,"/api/ports/preview/bulk",body))
+ if rec.Code!=http.StatusConflict { t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String()) }
+ if calls!=1 { t.Fatalf("switch reads=%d want 1",calls) }
+ if strings.Contains(rec.Body.String(),"\"previews\"") { t.Fatalf("partial preview must not be returned: %s",rec.Body.String()) }
+}

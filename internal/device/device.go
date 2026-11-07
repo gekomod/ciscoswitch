@@ -405,6 +405,78 @@ func BuildPortSettingsCommands(name,mode string,access int,allowed string,native
  cmds=append(cmds,"end")
  return cmds,nil
 }
+
+type vlanPortConfig struct {
+ mode string
+ native int
+ routed bool
+}
+
+// BuildVLANPortMembershipCommands changes membership only when the existing
+// interface mode is compatible. It never silently converts access ports to trunk
+// or trunk ports to access.
+func BuildVLANPortMembershipCommands(runningConfig string, ports []string, vlan int, membership string) ([]string, error) {
+ if vlan < 1 || vlan > 4094 { return nil, fmt.Errorf("VLAN ID musi być z zakresu 1–4094") }
+ if len(ports) < 1 || len(ports) > 52 { return nil, fmt.Errorf("wybierz od 1 do 52 portów") }
+ configs := map[string]vlanPortConfig{}
+ current := ""
+ for _, raw := range strings.Split(runningConfig, "\n") {
+  line := strings.TrimSpace(strings.TrimSuffix(raw, "\r"))
+  lower := strings.ToLower(line)
+  if strings.HasPrefix(lower, "interface ") {
+   fields := strings.Fields(line)
+   current = ""
+   if len(fields) == 2 && validPort(fields[1]) {
+    current = fields[1]
+    configs[current] = vlanPortConfig{mode:"access", native:1}
+   }
+   continue
+  }
+  if current == "" { continue }
+  cfg := configs[current]
+  if lower == "no switchport" { cfg.routed = true }
+  if lower == "switchport mode trunk" || strings.HasPrefix(lower, "switchport mode trunk ") { cfg.mode = "trunk" }
+  if lower == "switchport mode access" { cfg.mode = "access" }
+  if strings.HasPrefix(lower, "switchport trunk native vlan ") {
+   fields := strings.Fields(line)
+   if len(fields) == 5 { if n,err:=strconv.Atoi(fields[4]); err==nil && n>=1 && n<=4094 { cfg.native=n } }
+  }
+  configs[current] = cfg
+ }
+ seen := map[string]bool{}
+ commands := []string{"configure terminal"}
+ for _, raw := range ports {
+  port := strings.TrimSpace(raw)
+  if !validPort(port) { return nil, fmt.Errorf("nieprawidłowy port: %s", port) }
+  if seen[port] { continue }; seen[port] = true
+  cfg, exists := configs[port]
+  if !exists { cfg = vlanPortConfig{mode:"access", native:1} }
+  if cfg.routed { return nil, fmt.Errorf("%s: port działa w trybie routowanym (no switchport)", port) }
+  switch membership {
+  case "tagged":
+   if cfg.mode != "trunk" { return nil, fmt.Errorf("%s: port nie jest trunk; najpierw skonfiguruj i sprawdź profil trunk", port) }
+   if cfg.native == vlan { return nil, fmt.Errorf("%s: VLAN %d jest native/untagged na tym porcie, nie można dodać go jako tagged", port, vlan) }
+   commands = append(commands, "interface "+port, fmt.Sprintf("switchport trunk allowed vlan add %d", vlan))
+  case "untagged":
+   if cfg.mode == "trunk" { return nil, fmt.Errorf("%s: port jest trunk; zmiana na untagged wymaga świadomej zmiany profilu portu", port) }
+   commands = append(commands, "interface "+port, fmt.Sprintf("switchport access vlan %d", vlan))
+  default:
+   return nil, fmt.Errorf("typ członkostwa musi być tagged lub untagged")
+  }
+ }
+ if len(seen)==0 { return nil, fmt.Errorf("nie wybrano portów") }
+ commands = append(commands, "end")
+ return commands, nil
+}
+
+func (s *Service) ConfigureVLANPortMembership(ports []string, vlan int, membership string) (string,error) {
+ running,err:=s.RunReadOnly("show running-config")
+ if err!=nil { return "",fmt.Errorf("nie udało się odczytać bieżącej konfiguracji portów: %w",err) }
+ commands,err:=BuildVLANPortMembershipCommands(running,ports,vlan,membership)
+ if err!=nil { return "",err }
+ return s.runConfig(commands)
+}
+
 func (s *Service) ConfigureVLAN(id int,name string,remove bool)(string,error) {
  cmds,err:=BuildVLANCommands(id,name,remove);if err!=nil{return "",err};return s.runConfig(cmds)
 }

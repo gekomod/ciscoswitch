@@ -26,6 +26,7 @@ func Register(m *http.ServeMux,svc *device.Service){
  if raw := os.Getenv("CONFIG_BACKUP_RETENTION"); raw != "" { if n, err := strconv.Atoi(raw); err == nil && n >= 1 && n <= 10000 { retention = n } }
  m.Handle("/api/config/backups", configBackupsHandler(svc.RunReadOnly, backupDir, retention))
  m.Handle("/api/config/backups/download", configBackupDownloadHandler(backupDir))
+ m.Handle("/api/config/backups/compare", configBackupCompareHandler(svc.RunReadOnly, backupDir))
  m.Handle("/api/audit", auditHistoryHandler(os.Getenv("AUDIT_LOG_PATH")))
  m.Handle("/api/monitor/history", monitorHistoryHandler(filepath.Join("data", "monitor-history.jsonl")))
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
@@ -401,6 +402,82 @@ func configBackupDownloadHandler(dir string) http.Handler {
  })
 }
 
+
+type configBackupCompareResult struct {
+ BackupID string `json:"backupId"`
+ SHA256 string `json:"sha256"`
+ BackupLines int `json:"backupLines"`
+ CurrentLines int `json:"currentLines"`
+ AddedInCurrent int `json:"addedInCurrent"`
+ RemovedFromCurrent int `json:"removedFromCurrent"`
+ Identical bool `json:"identical"`
+ ComparedAt time.Time `json:"comparedAt"`
+}
+
+// configBackupCompareHandler compares a verified local snapshot with the current
+// running-config. It deliberately returns counts only: configuration lines can
+// contain passwords, communities, and other management secrets.
+func configBackupCompareHandler(run func(string) (string, error), dir string) http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+  if r.Method != http.MethodGet {
+   http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+   return
+  }
+  id := r.URL.Query().Get("id")
+  if !validBackupID(id) {
+   http.Error(w, "invalid backup id", http.StatusBadRequest)
+   return
+  }
+  data, err := os.ReadFile(filepath.Join(dir, id+".cfg"))
+  if os.IsNotExist(err) {
+   http.NotFound(w, r)
+   return
+  }
+  if err != nil {
+   http.Error(w, "backup read failed", http.StatusInternalServerError)
+   return
+  }
+  expected, err := os.ReadFile(filepath.Join(dir, id+".sha256"))
+  if os.IsNotExist(err) {
+   http.Error(w, "backup is not verified; comparison blocked", http.StatusConflict)
+   return
+  }
+  if err != nil {
+   http.Error(w, "backup integrity metadata read failed", http.StatusInternalServerError)
+   return
+  }
+  sum := sha256.Sum256(data)
+  digest := hex.EncodeToString(sum[:])
+  if strings.TrimSpace(string(expected)) != digest {
+   http.Error(w, "backup integrity check failed; comparison blocked", http.StatusConflict)
+   return
+  }
+
+  current, err := run("show running-config")
+  if err != nil {
+   http.Error(w, "current running configuration read failed", http.StatusBadGateway)
+   return
+  }
+  if strings.TrimSpace(current) == "" {
+   http.Error(w, "switch returned an empty running configuration", http.StatusBadGateway)
+   return
+  }
+  diff := compareConfigLines(current, string(data))
+  result := configBackupCompareResult{
+   BackupID: id,
+   SHA256: digest,
+   BackupLines: len(nonEmptyConfigLines(string(data))),
+   CurrentLines: len(nonEmptyConfigLines(current)),
+   AddedInCurrent: len(diff.Added),
+   RemovedFromCurrent: len(diff.Removed),
+   Identical: len(diff.Added) == 0 && len(diff.Removed) == 0,
+   ComparedAt: time.Now().UTC(),
+  }
+  w.Header().Set("Content-Type", "application/json; charset=utf-8")
+  w.Header().Set("Cache-Control", "no-store")
+  _ = json.NewEncoder(w).Encode(result)
+ })
+}
 
 // runWithPreChangeBackup is fail-closed: a config change is not sent unless the
 // current running-config was read and stored successfully first.

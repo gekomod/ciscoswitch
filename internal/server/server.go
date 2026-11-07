@@ -34,6 +34,7 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
  m.Handle("/api/ports/protection", protectedPortsHandler())
  m.Handle("/api/ports/preview/bulk", bulkPortPreviewHandler(svc.RunReadOnly))
+ m.Handle("/api/ports/switchport/bulk", bulkSwitchportDetailsHandler(svc.RunReadOnly))
  m.HandleFunc("/api/port/preview",func(w http.ResponseWriter,r *http.Request){
  if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
  r.Body=http.MaxBytesReader(w,r.Body,4096)
@@ -616,6 +617,34 @@ type bulkPortPreviewItem struct {
  Port string `json:"port"`
  Current map[string]any `json:"current"`
  Warnings []string `json:"warnings"`
+}
+
+func bulkSwitchportDetailsHandler(read func(string) (string,error)) http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request) {
+  if r.Method != http.MethodPost { http.Error(w,"method not allowed",http.StatusMethodNotAllowed); return }
+  r.Body = http.MaxBytesReader(w,r.Body,4096)
+  var q struct { Ports []string `json:"ports"` }
+  if err:=json.NewDecoder(r.Body).Decode(&q);err!=nil { http.Error(w,"invalid JSON",http.StatusBadRequest); return }
+  if _,err:=device.BuildBulkPortActionCommands(q.Ports,"enable");err!=nil { http.Error(w,err.Error(),http.StatusBadRequest); return }
+  ports:=make([]string,0,len(q.Ports))
+  seen:=make(map[string]bool,len(q.Ports))
+  for _,raw:=range q.Ports {
+   port:=strings.TrimSpace(raw)
+   key:=strings.ToLower(port)
+   if !seen[key] { seen[key]=true;ports=append(ports,port) }
+  }
+  output,err:=read("show interface switchport")
+  if err!=nil { http.Error(w,"nie udało się odczytać konfiguracji portów po zmianie",http.StatusBadGateway);return }
+  details:=make([]map[string]any,0,len(ports))
+  for _,port:=range ports {
+   current,parseErr:=device.ParseSwitchportDetails(output,port)
+   if parseErr!=nil { http.Error(w,"nie udało się potwierdzić konfiguracji portu "+port,http.StatusConflict);return }
+   details=append(details,map[string]any{"port":port,"mode":current.Mode,"defaultVlan":current.DefaultVLAN,"configuredVlans":current.ConfiguredVLANs})
+  }
+  w.Header().Set("Content-Type","application/json")
+  w.Header().Set("Cache-Control","no-store")
+  _=json.NewEncoder(w).Encode(map[string]any{"ports":details,"readOperations":1})
+ })
 }
 
 func bulkPortPreviewHandler(read func(string) (string,error)) http.Handler {

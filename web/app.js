@@ -457,15 +457,32 @@ let statusLoading=false;async function load(){if(statusLoading)return;statusLoad
 $('bulk-apply').onclick=async()=>{
  const numbers=[...new Set($('bulk-ports').value.split(',').map(x=>x.trim()).filter(Boolean))];
  if(!numbers.length){alert('Wpisz numery portów, np. 1,2,3.');return;}
- if(numbers.some(n=>!/^\\d+$/.test(n)||Number(n)<1||Number(n)>52)){alert('Porty muszą być numerami od 1 do 52.');return;}
+ if(numbers.some(n=>!/^[0-9]+$/.test(n)||Number(n)<1||Number(n)>52)){alert('Porty muszą być numerami od 1 do 52.');return;}
  const payload={ports:numbers.map(n=>'port1.0.'+n),mode:$('bulk-mode').value,accessVlan:Number($('bulk-access-vlan').value),allowed:$('bulk-allowed').value,native:Number($('bulk-native').value),speed:$('bulk-speed').value,duplex:$('bulk-duplex').value,description:$('bulk-description').value};
+ if(payload.mode==='access'&&(!Number.isInteger(payload.accessVlan)||payload.accessVlan<1||payload.accessVlan>4094)){alert('Access VLAN musi mieścić się w zakresie 1–4094.');return;}
+ if(payload.mode==='trunk'&&(!Number.isInteger(payload.native)||payload.native<1||payload.native>4094||!payload.allowed.trim())){alert('Dla trunk podaj poprawny Native VLAN i listę dozwolonych VLAN.');return;}
  const button=$('bulk-apply');button.disabled=true;
  try{
-  const preview=await api('/api/port/preview',{port:payload.ports[0],mode:payload.mode,accessVlan:payload.accessVlan,allowed:payload.allowed,native:payload.native,speed:payload.speed,duplex:payload.duplex,description:payload.description});
-  const summary='Profil '+(payload.mode==='access'?'Access':'Trunk')+' zostanie zastosowany na '+payload.ports.length+' portach. VLAN dostępu: '+payload.accessVlan+'. Przed zmianą zostanie utworzona kopia konfiguracji.'+(preview.warnings?.length?'\\n\\nUwagi: '+preview.warnings.join(' · '):'');
-  showFriendlyResult('bulk-output',summary,'Podgląd profilu portów');if(!confirm(summary+'\\n\\nZastosować profil?'))return;
-  const result=await api('/api/ports/settings/bulk',payload);showFriendlyResult('bulk-output',result.output,'Profil portów');
-  addEvent('Zastosowano profil na '+payload.ports.length+' portach');await load();
+  const previews=await Promise.all(payload.ports.map(async port=>({port,...await api('/api/port/preview',{port,mode:payload.mode,accessVlan:payload.accessVlan,allowed:payload.allowed,native:payload.native,speed:payload.speed,duplex:payload.duplex,description:payload.description})})));
+  const warnings=[...new Set(previews.flatMap(item=>Array.isArray(item.warnings)?item.warnings:[]))];
+  const summary='Profil '+(payload.mode==='access'?'Access':'Trunk')+' zostanie zastosowany na '+payload.ports.length+' portach:\\n'+payload.ports.join(', ')+'\\n\\n'+(payload.mode==='access'?'Access VLAN: '+payload.accessVlan:'Native VLAN: '+payload.native+' · dozwolone VLAN: '+payload.allowed)+'\\n\\nKażdy port przeszedł osobny podgląd walidacyjny. Przed zmianą zostanie utworzona kopia konfiguracji.'+(warnings.length?'\\n\\nUwagi: '+warnings.join(' · '):'');
+  showFriendlyResult('bulk-output',summary,'Podgląd profilu portów');
+  if(!confirm(summary+'\\n\\nZastosować profil?'))return;
+  const result=await api('/api/ports/settings/bulk',payload);
+  const checks=await Promise.all(payload.ports.map(async port=>{
+   try{
+    const state=await api('/api/port/switchport?port='+encodeURIComponent(port));
+    const mode=String(state.mode||'').toLowerCase(),native=Number.parseInt(state.defaultVlan,10);
+    const modeOK=mode===payload.mode;
+    const vlanOK=payload.mode==='access'?native===payload.accessVlan:(native===payload.native&&Array.isArray(state.configuredVlans)&&payload.allowed.split(/[\\s,]+/).filter(Boolean).every(v=>state.configuredVlans.map(String).includes(String(v))));
+    return {port,ok:modeOK&&vlanOK,detail:!modeOK?'Tryb: '+(mode||'nieustalony'):!vlanOK?'VLAN wymaga sprawdzenia':'Konfiguracja potwierdzona'};
+   }catch(error){return {port,ok:false,detail:'Nie udało się odczytać konfiguracji zwrotnej: '+error.message};}
+  }));
+  const verified=checks.filter(x=>x.ok).length;
+  const report='Weryfikacja po zastosowaniu: '+verified+'/'+checks.length+' portów potwierdzonych.\\n'+checks.map(x=>(x.ok?'✓ ':'! ')+x.port+' — '+x.detail).join('\\n');
+  showFriendlyResult('bulk-output',report,'Wynik konfiguracji portów');
+  addEvent('Profil '+payload.mode.toUpperCase()+' zastosowany na '+payload.ports.length+' portach; potwierdzono '+verified+'/'+checks.length,'warning');
+  await load();
  }catch(e){showFriendlyResult('bulk-output',e.message,'Profil portów');}
  finally{button.disabled=false;}
 };

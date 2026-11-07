@@ -3,6 +3,7 @@ package server
 import (
  "bufio"
  "encoding/json"
+ "fmt"
  "math"
  "net/http"
  "os"
@@ -37,6 +38,74 @@ type monitorPortRate struct { RX float64 `json:"rx"`; TX float64 `json:"tx"` }
 type monitorHistoryResponse struct { Events []monitorRecord `json:"events"`; Samples []monitorRecord `json:"samples"`; PortEvents []monitorRecord `json:"portEvents"`; CounterEvents []monitorRecord `json:"counterEvents"`; PortSamples []monitorRecord `json:"portSamples"` }
 type monitorHistoryStore struct { path string; mu sync.Mutex }
 
+type monitorEventHub struct {
+	mu sync.Mutex
+	nextID uint64
+	subscribers map[uint64]chan monitorRecord
+}
+
+var sharedMonitorEventHub = &monitorEventHub{subscribers: make(map[uint64]chan monitorRecord)}
+
+func (h *monitorEventHub) subscribe() (uint64, <-chan monitorRecord) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.subscribers == nil { h.subscribers = make(map[uint64]chan monitorRecord) }
+	h.nextID++
+	ch := make(chan monitorRecord, 32)
+	h.subscribers[h.nextID] = ch
+	return h.nextID, ch
+}
+
+func (h *monitorEventHub) unsubscribe(id uint64) {
+	h.mu.Lock()
+	if ch, ok := h.subscribers[id]; ok { delete(h.subscribers, id); close(ch) }
+	h.mu.Unlock()
+}
+
+func (h *monitorEventHub) publish(record monitorRecord) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, ch := range h.subscribers {
+		select { case ch <- record: default:
+			// A slow client must never block monitoring for other users.
+			select { case <-ch: default: }
+			select { case ch <- record: default: }
+		}
+	}
+}
+
+func monitorStreamHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet { w.Header().Set("Allow", "GET"); http.Error(w, "method not allowed", http.StatusMethodNotAllowed); return }
+		flusher, ok := w.(http.Flusher)
+		if !ok { http.Error(w, "streaming is not supported", http.StatusInternalServerError); return }
+		id, events := sharedMonitorEventHub.subscribe()
+		defer sharedMonitorEventHub.unsubscribe(id)
+		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("X-Accel-Buffering", "no")
+		_, _ = fmt.Fprint(w, "event: ready\\ndata: {}\\n\\n")
+		flusher.Flush()
+		heartbeat := time.NewTicker(20 * time.Second)
+		defer heartbeat.Stop()
+		for {
+			select {
+			case <-r.Context().Done(): return
+			case record, open := <-events:
+				if !open { return }
+				payload, err := json.Marshal(record)
+				if err != nil { continue }
+				if _, err := fmt.Fprintf(w, "event: monitor\\ndata: %s\\n\\n", payload); err != nil { return }
+				flusher.Flush()
+			case <-heartbeat.C:
+				if _, err := fmt.Fprint(w, ": keepalive\\n\\n"); err != nil { return }
+				flusher.Flush()
+			}
+		}
+	})
+}
+
 func monitorHistoryHandler(path string) http.Handler {
  if strings.TrimSpace(path)=="" { path=filepath.Join("data","monitor-history.jsonl") }
  store:=&monitorHistoryStore{path:path}
@@ -51,6 +120,7 @@ func monitorHistoryHandler(path string) http.Handler {
    if dec.Decode(&rec)!=nil || validateMonitorRecord(rec)!=nil { http.Error(w,"invalid monitor record",400); return }
    rec.Timestamp=time.Now().UTC()
    if err:=store.append(rec); err!=nil { http.Error(w,"monitor history write failed",500); return }
+   sharedMonitorEventHub.publish(rec)
    w.WriteHeader(http.StatusNoContent)
   default:
    w.Header().Set("Allow","GET, POST"); http.Error(w,"method not allowed",405)

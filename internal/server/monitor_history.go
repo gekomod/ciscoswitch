@@ -85,7 +85,7 @@ func monitorStreamHandler() http.Handler {
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		w.Header().Set("Connection", "keep-alive")
 		w.Header().Set("X-Accel-Buffering", "no")
-		_, _ = fmt.Fprint(w, "event: ready\\ndata: {}\\n\\n")
+		_, _ = fmt.Fprint(w, "event: ready\ndata: {}\n\n")
 		flusher.Flush()
 		heartbeat := time.NewTicker(20 * time.Second)
 		defer heartbeat.Stop()
@@ -96,10 +96,10 @@ func monitorStreamHandler() http.Handler {
 				if !open { return }
 				payload, err := json.Marshal(record)
 				if err != nil { continue }
-				if _, err := fmt.Fprintf(w, "event: monitor\\ndata: %s\\n\\n", payload); err != nil { return }
+				if _, err := fmt.Fprintf(w, "event: monitor\ndata: %s\n\n", payload); err != nil { return }
 				flusher.Flush()
 			case <-heartbeat.C:
-				if _, err := fmt.Fprint(w, ": keepalive\\n\\n"); err != nil { return }
+				if _, err := fmt.Fprint(w, ": keepalive\n\n"); err != nil { return }
 				flusher.Flush()
 			}
 		}

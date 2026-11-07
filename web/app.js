@@ -128,12 +128,29 @@ async function loadPortNetworkContext(){
  const port=$('detail-port')?.value;if(!port){alert('Wybierz port.');return;}
  const button=$('load-port-network');button.disabled=true;button.textContent='Odczyt…';
  for(const id of ['detail-vlan-context','detail-mac-context','detail-lldp-context'])$(id).textContent='Pobieranie danych ze switcha…';
- const commands=[['switchport','show interface switchport'],['vlans','show vlan all'],['mac','show mac address-table'],['lldp','show lldp neighbors']];
  try{
-  const results=await Promise.all(commands.map(async([key,command])=>{try{return [key,{output:(await api('/api/command',{command})).output||''}];}catch(e){return [key,{error:e.message}];}}));
-  const all=Object.fromEntries(results),ctx={vlan:{output:[all.switchport?.output,all.vlans?.output].filter(Boolean).join('\n\\n--- show vlan all ---\\n')},mac:all.mac,lldp:all.lldp};
-  if(all.switchport?.error)ctx.vlan.error=all.switchport.error;if(all.vlans?.error)ctx.vlan.error=(ctx.vlan.error?ctx.vlan.error+'; ':'')+all.vlans.error;
+  const [switchport,vlans,mac,lldp]=await Promise.all([
+   api('/api/port/switchport?port='+encodeURIComponent(port)),
+   api('/api/command',{command:'show vlan all'}),
+   api('/api/command',{command:'show mac address-table'}),
+   api('/api/command',{command:'show lldp neighbors'})
+  ]);
+  const vlanLines=[
+   'PORT: '+switchport.port,
+   'TRYB: '+(switchport.mode||'nieznany'),
+   'DEFAULT / NATIVE VLAN: '+(switchport.defaultVlan||'brak danych'),
+   'INGRESS FILTER: '+(switchport.ingressFilter||'brak danych'),
+   'TYPY RAMEK: '+(switchport.acceptableFrameTypes||'brak danych'),
+   'DOZWOLONE VLAN: '+((switchport.configuredVlans||[]).join(', ')||'brak danych'),
+   '',
+   'SUROWE DANE — show interface switchport',
+   switchport.raw||'(brak)'
+  ];
+  const ctx={vlan:{output:vlanLines.join('\n')+'\n\n--- show vlan all ---\n'+(vlans.output||'')},mac:{output:mac.output||''},lldp:{output:lldp.output||''}};
   portNetworkContext.set(port,ctx);renderPortNetworkContext();
+ }catch(e){
+  portNetworkContext.set(port,{vlan:{error:e.message},mac:{error:e.message},lldp:{error:e.message}});
+  renderPortNetworkContext();
  }finally{button.disabled=false;button.textContent='Odczytaj VLAN / MAC / LLDP';}
 }
 function renderPortDetail(){

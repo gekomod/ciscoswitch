@@ -311,3 +311,20 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 #monitor-stream-state.stream-online{color:var(--success)}
 #monitor-stream-state.stream-offline{color:var(--warning)}
 #monitor-stream-state i{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 15%,transparent)}
+
+.topology-graph{display:grid;grid-template-columns:minmax(180px,240px) minmax(0,1fr);gap:18px;align-items:start;padding:18px;border:1px solid var(--border);border-radius:16px;background:var(--surface-soft,rgba(127,140,160,.045));margin:12px 0 24px}
+.topology-graph-root{position:sticky;top:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:150px;padding:18px;border:1px solid var(--border);border-radius:14px;background:var(--surface);text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.06)}
+.topology-graph-root b,.topology-graph-peer b{overflow-wrap:anywhere}
+.topology-graph-root small,.topology-graph-peer small{display:block;color:var(--muted);font-size:12px;line-height:1.45;margin-top:4px}
+.topology-graph-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:rgba(59,130,246,.13);color:var(--accent,#60a5fa);font-weight:800;font-size:13px}
+.topology-graph-icon.peer{width:36px;height:36px;flex:0 0 36px}
+.topology-graph-links{display:grid;gap:10px;min-width:0}
+.topology-graph-edge{display:grid;grid-template-columns:minmax(170px,.9fr) minmax(180px,1.1fr);align-items:center;gap:14px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.topology-graph-connector{display:flex;align-items:center;gap:7px;min-width:0;color:var(--muted);font-size:11px}
+.topology-graph-connector span{white-space:nowrap;font-weight:700;color:var(--text)}
+.topology-graph-connector i{height:2px;min-width:12px;flex:1;background:var(--accent,#60a5fa);opacity:.55}
+.topology-graph-connector small{padding:3px 6px;border-radius:5px;background:rgba(59,130,246,.1);font-weight:700;letter-spacing:.04em}
+.topology-graph-peer{display:flex;align-items:center;gap:10px;min-width:0}
+.topology-graph-peer>div{min-width:0}
+.topology-graph-peer b{font-size:13px}
+@media(max-width:760px){.topology-graph{grid-template-columns:1fr;padding:12px}.topology-graph-root{position:static;min-height:110px}.topology-graph-edge{grid-template-columns:1fr;gap:9px}.topology-graph-connector{justify-content:center}}

@@ -273,3 +273,14 @@ body{background:radial-gradient(ellipse at 78% -20%,rgba(44,104,165,.19),transpa
 #diagnostics .quick-actions .btn{min-height:38px}
 #diagnostics .panel pre,#diagnostics pre{display:none!important}
 @media(max-width:600px){.friendly-result{gap:9px;padding:11px!important}.friendly-result-count{font-size:16px}}
+
+/* The normal product UI never renders raw CLI text blocks */
+main pre:not(.friendly-result):not(#config-diff){display:none!important}
+main pre.friendly-result{display:flex!important}
+main pre#config-diff{display:block!important;white-space:normal!important;font:inherit!important;color:var(--text);line-height:1.55}
+.friendly-result{font-family:inherit!important}
+:root[data-theme="light"] .friendly-result{background:linear-gradient(110deg,#f4f8fc,#fff)!important;border-color:#d8e3ee!important;color:#26384c!important}
+:root[data-theme="light"] .friendly-result-copy b{color:#1e3045}
+:root[data-theme="light"] .friendly-result-copy span{color:#60738a}
+:root[data-theme="light"] .friendly-result-icon.is-muted{background:#e9eff5;color:#65778b}
+:root[data-theme="light"] .friendly-result-count{color:#2878d0}

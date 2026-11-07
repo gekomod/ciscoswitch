@@ -148,8 +148,8 @@ func (s *panelUserStore) sessionValid(session panelSession) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, user := range s.users {
-		if strings.EqualFold(user.Username, username) {
-			return user.Active && user.Role == role
+		if strings.EqualFold(user.Username, session.username) {
+			return user.Active && user.Role == session.role && !user.UpdatedAt.After(session.issuedAt)
 		}
 	}
 	return false

@@ -38,6 +38,46 @@ function initPageNavigation(){
  activatePage(location.hash||'#overview');
 }
 initPageNavigation();
+function initNavigationSearch(){
+ const input=$('nav-search');
+ if(!input)return;
+ const links=[...document.querySelectorAll('.sidebar .nav')];
+ const empty=document.createElement('div');
+ empty.className='nav-search-empty';
+ empty.textContent='Brak pasujących sekcji';
+ empty.hidden=true;
+ input.closest('.nav-search-wrap').insertAdjacentElement('afterend',empty);
+ const filter=()=>{
+  const query=input.value.trim().toLocaleLowerCase('pl');
+  let visible=0;
+  links.forEach(link=>{
+   const match=!query||link.textContent.toLocaleLowerCase('pl').includes(query);
+   link.hidden=!match;
+   if(match)visible++;
+  });
+  empty.hidden=visible!==0;
+ };
+ input.addEventListener('input',filter);
+ input.addEventListener('keydown',event=>{
+  if(event.key==='Escape'){input.value='';filter();input.blur();return;}
+  if(event.key==='Enter'){
+   const first=links.find(link=>!link.hidden);
+   if(first)first.click();
+  }
+ });
+ document.addEventListener('keydown',event=>{
+  const target=event.target;
+  const typing=target instanceof HTMLElement&&(target.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(target.tagName));
+  if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){
+   event.preventDefault();input.focus();input.select();return;
+  }
+  if(event.key==='/'&&!typing&&!event.ctrlKey&&!event.metaKey&&!event.altKey){
+   event.preventDefault();input.focus();
+  }
+ });
+}
+initNavigationSearch();
+
 function syncPortChoices(){for(const id of ['cfg-port','edgeport-port','detail-port']){const sel=$(id),old=sel.value;sel.innerHTML=latestPorts.map(p=>'<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>').join('');if([...sel.options].some(o=>o.value===old))sel.value=old;}}
 function render(){const q=$('filter').value.toLowerCase(),st=$('state-filter').value;const ps=latestPorts.filter(p=>(p.name||'').toLowerCase().includes(q)&&(st==='all'||p.oper===st));$('port-count').textContent=ps.length+' / '+latestPorts.length+' portów';$('ports').innerHTML=ps.length?ps.map(p=>{const on=p.admin==='up';return '<tr><td><b>'+esc(p.name)+'</b></td><td><span class="state '+(on?'up':'down')+'">'+esc(p.admin)+'</span></td><td><span class="state '+(p.oper==='up'?'up':p.oper==='down'?'down':'unknown')+'">'+esc(p.oper)+'</span></td><td>'+esc(p.speed||'—')+'</td><td>'+fmtCount(p.inOctets)+'</td><td>'+fmtCount(p.outOctets)+'</td><td>'+fmtCount(p.inErrors)+' / '+fmtCount(p.outErrors)+'</td><td>'+(Number(p.mtu)||'—')+'</td><td><button class="port-action '+(on?'danger':'')+'" data-port="'+esc(p.name)+'" data-action="'+(on?'disable':'enable')+'">'+(on?'Wyłącz port':'Włącz port')+'</button> <button class="port-action" data-config-port="'+esc(p.name)+'">Konfiguruj</button></td></tr>'}).join(''):'<tr><td colspan="9" class="empty">Brak portów pasujących do filtra.</td></tr>';}
 function fmtDuration(seconds){const n=Math.max(0,Math.floor(seconds));if(n<60)return n+' s';const d=Math.floor(n/86400),h=Math.floor(n%86400/3600),m=Math.floor(n%3600/60);return (d?d+' d ':'')+(h?h+' godz. ':'')+(m?m+' min':'')||'0 min';}

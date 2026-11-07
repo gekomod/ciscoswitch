@@ -644,9 +644,9 @@ async function inspectVLAN(){
   const d=await api('/api/command',{command:'show vlan '+id}),raw=String(d.output||'').trim();
   if(!raw)throw new Error('Switch zwrócił pustą odpowiedź dla VLAN '+id+'.');
   const members=new Map(),knownPorts=new Set(latestPorts.map(p=>p.name.toLowerCase()));
-  for(const m of raw.matchAll(/(port\\d+\\.\\d+\\.\\d+)\\s*\\(([ut])\\)/gi)){const name=m[1].toLowerCase();if(knownPorts.has(name))members.set(name,m[2].toLowerCase());}
+  for(const m of raw.matchAll(/(port\d+\.\d+\.\d+)\s*\(([ut])\)/gi)){const name=m[1].toLowerCase();if(knownPorts.has(name))members.set(name,m[2].toLowerCase());}
   $('vlan-inspect-raw').textContent=raw;
-  const ports=latestPorts.map(p=>{const mode=members.get(p.name)||'unknown';return '<div class="vlan-port-cell '+(mode==='u'?'is-untagged':mode==='t'?'is-tagged':'is-unknown')+'" data-vlan-state="'+mode+'" data-vlan-port-name="'+esc(p.name.toLowerCase())+'"><b>'+esc(p.name.replace(/^port1\\.0\\./,''))+'</b><small>'+(mode==='u'?'UNTAGGED':mode==='t'?'TAGGED':'NIEUSTALONY')+'</small><label class="vlan-port-select"><input type="checkbox" data-vlan-select="'+esc(p.name)+'"> Zaznacz</label><button type="button" class="vlan-port-config" data-vlan-port="'+esc(p.name)+'" aria-label="Konfiguruj port '+esc(p.name)+'">Konfiguruj</button></div>';});
+  const ports=latestPorts.map(p=>{const mode=members.get(p.name)||'unknown';return '<div class="vlan-port-cell '+(mode==='u'?'is-untagged':mode==='t'?'is-tagged':'is-unknown')+'" data-vlan-state="'+mode+'" data-vlan-port-name="'+esc(p.name.toLowerCase())+'"><b>'+esc(p.name.replace(/^port1\.0\./,''))+'</b><small>'+(mode==='u'?'UNTAGGED':mode==='t'?'TAGGED':'NIEUSTALONY')+'</small><label class="vlan-port-select"><input type="checkbox" data-vlan-select="'+esc(p.name)+'"> Zaznacz</label><button type="button" class="vlan-port-config" data-vlan-port="'+esc(p.name)+'" aria-label="Konfiguruj port '+esc(p.name)+'">Konfiguruj</button></div>';});
   map.innerHTML=ports.join('')||'<p class="empty">Brak portów.</p>';
   applyVLANPortFilters();
   const tagged=[...members.values()].filter(v=>v==='t').length,untagged=[...members.values()].filter(v=>v==='u').length;
@@ -680,7 +680,7 @@ async function applyVLANMembership(){
   if(!confirm(summary+'\\n\\nZastosować zmianę?'))return;
   await api('/api/vlan/ports/apply',payload);
   let good=0;
-  try{const check=await api('/api/command',{command:'show vlan '+vlan}),observed=new Map();for(const match of String(check.output||'').matchAll(/(port\\d+\\.\\d+\\.\\d+)\\s*\\(([ut])\\)/gi))observed.set(match[1],match[2].toLowerCase());const expected=membership==='tagged'?'t':'u';good=ports.filter(port=>observed.get(port)===expected).length;}
+  try{const check=await api('/api/command',{command:'show vlan '+vlan}),observed=new Map();for(const match of String(check.output||'').matchAll(/(port\d+\.\d+\.\d+)\s*\(([ut])\)/gi))observed.set(match[1],match[2].toLowerCase());const expected=membership==='tagged'?'t':'u';good=ports.filter(port=>observed.get(port)===expected).length;}
   catch(_e){}
   showFriendlyResult('vlan-membership-output','Zweryfikowano '+good+' z '+ports.length+' portów. Oczekiwany tryb: '+membership.toUpperCase()+', VLAN '+vlan+'.','Weryfikacja członkostwa VLAN');
   addEvent('Zmieniono członkostwo VLAN '+vlan+' na '+ports.length+' portach');await inspectVLAN();

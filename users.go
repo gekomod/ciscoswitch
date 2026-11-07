@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -269,4 +270,86 @@ func (s *panelUserStore) update(id string, role *string, active *bool, password 
 	}
 	s.users = next
 	return publicPanelUser(user), nil
+}
+
+func registerPanelUserRoutes(mux *http.ServeMux, store *panelUserStore) {
+	mux.HandleFunc("/api/users", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		switch r.Method {
+		case http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"users": store.list()})
+		case http.MethodPost:
+			r.Body = http.MaxBytesReader(w, r.Body, 4096)
+			var input struct {
+				Username string `json:"username"`
+				Password string `json:"password"`
+				Role     string `json:"role"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+				http.Error(w, "Nieprawidłowe dane użytkownika.", http.StatusBadRequest)
+				return
+			}
+			user, err := store.create(input.Username, input.Password, input.Role)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(user)
+		default:
+			w.Header().Set("Allow", "GET, POST")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/users/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method != http.MethodPatch {
+			w.Header().Set("Allow", "PATCH")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		id := strings.TrimPrefix(r.URL.Path, "/api/users/")
+		if id == "" || strings.Contains(id, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 4096)
+		var input struct {
+			Role     *string `json:"role"`
+			Active   *bool   `json:"active"`
+			Password *string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "Nieprawidłowe dane użytkownika.", http.StatusBadRequest)
+			return
+		}
+		if input.Role == nil && input.Active == nil && input.Password == nil {
+			http.Error(w, "Nie podano zmian.", http.StatusBadRequest)
+			return
+		}
+		if identity, ok := r.Context().Value(identityContextKey{}).(panelIdentity); ok {
+			store.mu.RLock()
+			current := store.users[id]
+			store.mu.RUnlock()
+			if current.Username == identity.Username && ((input.Active != nil && !*input.Active) || (input.Role != nil && *input.Role != "admin")) {
+				http.Error(w, "Nie można zablokować ani zdegradować własnego konta administratora.", http.StatusConflict)
+				return
+			}
+		}
+		user, err := store.update(id, input.Role, input.Active, input.Password)
+		if err != nil {
+			status := http.StatusBadRequest
+			if err.Error() == "nie znaleziono użytkownika" {
+				status = http.StatusNotFound
+			} else if strings.Contains(err.Error(), "ostatniego aktywnego administratora") {
+				status = http.StatusConflict
+			}
+			http.Error(w, err.Error(), status)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(user)
+	})
 }

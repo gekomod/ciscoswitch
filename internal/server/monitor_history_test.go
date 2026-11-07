@@ -41,7 +41,7 @@ func TestMonitorEventHubPublishesRecords(t *testing.T) {
 func TestMonitorStreamDeliversLiveEvents(t *testing.T) {
 	server := httptest.NewServer(monitorStreamHandler())
 	defer server.Close()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL, nil)
 	if err != nil { t.Fatal(err) }
@@ -55,14 +55,9 @@ func TestMonitorStreamDeliversLiveEvents(t *testing.T) {
 	if !ready { t.Fatal("SSE ready event was not sent") }
 	sharedMonitorEventHub.publish(monitorRecord{Kind:"event",Message:"Live link restored",Type:"success",Timestamp:time.Now().UTC()})
 	received := false
-	deadline := time.After(2*time.Second)
 	for !received {
-		select {
-		case <-deadline: t.Fatal("live SSE event was not delivered")
-		default:
-			line,err:=reader.ReadString('\n')
-			if err!=nil { t.Fatal(err) }
-			if strings.Contains(line,"Live link restored") { received=true }
-		}
+		line,err:=reader.ReadString('\n')
+		if err!=nil { t.Fatalf("live SSE event was not delivered: %v", err) }
+		if strings.Contains(line,"Live link restored") { received=true }
 	}
 }

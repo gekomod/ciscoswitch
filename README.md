@@ -135,9 +135,3 @@ Dashboard odczytuje stan przełącznika przez `/api/status` co 15 sekund i param
 Endpoint `GET /api/monitor/stream` udostępnia uwierzytelniony strumień Server-Sent Events (SSE). Zdarzenia zapisane przez aktywne sesje panelu są rozsyłane do pozostałych otwartych sesji bez przeładowywania strony. Wolni odbiorcy nie blokują monitoringu; po rozłączeniu przeglądarka automatycznie nawiązuje połączenie ponownie. Strumień używa wyłącznie metadanych zdarzeń, bez surowego wyjścia CLI, konfiguracji ani sekretów.
 
 **Ważne:** nie jest to niezależny daemon monitorujący switch. Odczyty SNMP i wykrywanie zmian są wykonywane podczas działania otwartej sesji panelu. Jeśli wszystkie przeglądarki zostaną zamknięte, zbieranie nowych zdarzeń ustaje. Serwer wysyła heartbeat co 20 sekund, aby utrzymać połączenie SSE przez proxy.
-
-## Topologia LLDP
-
-Widok topologii pobiera sąsiadów przez read-only `show lldp neighbors detail` (AlliedWare Plus), a następnie łączy ich z lokalnymi portami. Identyfikator chassis, nazwa systemu, zdalny port, opis i capabilities są pokazywane tylko wtedy, gdy switch rzeczywiście je ogłasza. Skan topologii uruchamia się po otwarciu panelu i ponawia co 5 minut, gdy karta jest widoczna. Dodanie lub utrata sąsiada LLDP generuje zdarzenie w centrum alarmów.
-
-Mapa LLDP przedstawia wyłącznie relacje potwierdzone odebranymi ogłoszeniami LLDP. Nie próbuje wywnioskować fizycznego połączenia z samego MAC/FDB lub ARP. Urządzenia bez LLDP mogą nadal pojawić się w mapie portów jako obserwowane adresy MAC/IP. Jeżeli sąsiad nie publikuje nazwy lub portu, panel pokazuje dostępny identyfikator zamiast zgadywać.

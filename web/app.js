@@ -120,6 +120,12 @@ function renderPortNetworkContext(){
   if(!port){el.textContent='Wybierz port.';continue;}
   if(!ctx){el.textContent='Kliknij „Odczytaj VLAN / MAC / LLDP”.';continue;}
   const result=ctx[key];if(result.error){el.textContent='Błąd odczytu: '+result.error;continue;}
+  if(key==='vlan'){
+   const parts=String(result.output||'').split('\n\n--- show vlan all ---\n');
+   const vlanRows=portContextLines(parts[1]||'',port);
+   el.textContent=(parts[0]||'Brak szczegółów switchport')+'\n\nCZŁONKOSTWO VLAN — WIERSZE DLA PORTU\n'+(vlanRows.length?vlanRows.join('\n'):'Brak wierszy VLAN dla '+port+'.');
+   continue;
+  }
   const lines=portContextLines(result.output,port);
   el.textContent=lines.length?lines.join('\n'):'Brak wierszy z dokładnym identyfikatorem '+port+'.\\n\\nSurowa odpowiedź switcha:\\n'+String(result.output||'(brak danych)').slice(0,6000);
  }

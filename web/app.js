@@ -432,8 +432,9 @@ function systemMetric(raw,kind){
 }
 async function refreshSystem(){const button=$('refresh-system');button.disabled=true;button.textContent='Odczytuję…';try{
  const d=await api('/api/system');
- const version=String(d.version||'').split(/\r?\n/).find(x=>/(?:version|alliedware|firmware|release)/i.test(x));
- $('sys-version').textContent=version?version.trim():'Brak danych';
+ const versionText=String(d.version||'');
+ const versionMatch=versionText.match(/\b\d+(?:\.\d+){1,3}(?:[-+._A-Za-z0-9]*)?\b/);
+ $('sys-version').textContent=versionMatch?versionMatch[0]:'Informacja niedostępna';
  $('sys-cpu').textContent=systemMetric(d.cpu,'cpu');
  $('sys-memory').textContent=systemMetric(d.memory,'memory');
  $('sys-temperature').textContent=systemMetric(d.environment,'temperature');

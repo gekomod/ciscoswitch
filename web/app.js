@@ -206,6 +206,24 @@ $('bulk-apply').onclick=async()=>{
  }catch(e){out.textContent='BŁĄD: '+e.message;alert(e.message);}
  finally{button.disabled=false;}
 };
+$('bulk-admin-apply').onclick=async()=>{
+ const numbers=[...new Set($('bulk-admin-ports').value.split(',').map(x=>x.trim()).filter(Boolean))];
+ const action=$('bulk-admin-action').value,out=$('bulk-admin-output'),button=$('bulk-admin-apply');
+ if(!numbers.length){alert('Wpisz numery portów, np. 5,6,7.');return;}
+ if(numbers.some(n=>!/^[0-9]+$/.test(n)||Number(n)<1||Number(n)>52)){alert('Porty muszą być numerami od 1 do 52.');return;}
+ const ports=numbers.map(n=>'port1.0.'+n);
+ const warning=action==='disable'?'\n\nUWAGA: wyłączenie może odciąć urządzenia lub uplink. Serwer musi mieć ALLOW_PORT_SHUTDOWN=true.':'';
+ const summary=(action==='enable'?'WŁĄCZYĆ':'WYŁĄCZYĆ')+' porty: '+ports.join(', ')+warning+'\n\nPrzed zmianą zostanie wykonana kopia konfiguracji. Kontynuować?';
+ if(!confirm(summary))return;
+ button.disabled=true;out.textContent='Sprawdzanie zabezpieczeń i wykonywanie operacji…';
+ try{
+  const result=await api('/api/ports/action/bulk',{ports,action});
+  out.textContent=result.output||'Polecenia przekazane do switcha.';
+  addEvent((action==='enable'?'Włączono':'Wyłączono')+' porty: '+ports.join(', '),action==='enable'?'success':'warning');
+  await load();
+ }catch(e){out.textContent='BŁĄD: '+e.message;alert(e.message);}
+ finally{button.disabled=false;}
+};
 $('lacp-create').onclick=async()=>{const group=Number($('lacp-group').value),ports=$('lacp-ports').value,mode=$('lacp-mode').value;if(!confirm('Utworzyć LACP group '+group+' na portach '+ports+'? Porty powinny być wcześniej skonfigurowane identycznie po obu stronach łącza.'))return;try{const d=await api('/api/lacp',{group,ports,mode,delete:false});$('lacp-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
 $('lacp-delete').onclick=async()=>{const group=Number($('lacp-group').value),ports=$('lacp-ports').value;if(!confirm('Usunąć konfigurację channel-group z portów '+ports+'?'))return;try{const d=await api('/api/lacp',{group,ports,mode:$('lacp-mode').value,delete:true});$('lacp-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
 function parseLACPDetail(raw){

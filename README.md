@@ -76,12 +76,16 @@ Jeśli pojawi się kilka odcisków, upewnij się, który algorytm klucza hosta j
 
 ## Role panelu
 
-Panel obsługuje bazowy model ról dla konta skonfigurowanego przez `PANEL_USER` i `PANEL_PASSWORD`. Rola jest ustawiana przez `PANEL_ROLE` (domyślnie `admin`):
-- `viewer` — podgląd dashboardu i danych; bez surowego CLI, eksportu konfiguracji i pobierania backupów.
-- `operator` — odczyt oraz operacje konfiguracyjne; bez administracji kontami panelu.
-- `admin` — pełny dostęp.
+Panel obsługuje trwały rejestr wielu kont. Przy pierwszym uruchomieniu, jeśli plik `PANEL_USERS_PATH` (domyślnie `data/users.json`) nie istnieje, konto początkowe jest tworzone z `PANEL_USER`, `PANEL_PASSWORD` i `PANEL_ROLE`. Przy kolejnych uruchomieniach rejestr jest źródłem prawdy; zmiany tych zmiennych nie nadpisują istniejących kont.
 
-Autoryzacja jest egzekwowana po stronie backendu, a nie przez ukrywanie przycisków w przeglądarce. Każda sesja otrzymuje rolę przy logowaniu; endpoint `/api/session` zwraca nazwę zalogowanego konta i rolę. To jest pierwszy etap RBAC — obecnie istnieje jedno konto z konfiguracji środowiskowej. Trwały rejestr wielu użytkowników, zarządzanie kontami i reset haseł będą osobnym etapem; nie należy tworzyć dodatkowych kont przez ręczną edycję plików.
+Role:
+- `viewer` — podgląd danych; bez zmian konfiguracji, eksportu konfiguracji, pobierania backupów i administracji kontami.
+- `operator` — odczyt oraz operacje konfiguracyjne; bez administracji kontami panelu.
+- `admin` — pełny dostęp, w tym zarządzanie użytkownikami.
+
+Administrator zarządza kontami w sekcji „Użytkownicy i role”: może tworzyć konta, zmieniać role, blokować/odblokowywać dostęp i resetować hasła. Nowe hasła muszą mieć co najmniej 12 znaków. Hasła są przechowywane jako bcrypt; API nigdy nie zwraca hashy. Nie można zablokować ani zdegradować ostatniego aktywnego administratora. Konta panelu są niezależne od kont SSH na przełączniku.
+
+Autoryzacja jest egzekwowana po stronie backendu. Sesja otrzymuje rolę przy logowaniu; endpoint `/api/session` zwraca nazwę zalogowanego konta i rolę. Rejestr JSON jest zapisywany atomowo, z uprawnieniami katalogu `0700` i pliku `0600`. Wykonaj kopię `data/users.json` razem z innymi lokalnymi danymi panelu; nie publikuj tego pliku w repozytorium. Uszkodzony lub pusty rejestr blokuje start zamiast automatycznie tworzyć nowe konto i nadpisywać dane.
 
 ## Bezpieczeństwo i ograniczenia
 - Wyłączanie portów jest domyślnie zablokowane; świadome odblokowanie wymaga `ALLOW_PORT_SHUTDOWN=true`. Nie ustawiaj tej opcji bez lokalnego planu odzyskania dostępu.

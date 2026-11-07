@@ -281,7 +281,7 @@ func (s *panelUserStore) update(id string, role *string, active *bool, password 
 			return panelUserPublic{}, errors.New("nie można zablokować ani zdegradować ostatniego aktywnego administratora")
 		}
 	}
-	user.UpdatedAt = time.Now().UTC()
+	updatedAt := time.Now().UTC()\n\tif !updatedAt.After(user.UpdatedAt) { updatedAt = user.UpdatedAt.Add(time.Nanosecond) }\n\tuser.UpdatedAt = updatedAt
 	next := make(map[string]panelUserRecord, len(s.users))
 	for key, value := range s.users {
 		next[key] = value

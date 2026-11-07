@@ -476,7 +476,8 @@ $('bulk-apply').onclick=async()=>{
  try{
   const previews=await Promise.all(payload.ports.map(async port=>({port,...await api('/api/port/preview',{port,mode:payload.mode,accessVlan:payload.accessVlan,allowed:payload.allowed,native:payload.native,speed:payload.speed,duplex:payload.duplex,description:payload.description})})));
   const warnings=[...new Set(previews.flatMap(item=>Array.isArray(item.warnings)?item.warnings:[]))];
-  const summary='Profil '+(payload.mode==='access'?'Access':'Trunk')+' zostanie zastosowany na '+payload.ports.length+' portach:\\n'+payload.ports.join(', ')+'\\n\\n'+(payload.mode==='access'?'Access VLAN: '+payload.accessVlan:'Native VLAN: '+payload.native+' · dozwolone VLAN: '+payload.allowed)+'\\n\\nKażdy port przeszedł osobny podgląd walidacyjny. Przed zmianą zostanie utworzona kopia konfiguracji.'+(warnings.length?'\\n\\nUwagi: '+warnings.join(' · '):'');
+  const currentSummary=previews.map(item=>item.port+': '+(item.current?.mode||'tryb nieznany')+' · VLAN '+(item.current?.defaultVlan||'—')).join('\\n');
+  const summary='Profil '+(payload.mode==='access'?'Access':'Trunk')+' zostanie zastosowany na '+payload.ports.length+' portach:\\n'+payload.ports.join(', ')+'\\n\\nStan bieżący:\\n'+currentSummary+'\\n\\nNowe ustawienia: '+(payload.mode==='access'?'Access VLAN: '+payload.accessVlan:'Native VLAN: '+payload.native+' · dozwolone VLAN: '+payload.allowed)+'\\n\\nKażdy port przeszedł osobny podgląd walidacyjny. Przed zmianą zostanie utworzona kopia konfiguracji.'+(warnings.length?'\\n\\nUwagi: '+warnings.join(' · '):'');
   showFriendlyResult('bulk-output',summary,'Podgląd profilu portów');
   if(!confirm(summary+'\\n\\nZastosować profil?'))return;
   const result=await api('/api/ports/settings/bulk',payload);
@@ -947,7 +948,8 @@ $('apply-port-settings').onclick=async()=>{
  const button=$('apply-port-settings');button.disabled=true;
  try{
   const p=await api('/api/port/preview',payload);
-  const summary='Zmiana ustawień portu '+payload.port+'. Tryb: '+(payload.mode==='access'?'Access':'Trunk')+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\\n\\nUwagi: '+p.warnings.join(' · '):'');
+  const current=p.current||{};
+  const summary='Port '+payload.port+' — stan bieżący: '+(current.mode||'nieustalony')+', VLAN '+(current.defaultVlan||'—')+'.\\nNowy tryb: '+(payload.mode==='access'?'Access':'Trunk')+'. '+(payload.mode==='access'?'Access VLAN: '+payload.accessVlan:'Native VLAN: '+payload.native+' · dozwolone VLAN: '+payload.allowed)+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\\n\\nUwagi: '+p.warnings.join(' · '):'');
   showFriendlyResult('output',summary,'Podgląd portu');
   if(!confirm(summary+'\\n\\nZastosować konfigurację?'))return;
   await api('/api/port/settings',payload);

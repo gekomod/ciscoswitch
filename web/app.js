@@ -249,7 +249,7 @@ async function loadPortNetworkContext(){
    api('/api/port/switchport?port='+encodeURIComponent(port)),
    api('/api/command',{command:'show vlan all'}),
    api('/api/command',{command:'show mac address-table'}),
-   api('/api/command',{command:'show lldp neighbors'})
+   api('/api/command',{command:'show lldp neighbors detail'})
   ]);
   const vlanLines=[
    'PORT: '+switchport.port,
@@ -542,38 +542,27 @@ function parseARP(raw){
 }
 function parseLLDPDetails(raw){
  const lines=String(raw||'').replace(/\r/g,'').split('\n'),records=[];
- const labels=[
-  ['systemName',/^(?:neighbor\s+)?(?:system\s+name|sys(?:tem)?\s+name)\s*[:=]\s*(.+)$/i],
-  ['chassisId',/^(?:neighbor\s+)?chassis\s+id\s*[:=]\s*(.+)$/i],
-  ['portId',/^(?:neighbor\s+)?(?:port\s+id|port\s+identifier)\s*[:=]\s*(.+)$/i],
-  ['portDescription',/^(?:neighbor\s+)?port\s+description\s*[:=]\s*(.+)$/i],
-  ['systemDescription',/^(?:neighbor\s+)?system\s+description\s*[:=]\s*(.+)$/i],
-  ['capabilities',/^(?:system\s+)?capabilities\s*[:=]\s*(.+)$/i]
- ];
  let current=null;
- const finish=()=>{if(current&&(current.localPort||current.systemName||current.chassisId||current.portId)){current.key=(current.chassisId||current.systemName||current.portId||current.localPort||'').toLowerCase();records.push(current);}current=null;};
- for(let i=0;i<lines.length;i++){
-  const line=lines[i].trim();if(!line)continue;
-  const local=line.match(/(?:local\s+(?:port|interface)(?:\s+(?:id|name))?|local\s+port)\s*[:=]\s*(port\d+\.\d+\.\d+)/i);
-  const portOnLine=line.match(/\b(port\d+\.\d+\.\d+)\b/i);
-  const isHeader=/local\s+(?:port|interface)/i.test(line)&&/(?:chassis|system\s+name|neighbor)/i.test(line);
-  if(local||(!isHeader&&portOnLine&&/neighbor|chassis|system name/i.test(line))){
-   if(current)finish();
-   current={localPort:(local||portOnLine)[1].toLowerCase(),systemName:'',chassisId:'',portId:'',portDescription:'',systemDescription:'',capabilities:''};
-  }
-  if(!current&&portOnLine){current={localPort:portOnLine[1].toLowerCase(),systemName:'',chassisId:'',portId:'',portDescription:'',systemDescription:'',capabilities:''};}
-  if(current){
-   for(const [key,pattern] of labels){const m=line.match(pattern);if(m)current[key]=m[1].trim();}
-   // Some firmware emits the local interface and remote system name in one row.
-   if(portOnLine&&line.includes(portOnLine[1])&&!current.systemName){
-    const tokens=line.split(/\s{2,}/).map(x=>x.trim()).filter(Boolean);
-    if(tokens.length>=3){const name=tokens.find((v,n)=>n>0&&!/^port\d+\./i.test(v)&&!/^([0-9a-f]{2}[:-]){5}/i.test(v));if(name)current.systemName=name;}
-   }
-  }
-  if(/^[-=]{4,}$/.test(line)||/^total\s+neighbors?/i.test(line))finish();
+ const finish=()=>{if(current&&current.localPort&&(current.systemName||current.chassisId||current.portId||current.systemDescription)){current.key=(current.chassisId||current.systemName||current.portId||'').toLowerCase();records.push(current);}current=null;};
+ const fields=[
+  ['chassisId',/^(?:\+\s*)?Chassis ID\s*(?:\.{2,}\s*|[:=]\s*)(.+)$/i],
+  ['portId',/^(?:\+\s*)?Port ID\s*(?:\.{2,}\s*|[:=]\s*)(.+)$/i],
+  ['portDescription',/^(?:\+\s*)?Port Description\s*(?:\.{2,}\s*|[:=]\s*)(.+)$/i],
+  ['systemName',/^(?:\+\s*)?System Name\s*(?:\.{2,}\s*|[:=]\s*)(.+)$/i],
+  ['systemDescription',/^(?:\+\s*)?System Description\s*(?:\.{2,}\s*|[:=]\s*)(.+)$/i],
+  ['capabilities',/^(?:\+\s*)?System Capabilities(?:\s*-\s*Supported)?\s*(?:\.{2,}\s*|[:=]\s*)(.+)$/i],
+  ['managementAddress',/^(?:\+\s*)?Management Address(?:es)?\s*(?:\.{2,}\s*|[:=]\s*)(.+)$/i]
+ ];
+ for(const lineRaw of lines){
+  const line=lineRaw.trim();if(!line)continue;
+  const local=line.match(/^Local\s+(port\d+\.\d+\.\d+)\s*:?\s*$/i);
+  if(local){finish();current={localPort:local[1].toLowerCase(),systemName:'',chassisId:'',portId:'',portDescription:'',systemDescription:'',capabilities:'',managementAddress:''};continue;}
+  if(!current)continue;
+  for(const [key,pattern] of fields){const match=line.match(pattern);if(match)current[key]=match[1].trim().replace(/^["']|["']$/g,'');}
+  if(/^Local\s+port\d+\.\d+\.\d+/i.test(line)){finish();}
  }
  finish();
- const seen=new Set();return records.filter(r=>{const id=[r.localPort,r.key].join('|');if(seen.has(id))return false;seen.add(id);return true;});
+ const seen=new Set();return records.filter(record=>{const id=record.localPort+'|'+record.key;if(seen.has(id))return false;seen.add(id);return true;});
 }
 function parseLLDP(raw){
  const byPort=new Map();
@@ -674,7 +663,7 @@ $('topology-vlan-load').onclick=inspectTopologyVLAN;
 $('topology-vlan-map').addEventListener('click',e=>{const b=e.target.closest('[data-topology-port]');if(b)openPortDiagnostics(b.dataset.topologyPort);});
 async function refreshTopology(){
  const button=$('refresh-topology');button.disabled=true;button.textContent='Skanowanie…';$('topology-status').textContent='Pobieranie tablic FDB, ARP, LLDP i VLAN…';
- const commands=[['fdb','show mac address-table'],['arp','show arp'],['lldp','show lldp neighbors'],['vlan','show vlan all'],['switchport','show interface switchport'],['stp','show spanning-tree']];
+ const commands=[['fdb','show mac address-table'],['arp','show arp'],['lldp','show lldp neighbors detail'],['vlan','show vlan all'],['switchport','show interface switchport'],['stp','show spanning-tree']];
  try{
   const results=await Promise.all(commands.map(async([key,command])=>{try{const d=await api('/api/command',{command});return [key,{output:d.output||''}];}catch(e){return [key,{error:e.message,output:''}];}}));
   const raw=Object.fromEntries(results);topologyData.raw=raw;

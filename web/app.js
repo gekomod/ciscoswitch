@@ -514,6 +514,7 @@ async function applyVLANMembership(){
 $('vlan-apply-membership').onclick=applyVLANMembership;
 $('vlan-use-selected').onclick=()=>{const nums=[...vlanSelectedPorts].map(name=>Number(name.match(/\.(\d+)$/)?.[1])).filter(n=>Number.isInteger(n)&&n>=1&&n<=52).sort((a,b)=>a-b);if(!nums.length){alert('Nie znaleziono poprawnych numerów zaznaczonych portów.');return;}$('bulk-ports').value=nums.join(',');$('bulk-port-settings').scrollIntoView({behavior:'smooth',block:'center'});$('bulk-ports').focus();};
 let topologyData={rows:[],raw:{}};
+let previousTopologyNeighborKeys=null;
 const ouiVendors={
  '000c29':'VMware','005056':'VMware','001c42':'Parallels',
  '001b63':'Apple','3c22fb':'Apple','f0d1a9':'Apple','a4b1c1':'Apple','acde48':'Apple','f0dbf8':'Apple',
@@ -620,6 +621,18 @@ function parseSTP(raw){
  }
  return states;
 }
+function detectTopologyNeighborChanges(items){
+ const current=new Map();
+ for(const item of items||[]){
+  const identity=(item.chassisId||item.systemName||item.portId||'unknown').toLowerCase()+'|'+item.localPort;
+  current.set(identity,item);
+ }
+ if(previousTopologyNeighborKeys!==null){
+  for(const [key,item] of current){if(!previousTopologyNeighborKeys.has(key)){const name=item.systemName||item.chassisId||'nowy sąsiad LLDP';addEvent('Wykryto '+name+' na porcie '+item.localPort,'success');}}
+  for(const [key,item] of previousTopologyNeighborKeys){if(!current.has(key)){const name=item.systemName||item.chassisId||'sąsiad LLDP';addEvent('Utracono sąsiedztwo z '+name+' na porcie '+item.localPort,'warning');}}
+ }
+ previousTopologyNeighborKeys=current;
+}
 function renderTopologyGraph(){
  const host=$('host')?.textContent||'Przełącznik lokalny',items=topologyData.neighbors||[],el=$('topology-graph');
  if(!el)return;
@@ -670,7 +683,7 @@ async function refreshTopology(){
   for(const p of latestPorts)byPort.set(p.name,{port:p.name,link:p.oper||'unknown',vlans:new Set(),macs:new Set(),ips:new Set(),neighbors:new Set()});
   for(const entry of fdb){if(!byPort.has(entry.port))byPort.set(entry.port,{port:entry.port,link:'unknown',vlans:new Set(),macs:new Set(),ips:new Set(),neighbors:new Set()});const row=byPort.get(entry.port);row.macs.add(entry.mac);if(entry.vlan)row.vlans.add(entry.vlan);for(const ip of arp.get(entry.mac)||[])row.ips.add(ip);}
   for(const [port,items] of lldp){if(!byPort.has(port))byPort.set(port,{port,link:'unknown',vlans:new Set(),macs:new Set(),ips:new Set(),neighbors:new Set()});for(const item of items)byPort.get(port).neighbors.add(item);}
-  topologyData.neighbors=lldpDetails;topologyData.rows=[...byPort.values()].map(r=>({port:r.port,link:r.link,vlans:[...r.vlans].join(', '),macs:[...r.macs].join(', '),ips:[...r.ips].join(', '),lldp:[...r.neighbors].join(' | '),neighborCount:r.neighbors.size})).map(r=>{const device=classifyNeighbor(r.lldp);r.deviceClass=device.kind;r.deviceLabel=device.label;r.deviceEvidence=device.evidence;r.stp=stp.get(r.port)||'unknown';r.uplink=r.link==='up'&&['switch','router'].includes(device.kind);return r;}).sort((a,b)=>natural(a.port,b.port));
+  topologyData.neighbors=lldpDetails;if(!raw.lldp.error&&String(raw.lldp.output||'').trim())detectTopologyNeighborChanges(lldpDetails);topologyData.rows=[...byPort.values()].map(r=>({port:r.port,link:r.link,vlans:[...r.vlans].join(', '),macs:[...r.macs].join(', '),ips:[...r.ips].join(', '),lldp:[...r.neighbors].join(' | '),neighborCount:r.neighbors.size})).map(r=>{const device=classifyNeighbor(r.lldp);r.deviceClass=device.kind;r.deviceLabel=device.label;r.deviceEvidence=device.evidence;r.stp=stp.get(r.port)||'unknown';r.uplink=r.link==='up'&&['switch','router'].includes(device.kind);return r;}).sort((a,b)=>natural(a.port,b.port));
   $('topology-port-count').textContent=topologyData.rows.length;$('topology-mac-count').textContent=fdb.length;$('topology-ip-count').textContent=[...arp.values()].reduce((n,x)=>n+x.length,0);$('topology-lldp-count').textContent=[...lldp.values()].reduce((n,x)=>n+x.length,0);
   const errors=results.filter(x=>x[1].error).map(x=>x[0]+': '+x[1].error);
   $('topology-status').textContent='Odczyt '+new Date().toLocaleString()+' · FDB: '+fdb.length+' wpisów · ARP: '+[...arp.values()].reduce((n,x)=>n+x.length,0)+' adresów · LLDP: '+[...lldp.values()].reduce((n,x)=>n+x.length,0)+' obserwacji'+(errors.length?' · Nie udało się odczytać '+errors.length+' źródeł':' · Odczyt zakończony');
@@ -805,7 +818,7 @@ $('config-backups').addEventListener('click',async event=>{const button=event.ta
 $('create-config-backup').onclick=async()=>{const b=$('create-config-backup');if(!confirm('Pobrać running-config i zapisać lokalną kopię na serwerze panelu? Plik może zawierać hasła i inne dane poufne.'))return;b.disabled=true;try{const r=await fetch('/api/config/backups',{method:'POST'});if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();$('config-diff').textContent='Utworzono kopię '+d.id+'\nSHA256: '+d.sha256;await refreshConfigBackups();}catch(e){$('config-diff').textContent='Nie udało się utworzyć kopii: '+e.message;}finally{b.disabled=false;}};
 $('compare-config').onclick=async()=>{const box=$('config-diff'),button=$('compare-config');button.disabled=true;box.textContent='Pobieranie i porównywanie konfiguracji…';try{const response=await fetch('/api/config/compare');if(!response.ok)throw new Error('Błąd porównania: HTTP '+response.status);const d=await response.json();const added=Number(d.added)||0,removed=Number(d.removed)||0;box.textContent='Różnice: '+added+' dodanych w running-config · '+removed+' usuniętych względem startup-config · Linie: running '+d.runningLines+' / startup '+d.startupLines+'. '+(added===0&&removed===0?'Konfiguracje są zgodne.':'Szczegółowe linie pominięto, ponieważ mogą zawierać dane poufne.');}catch(e){box.textContent=e.message;}finally{button.disabled=false;}};
 $('save-config').onclick=async()=>{if(!confirm('Zapisać running-config do startup-config?'))return;try{const d=await api('/api/save',{});showFriendlyResult('output',d.output,'Zapis konfiguracji');alert('Polecenie zapisu wysłane.');}catch(x){alert(x.message);}};
-$('run').onclick=async()=>{const command=$('cmd').value;$('output').textContent='Łączenie przez SSH…';try{const d=await api('/api/command',{command});showFriendlyResult('output',d.output,'Diagnostyka urządzenia');}catch(x){showFriendlyResult('output',x.message,'Operacja na switchu');}};load();setInterval(()=>{if(document.visibilityState==='visible')load();},15000);refreshSystem();setInterval(()=>{if(document.visibilityState==='visible')refreshSystem();},60000);restoreMonitorHistory();connectMonitorStream();refreshConfigBackups();refreshAudit();
+$('run').onclick=async()=>{const command=$('cmd').value;$('output').textContent='Łączenie przez SSH…';try{const d=await api('/api/command',{command});showFriendlyResult('output',d.output,'Diagnostyka urządzenia');}catch(x){showFriendlyResult('output',x.message,'Operacja na switchu');}};load();setInterval(()=>{if(document.visibilityState==='visible')load();},15000);refreshSystem();setInterval(()=>{if(document.visibilityState==='visible')refreshSystem();},60000);restoreMonitorHistory();connectMonitorStream();refreshTopology();setInterval(()=>{if(document.visibilityState==='visible')refreshTopology();},300000);refreshConfigBackups();refreshAudit();
 async function loadPanelUsers(){
  const body=$('panel-users-rows'),status=$('panel-users-status');if(!body)return;
  try{

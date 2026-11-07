@@ -9,7 +9,7 @@ Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948
 - VLAN: podgląd listy, tworzenie i usuwanie VLAN 2–4094.
 - Porty: access/trunk, VLAN access, lista VLAN dozwolonych na trunk, native VLAN.
 - Porty: opis, speed auto/10/100/1000, duplex auto/full/half.
-- LACP: tworzenie i usuwanie channel-group, tryb active/passive oraz diagnostyka tylko do odczytu z próbą `show etherchannel detail`, `show etherchannel summary` i `show etherchannel` (agregatory, partner LAG, liczniki łączy i synchronizacja portów, jeśli format jest rozpoznany). Parser jest zależny od formatu CLI; surowa odpowiedź z wybranego polecenia pozostaje dostępna.
+- LACP: tworzenie i usuwanie channel-group, tryb active/passive oraz diagnostyka tylko do odczytu z próbą `show etherchannel detail`, `show etherchannel summary` i `show etherchannel` (agregatory, partner LAG, liczniki łączy i synchronizacja portów, jeśli format jest rozpoznany). Parser jest zależny od formatu CLI; panel pokazuje rozpoznane agregatory i stan portów, a nieprzetworzone odpowiedzi pozostają poza standardowym widokiem użytkownika.
 - STP: ustawienie trybu STP/RSTP/MSTP, priorytet bridge, edgeport na porcie.
 - DHCP client dla interfejsu zarządzającego VLAN 1.
 - Zapis running-config do startup-config.
@@ -109,7 +109,7 @@ Panel pozwala ręcznie tworzyć kopie `running-config` na serwerze, przeglądać
 
 
 ### Inspektor portu / switchport
-W szczegółach wybranego portu przycisk „Odczytaj VLAN / MAC / LLDP” pobiera `show interface switchport` i pokazuje osobno tryb access/trunk, Default VLAN (native/PVID), ingress filter, typy ramek oraz listę skonfigurowanych VLAN-ów. Parser dopasowuje pełną nazwę interfejsu, a nie fragment numeru portu; brakujące pola pozostają oznaczone jako brak danych. Surowy blok CLI pozostaje widoczny do diagnostyki. Odczyt jest tylko do odczytu i nie zmienia konfiguracji. Dane pochodzą z polecenia `show interface switchport`; status linku i liczniki nadal pochodzą z dotychczasowego SNMP/IF-MIB.
+W szczegółach wybranego portu przycisk „Odczytaj VLAN / MAC / LLDP” pobiera dane z `show interface switchport`, tablicy VLAN, FDB/MAC i LLDP. Panel prezentuje zwięzłe podsumowanie trybu access/trunk, native/PVID, rozpoznanych VLAN-ów, adresów MAC i sąsiadów LLDP. Surowe odpowiedzi CLI nie są wyświetlane w tym widoku. Dopasowanie odbywa się po pełnej nazwie interfejsu; brakujące dane są jawnie oznaczane. Odczyt jest tylko do odczytu i nie zmienia konfiguracji. Status linku i liczniki nadal pochodzą z SNMP/IF-MIB.
 
 
 ### Centrum alarmów

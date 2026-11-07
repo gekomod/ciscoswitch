@@ -139,6 +139,28 @@ $('bulk-mode').onchange=()=>{
  $('bulk-native').disabled=!trunk;
 };
 
+
+function runPortAudit(){
+ const rows=[];
+ for(const p of latestPorts){
+  const port=p.name||'—',admin=String(p.admin||'unknown').toLowerCase(),oper=String(p.oper||'unknown').toLowerCase();
+  const description=String(p.description||'').trim(),speed=String(p.speed||'').trim();
+  if(admin==='up'&&oper==='down')rows.push({level:'warning',port,title:'Port włączony administracyjnie, ale bez linku',value:'admin up · oper down',advice:'Sprawdź kabel, urządzenie końcowe i negocjację łącza. Jeśli port jest nieużywany, rozważ osobną politykę wyłączania.'});
+  if(!description)rows.push({level:'info',port,title:'Brak opisu portu',value:'description pusty',advice:'Dodaj opis wskazujący urządzenie, lokalizację lub przeznaczenie portu.'});
+  if(oper==='up'&&!speed)rows.push({level:'info',port,title:'Brak odczytu prędkości aktywnego łącza',value:'oper up · speed brak danych',advice:'Ponów odczyt SNMP i sprawdź obsługę IF-MIB dla tego interfejsu.'});
+  if(admin==='down'&&oper==='up')rows.push({level:'warning',port,title:'Niespójny stan administracyjny i operacyjny',value:'admin down · oper up',advice:'Zweryfikuj aktualność odczytu SNMP oraz stan interfejsu na switchu.'});
+ }
+ const warnings=rows.filter(x=>x.level==='warning').length,infos=rows.filter(x=>x.level==='info').length;
+ $('port-audit-summary').innerHTML='<div class="metric"><span>Porty sprawdzone</span><b>'+latestPorts.length+'</b></div><div class="metric"><span>Wymagają uwagi</span><b>'+warnings+'</b></div><div class="metric"><span>Informacyjne</span><b>'+infos+'</b></div>';
+ $('port-audit-status').textContent='Audyt zakończony na podstawie '+latestPorts.length+' portów z ostatniego odczytu SNMP. '+(rows.length?'Wykryto '+rows.length+' wskazówek do weryfikacji.':'Nie wykryto wskazanych niezgodności.')+' Wyniki nie oznaczają automatycznie awarii.';
+ $('port-audit-rows').innerHTML=rows.length?rows.map(x=>'<tr><td><span class="state '+(x.level==='warning'?'down':'unknown')+'">'+(x.level==='warning'?'Uwaga':'Info')+'</span></td><td><b>'+esc(x.port)+'</b></td><td>'+esc(x.title)+'</td><td>'+esc(x.value)+'</td><td>'+esc(x.advice)+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">Nie wykryto problemów w kontrolowanych kryteriach.</td></tr>';
+}
+$('run-port-audit').onclick=async()=>{
+ const button=$('run-port-audit');button.disabled=true;button.textContent='Odświeżam dane…';
+ try{await load();if(!latestPorts.length)throw new Error('Nie ma danych portów do audytu.');runPortAudit();}
+ catch(e){$('port-audit-status').textContent='Audyt nie został wykonany: '+e.message;}
+ finally{button.disabled=false;button.textContent='Uruchom audyt';}
+};
 function compareValue(value){return value===undefined||value===null||value===''?'Brak danych':String(value);}
 function comparePortRows(a,b){
  const fields=[

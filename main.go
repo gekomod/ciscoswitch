@@ -38,11 +38,7 @@ func main() {
  mux := http.NewServeMux()
  server.Register(mux,svc)
  panelUser, panelPassword := os.Getenv("PANEL_USER"), os.Getenv("PANEL_PASSWORD")
- if panelUser == "" || len(panelPassword) < 8 {
-  log.Fatal("Wymagane PANEL_USER oraz PANEL_PASSWORD (minimum 8 znaków) do utworzenia konta początkowego")
- }
  panelRole := env("PANEL_ROLE", "admin")
- if !validPanelRole(panelRole) { log.Fatalf("Nieprawidłowy PANEL_ROLE: dozwolone wartości to viewer, operator, admin") }
  users, err := openPanelUserStore(env("PANEL_USERS_PATH", filepath.Join("data", "users.json")), panelUser, panelPassword, panelRole)
  if err != nil { log.Fatalf("Nie można uruchomić rejestru użytkowników: %v", err) }
  registerPanelUserRoutes(mux, users)

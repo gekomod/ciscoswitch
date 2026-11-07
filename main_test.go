@@ -47,7 +47,9 @@ func TestSessionAuthLoginAndProtectedRoutes(t *testing.T) {
 func TestSessionRolesEnforceReadOnlyAndOperatorPermissions(t *testing.T) {
  cases:=[]struct{name,role,method,path string; want int}{
   {"viewer blocks config change","viewer",http.MethodPost,"/api/port/settings",http.StatusForbidden},
-  {"viewer allows diagnostics","viewer",http.MethodPost,"/api/command",http.StatusNoContent},
+  {"viewer blocks raw CLI","viewer",http.MethodPost,"/api/command",http.StatusForbidden},
+  {"viewer blocks config export","viewer",http.MethodGet,"/api/config/export",http.StatusForbidden},
+  {"viewer blocks backup download","viewer",http.MethodGet,"/api/config/backups/download",http.StatusForbidden},
   {"viewer allows preview","viewer",http.MethodPost,"/api/vlan/preview",http.StatusNoContent},
   {"operator allows config change","operator",http.MethodPost,"/api/port/settings",http.StatusNoContent},
   {"operator blocks user administration","operator",http.MethodPost,"/api/users",http.StatusForbidden},

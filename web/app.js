@@ -150,7 +150,38 @@ function formatRate(v){if(!Number.isFinite(v))return '—';if(v>=1e9)return (v/1
 async function load(){try{const d=await api('/api/status');latestPorts=sorted(d.ports||[]);recordStatusEvents(d);const up=latestPorts.filter(p=>p.oper==='up').length;$('host').textContent=d.host||'—';$('snmp').textContent=(d.snmpVersion==='3'?'SNMPv3':'SNMPv2c')+(d.reachable?' ONLINE':' OFFLINE');$('connection').classList.toggle('offline',!d.reachable);$('connection').innerHTML='<i></i> '+(d.reachable?'Połączono':'Brak połączenia');$('device-state').textContent=d.reachable?'ONLINE':'OFFLINE';$('device-state').style.color=d.reachable?'var(--green)':'var(--red)';$('count').textContent=latestPorts.length;$('up').textContent=up;$('updated').textContent=new Date().toLocaleTimeString();$('warning').textContent=d.warning||'';$('warning').classList.toggle('hidden',!d.warning);$('health-snmp').textContent=d.reachable?'Połączono':'Brak połączenia';$('health-snmp').className=d.reachable?'good':'bad';$('health-interfaces').textContent=latestPorts.length;$('health-up').textContent=up+' / '+latestPorts.length;$('health-time').textContent=new Date().toLocaleTimeString();$('map-online').textContent=(d.snmpVersion==='3'?'SNMPv3':'SNMPv2c')+(d.reachable?' ONLINE':' OFFLINE');syncPortChoices();render();renderMap();renderPortHistory();renderPortQuality();sampleTraffic();}catch(e){$('warning').textContent=e.message;$('warning').classList.remove('hidden');}}
 $('lacp-create').onclick=async()=>{const group=Number($('lacp-group').value),ports=$('lacp-ports').value,mode=$('lacp-mode').value;if(!confirm('Utworzyć LACP group '+group+' na portach '+ports+'? Porty powinny być wcześniej skonfigurowane identycznie po obu stronach łącza.'))return;try{const d=await api('/api/lacp',{group,ports,mode,delete:false});$('lacp-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
 $('lacp-delete').onclick=async()=>{const group=Number($('lacp-group').value),ports=$('lacp-ports').value;if(!confirm('Usunąć konfigurację channel-group z portów '+ports+'?'))return;try{const d=await api('/api/lacp',{group,ports,mode:$('lacp-mode').value,delete:true});$('lacp-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
-$('show-lacp').onclick=async()=>{try{const d=await api('/api/command',{command:'show etherchannel'});$('lacp-output').textContent=d.output||'Brak agregacji';}catch(e){$('lacp-output').textContent=e.message;}};
+function parseLACPDetail(raw){
+ const groups=[];let current=null;
+ for(const line of String(raw||'').split(/\r?\n/)){
+  let m=line.match(/^\s*Aggregator\s+(po\d+)\b.*$/i);
+  if(m){current={name:m[1],partner:'—',receive:'—',transmit:'—',ready:'—',members:[]};groups.push(current);continue;}
+  if(!current)continue;
+  m=line.match(/^\s*Partner LAG:\s*(.+)$/i);if(m)current.partner=m[1].trim();
+  m=line.match(/^\s*Receive link count:\s*(\d+)\s*-\s*Transmit link count:\s*(\d+)/i);if(m){current.receive=m[1];current.transmit=m[2];}
+  m=line.match(/^\s*Individual:\s*(\d+)\s*-\s*Ready:\s*(\d+)/i);if(m)current.ready=m[2]==='1'?'Gotowy':'Niegotowy';
+  m=line.match(/^\s*Link:\s*(port[0-9.]+).*?(synchronized|not synchronized)?\s*$/i);
+  if(m)current.members.push({port:m[1],state:(m[2]||'stan nierozpoznany').toLowerCase()});
+ }
+ return groups;
+}
+function renderLACPDetail(raw){
+ const host=$('lacp-diagnostics'),groups=parseLACPDetail(raw);
+ if(!groups.length){host.innerHTML='<div class="empty">Nie rozpoznano struktury agregatorów w odpowiedzi. Sprawdź surowy wynik poniżej; parser nie będzie zgadywał stanu.</div>';return;}
+ host.innerHTML=groups.map(g=>{
+  const synced=g.members.filter(x=>x.state==='synchronized').length,unsynced=g.members.length-synced;
+  const rows=g.members.map(m=>'<tr><td><b>'+esc(m.port)+'</b></td><td><span class="state '+(m.state==='synchronized'?'up':'unknown')+'">'+esc(m.state)+'</span></td></tr>').join('');
+  return '<section class="lacp-group-card"><div class="lacp-group-head"><h3>'+esc(g.name)+'</h3><span class="state '+(g.ready==='Gotowy'?'up':'unknown')+'">'+esc(g.ready)+'</span></div><div class="lacp-stats"><div><small>Partner LAG</small><b>'+esc(g.partner)+'</b></div><div><small>RX link count</small><b>'+esc(g.receive)+'</b></div><div><small>TX link count</small><b>'+esc(g.transmit)+'</b></div><div><small>Porty zsynchronizowane</small><b>'+synced+' / '+g.members.length+'</b></div></div><div class="table-wrap"><table><thead><tr><th>PORT CZŁONKOWSKI</th><th>STAN LACP</th></tr></thead><tbody>'+(rows||'<tr><td colspan="2" class="empty">Brak rozpoznanych portów.</td></tr>')+'</tbody></table></div>'+(unsynced?'<p class="note">Co najmniej jeden port nie ma jawnego statusu „synchronized” — sprawdź konfigurację obu końców łącza.</p>':'')+'</section>';
+ }).join('');
+}
+$('show-lacp').onclick=async()=>{
+ $('lacp-diagnostics').innerHTML='<div class="empty">Odczytuję szczegóły LACP…</div>';
+ try{
+  const d=await api('/api/command',{command:'show etherchannel detail'});
+  const raw=d.output||'Brak agregacji lub pusta odpowiedź.';
+  $('lacp-output').textContent=raw;
+  renderLACPDetail(raw);
+ }catch(e){$('lacp-diagnostics').innerHTML='<div class="empty">'+esc(e.message)+'</div>';$('lacp-output').textContent=e.message;}
+};
 $('apply-stp').onclick=async()=>{const mode=$('stp-mode').value,priority=Number($('stp-priority').value);if(!confirm('Zmienić globalny tryb STP na '+mode.toUpperCase()+' i priorytet bridge na '+priority+'?'))return;try{const d=await api('/api/stp',{mode,priority});$('stp-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
 $('show-stp').onclick=async()=>{try{const d=await api('/api/command',{command:'show spanning-tree'});$('stp-output').textContent=d.output||'Brak danych';}catch(e){$('stp-output').textContent=e.message;}};
 $('edgeport-toggle').onchange=async e=>{const port=$('edgeport-port').value,enabled=e.target.checked;if(!port){alert('Wybierz port edge.');e.target.checked=false;return;}if(!confirm((enabled?'Włączyć':'Wyłączyć')+' edgeport na '+port+'? Włączaj wyłącznie na portach końcowych.')){e.target.checked=!enabled;return;}try{const d=await api('/api/edgeport',{port,enabled});$('stp-output').textContent=d.output||'Polecenie przekazane';}catch(x){e.target.checked=!enabled;alert(x.message);}};

@@ -643,8 +643,8 @@ async function inspectVLAN(){
   latestPorts=sorted(state.ports);
   const d=await api('/api/command',{command:'show vlan '+id}),raw=String(d.output||'').trim();
   if(!raw)throw new Error('Switch zwrócił pustą odpowiedź dla VLAN '+id+'.');
-  const members=new Map();
-  for(const m of raw.matchAll(/(port\d+\.\d+\.\d+)\s*\(([ut])\)/gi))members.set(m[1],m[2].toLowerCase());
+  const members=new Map(),knownPorts=new Set(latestPorts.map(p=>p.name.toLowerCase()));
+  for(const m of raw.matchAll(/(port\\d+\\.\\d+\\.\\d+)\\s*\\(([ut])\\)/gi)){const name=m[1].toLowerCase();if(knownPorts.has(name))members.set(name,m[2].toLowerCase());}
   $('vlan-inspect-raw').textContent=raw;
   const ports=latestPorts.map(p=>{const mode=members.get(p.name)||'none';return '<div class="vlan-port-cell '+(mode==='u'?'is-untagged':mode==='t'?'is-tagged':'is-unknown')+'"><b>'+esc(p.name.replace(/^port1\.0\./,''))+'</b><small>'+(mode==='u'?'UNTAGGED':mode==='t'?'TAGGED':'NIEUSTALONY')+'</small><label class="vlan-port-select"><input type="checkbox" data-vlan-select="'+esc(p.name)+'"> Zaznacz</label><button type="button" class="vlan-port-config" data-vlan-port="'+esc(p.name)+'" aria-label="Konfiguruj port '+esc(p.name)+'">Konfiguruj</button></div>';});
   map.innerHTML=ports.join('')||'<p class="empty">Brak portów.</p>';

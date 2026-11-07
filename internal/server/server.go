@@ -548,7 +548,7 @@ func protectedPortNames() []string {
   name:=strings.TrimSpace(item)
   if !strings.HasPrefix(strings.ToLower(name),"port1.0.") { continue }
   number,err:=strconv.Atoi(name[len("port1.0."):])
-  if err!=nil || number<1 || number>52 { continue }
+  if err!=nil || number<1 || number>52 || !strings.EqualFold(name,fmt.Sprintf("port1.0.%d",number)) { continue }
   key:=strings.ToLower(name)
   if seen[key] { continue }
   seen[key]=true

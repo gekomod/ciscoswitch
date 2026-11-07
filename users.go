@@ -50,9 +50,6 @@ func openPanelUserStore(path, bootstrapUsername, bootstrapPassword, bootstrapRol
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("PANEL_USERS_PATH nie może być pusty")
 	}
-	if !validPanelRole(bootstrapRole) {
-		return nil, errors.New("nieprawidłowa rola konta początkowego")
-	}
 	store := &panelUserStore{path: path, users: make(map[string]panelUserRecord)}
 	data, err := os.ReadFile(path)
 	if err == nil {
@@ -77,6 +74,9 @@ func openPanelUserStore(path, bootstrapUsername, bootstrapPassword, bootstrapRol
 	}
 	if !os.IsNotExist(err) {
 		return nil, fmt.Errorf("nie można otworzyć rejestru użytkowników: %w", err)
+	}
+	if !validPanelRole(bootstrapRole) {
+		return nil, errors.New("nieprawidłowa rola konta początkowego")
 	}
 	if !panelUsernamePattern.MatchString(bootstrapUsername) || len(bootstrapPassword) < 8 {
 		return nil, errors.New("konto początkowe wymaga poprawnego PANEL_USER i PANEL_PASSWORD (minimum 8 znaków)")

@@ -69,9 +69,9 @@ function recordStatusEvents(d){if(previousReachable!==null&&d.reachable!==previo
 function renderMap(){const el=$('port-map');if(!el)return;el.innerHTML=latestPorts.map(p=>{const state=p.oper||'unknown',label=(p.name||String(p.index)).replace(/^port1\.0\./,'');return '<button class="map-port '+(state==='up'?'is-up':state==='down'?'is-down':'is-unknown')+'" data-map-port="'+esc(p.name)+'" title="'+esc(p.name)+' · '+esc(state)+'"><b>'+esc(label)+'</b><small>'+(p.speed||'—').replace(' Mb/s','M')+'</small></button>';}).join('')||'<div class="empty">Brak interfejsów SNMP.</div>';}
 function fmtCount(v){const n=Number(v||0);return Number.isFinite(n)?new Intl.NumberFormat('pl-PL',{notation:n>999999?'compact':'standard',maximumFractionDigits:1}).format(n):'—';}
 function portContextLines(output,port){
- const lines=String(output||'').split(/\\r?\\n/),escaped=port.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\function renderPortDetail(){'),full=new RegExp(escaped+'(?![0-9])','i');
- const short=port.replace(/^port/,'');const compact=new RegExp('(^|[^0-9])'+short.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\function renderPortDetail(){')+'([^0-9]|$)','i');
- return lines.filter(line=>full.test(line)||compact.test(line)).slice(0,40);
+ const lines=String(output||'').split(/\\r?\\n/),tokens=[port.toLowerCase(),port.toLowerCase().replace(/^port/,'')].filter(Boolean);
+ const matches=line=>{const value=line.toLowerCase();return tokens.some(token=>{let from=0,index;while((index=value.indexOf(token,from))>=0){const after=value[index+token.length]||'';if(!/[0-9]/.test(after))return true;from=index+1;}return false;});};
+ return lines.filter(matches).slice(0,40);
 }
 function renderPortNetworkContext(){
  const port=$('detail-port')?.value,ctx=portNetworkContext.get(port);

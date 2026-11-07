@@ -976,7 +976,23 @@ $('config-backups').addEventListener('click',async event=>{const button=event.ta
 $('create-config-backup').onclick=async()=>{const b=$('create-config-backup');if(!confirm('Pobrać running-config i zapisać lokalną kopię na serwerze panelu? Plik może zawierać hasła i inne dane poufne.'))return;b.disabled=true;try{const r=await fetch('/api/config/backups',{method:'POST'});if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();$('config-diff').textContent='Utworzono kopię '+d.id+'\nSHA256: '+d.sha256;await refreshConfigBackups();}catch(e){$('config-diff').textContent='Nie udało się utworzyć kopii: '+e.message;}finally{b.disabled=false;}};
 $('compare-config').onclick=async()=>{const box=$('config-diff'),button=$('compare-config');button.disabled=true;box.textContent='Pobieranie i porównywanie konfiguracji…';try{const response=await fetch('/api/config/compare');if(!response.ok)throw new Error('Błąd porównania: HTTP '+response.status);const d=await response.json();const added=Number(d.added)||0,removed=Number(d.removed)||0;box.textContent='Różnice: '+added+' dodanych w running-config · '+removed+' usuniętych względem startup-config · Linie: running '+d.runningLines+' / startup '+d.startupLines+'. '+(added===0&&removed===0?'Konfiguracje są zgodne.':'Szczegółowe linie pominięto, ponieważ mogą zawierać dane poufne.');}catch(e){box.textContent=e.message;}finally{button.disabled=false;}};
 $('save-config').onclick=async()=>{if(!confirm('Zapisać running-config do startup-config?'))return;try{const d=await api('/api/save',{});showFriendlyResult('output',d.output,'Zapis konfiguracji');alert('Polecenie zapisu wysłane.');}catch(x){alert(x.message);}};
-$('run').onclick=async()=>{const command=$('cmd').value;$('output').textContent='Łączenie przez SSH…';try{const d=await api('/api/command',{command});showFriendlyResult('output',d.output,'Diagnostyka urządzenia');}catch(x){showFriendlyResult('output',x.message,'Operacja na switchu');}};load();setInterval(()=>{if(document.visibilityState==='visible')load();},15000);refreshSystem();setInterval(()=>{if(document.visibilityState==='visible')refreshSystem();},60000);restoreMonitorHistory();connectMonitorStream();refreshConfigBackups();refreshAudit();
+$('run').onclick=async()=>{const command=$('cmd').value;$('output').textContent='Łączenie przez SSH…';try{const d=await api('/api/command',{command});showFriendlyResult('output',d.output,'Diagnostyka urządzenia');}catch(x){showFriendlyResult('output',x.message,'Operacja na switchu');}};async function refreshPortProtection(){
+ const el=$('port-protection-status');if(!el)return;
+ try{
+  const data=await api('/api/ports/protection');
+  if(data.configured&&Array.isArray(data.ports)&&data.ports.length){
+   el.classList.remove('is-warning');
+   el.textContent='Ochrona aktywna dla '+data.count+' portów: '+data.ports.join(', ')+'. Lista pochodzi z PROTECTED_PORTS na serwerze.';
+  }else{
+   el.classList.add('is-warning');
+   el.textContent='UWAGA: nie skonfigurowano chronionych portów. Panel nie wykrywa automatycznie portu zarządzającego — ustaw PROTECTED_PORTS w pliku .env przed wykonywaniem zmian masowych.';
+  }
+ }catch(e){
+  el.classList.add('is-warning');
+  el.textContent='Nie można potwierdzić ochrony portów: '+e.message+'. Do czasu sprawdzenia konfiguracji unikaj zmian na uplinkach i porcie zarządzającym.';
+ }
+}
+load();setInterval(()=>{if(document.visibilityState==='visible')load();},15000);refreshPortProtection();refreshSystem();setInterval(()=>{if(document.visibilityState==='visible')refreshSystem();},60000);restoreMonitorHistory();connectMonitorStream();refreshConfigBackups();refreshAudit();
 async function loadPanelUsers(){
  const body=$('panel-users-rows'),status=$('panel-users-status');if(!body)return;
  try{

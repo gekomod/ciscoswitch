@@ -41,9 +41,19 @@ func Register(m *http.ServeMux,svc *device.Service){
  if isProtectedPort(q.Port){http.Error(w,"port chroniony przez PROTECTED_PORTS",400);return}
  cmds,err:=device.BuildPortSettingsCommands(q.Port,q.Mode,q.AccessVLAN,q.Allowed,q.Native,q.Speed,q.Duplex,q.Description)
  if err!=nil{http.Error(w,err.Error(),400);return}
- warnings:=[]string{"Podgląd pokazuje komendy do wysłania; nie odczytuje jeszcze bieżącej konfiguracji portu."}
+ raw,err:=svc.RunReadOnly("show interface switchport")
+ if err!=nil{http.Error(w,"nie udało się odczytać bieżącej konfiguracji portu; podgląd i zapis zostały zablokowane",http.StatusBadGateway);return}
+ current,err:=device.ParseSwitchportDetails(raw,q.Port)
+ if err!=nil{http.Error(w,"nie udało się jednoznacznie rozpoznać bieżącej konfiguracji portu; podgląd i zapis zostały zablokowane",http.StatusConflict);return}
+ warnings:=[]string{"Bieżąca konfiguracja została odczytana bez wprowadzania zmian."}
+ if strings.ToLower(current.Mode)!=q.Mode{warnings=append(warnings,"Zmiana trybu portu z "+current.Mode+" na "+q.Mode+" może przerwać łączność urządzeń.")}
  if q.Mode=="trunk"{warnings=append(warnings,"Zmiana listy allowed VLAN może przerwać ruch urządzeń korzystających z tego portu.")}
- w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(map[string]any{"commands":cmds,"warnings":warnings,"applies":false})
+ w.Header().Set("Content-Type","application/json")
+ w.Header().Set("Cache-Control","no-store")
+ _=json.NewEncoder(w).Encode(map[string]any{
+  "commands":cmds,"warnings":warnings,"applies":false,
+  "current":map[string]any{"port":current.Port,"mode":current.Mode,"defaultVlan":current.DefaultVLAN,"configuredVlans":current.ConfiguredVLANs},
+ })
 })
 m.HandleFunc("/api/vlan/preview",func(w http.ResponseWriter,r *http.Request){
  if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}

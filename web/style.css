@@ -295,3 +295,15 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .port-detail-grid{display:none!important}
 .diagnostic-tables>div:first-child{display:none!important}
 :root[data-theme="light"] pre.friendly-result{background:linear-gradient(110deg,#f4f8fc,#fff)!important}
+
+/* Local panel account administration */
+#panel-users .user-create-form{margin:18px 0;padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2)}
+#panel-users .user-create-form h3{margin:0 0 14px;font-size:14px}
+#panel-users .table-wrap{overflow-x:auto}
+#panel-users table{min-width:760px}
+#panel-users td small{display:block;margin-top:4px;color:var(--muted);font-size:10px}
+#panel-users td select,#panel-users td input[type="password"]{width:100%;min-width:125px}
+#panel-users .inline-check{display:flex;align-items:center;gap:7px;white-space:nowrap;font-size:12px}
+#panel-users .inline-check input{width:16px;height:16px}
+#panel-users-status{margin:12px 0}
+#panel-users[hidden],#panel-users-nav[hidden]{display:none!important}

@@ -51,7 +51,7 @@ func TestMonitorStreamDeliversLiveEvents(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") { t.Fatalf("status=%d content-type=%q", resp.StatusCode, resp.Header.Get("Content-Type")) }
 	reader := bufio.NewReader(resp.Body)
 	ready := false
-	for i:=0;i<3;i++ { line,err:=reader.ReadString('\\n'); if err!=nil { t.Fatal(err) }; if strings.Contains(line,"event: ready") { ready=true } }
+	for i:=0;i<3;i++ { line,err:=reader.ReadString('\n'); if err!=nil { t.Fatal(err) }; if strings.Contains(line,"event: ready") { ready=true } }
 	if !ready { t.Fatal("SSE ready event was not sent") }
 	sharedMonitorEventHub.publish(monitorRecord{Kind:"event",Message:"Live link restored",Type:"success",Timestamp:time.Now().UTC()})
 	received := false
@@ -60,7 +60,7 @@ func TestMonitorStreamDeliversLiveEvents(t *testing.T) {
 		select {
 		case <-deadline: t.Fatal("live SSE event was not delivered")
 		default:
-			line,err:=reader.ReadString('\\n')
+			line,err:=reader.ReadString('\n')
 			if err!=nil { t.Fatal(err) }
 			if strings.Contains(line,"Live link restored") { received=true }
 		}

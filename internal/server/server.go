@@ -75,6 +75,29 @@ m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method
  m.HandleFunc("/api/route/static",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,2048);var q struct{Prefix string `json:"prefix"`;Gateway string `json:"gateway"`;Distance int `json:"distance"`;Delete bool `json:"delete"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureStaticRoute(q.Prefix,q.Gateway,q.Distance,q.Delete)});write(w,v,e)})
  m.HandleFunc("/api/dhcp/pool",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,4096);var q struct{Name string `json:"name"`;Network string `json:"network"`;Mask string `json:"mask"`;Low string `json:"low"`;High string `json:"high"`;Router string `json:"router"`;DNS string `json:"dns"`;Enable bool `json:"enable"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureDHCPPool(q.Name,q.Network,q.Mask,q.Low,q.High,q.Router,q.DNS,q.Enable)});write(w,v,e)})
  m.HandleFunc("/api/vlan",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,2048);var q struct{ID int `json:"id"`;Name string `json:"name"`;Delete bool `json:"delete"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureVLAN(q.ID,q.Name,q.Delete)});write(w,v,e)})
+
+ m.HandleFunc("/api/vlan/ports/preview",func(w http.ResponseWriter,r *http.Request){
+  if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
+  r.Body=http.MaxBytesReader(w,r.Body,4096)
+  var q struct{Ports []string `json:"ports"`;VLAN int `json:"vlan"`;Membership string `json:"membership"`}
+  if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return}
+  for _,port:=range q.Ports{if isProtectedPort(port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",port));return}}
+  running,err:=svc.RunReadOnly("show running-config");if err!=nil{write(w,"",fmt.Errorf("nie udało się odczytać running-config: %w",err));return}
+  cmds,err:=device.BuildVLANPortMembershipCommands(running,q.Ports,q.VLAN,q.Membership);if err!=nil{write(w,"",err);return}
+  warning:="Operacja zmienia wyłącznie członkostwo VLAN na wybranych portach; nie zmienia automatycznie trybu access/trunk."
+  if q.Membership=="untagged"{warning+=" Porty muszą być w trybie access."}else{warning+=" Porty muszą już być w trybie trunk; istniejąca lista VLAN i native VLAN pozostają zachowane."}
+  w.Header().Set("Content-Type","application/json");w.Header().Set("Cache-Control","no-store")
+  _=json.NewEncoder(w).Encode(map[string]any{"commands":cmds,"warnings":[]string{warning},"applies":false})
+ })
+ m.HandleFunc("/api/vlan/ports/apply",func(w http.ResponseWriter,r *http.Request){
+  if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
+  r.Body=http.MaxBytesReader(w,r.Body,4096)
+  var q struct{Ports []string `json:"ports"`;VLAN int `json:"vlan"`;Membership string `json:"membership"`}
+  if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return}
+  for _,port:=range q.Ports{if isProtectedPort(port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",port));return}}
+  v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureVLANPortMembership(q.Ports,q.VLAN,q.Membership)})
+  write(w,v,e)
+ })
  m.HandleFunc("/api/port/settings",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,4096);var q struct{Port string `json:"port"`;Mode string `json:"mode"`;AccessVLAN int `json:"accessVlan"`;Allowed string `json:"allowed"`;Native int `json:"native"`;Speed string `json:"speed"`;Duplex string `json:"duplex"`;Description string `json:"description"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};if isProtectedPort(q.Port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",q.Port));return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigurePortSettings(q.Port,q.Mode,q.AccessVLAN,q.Allowed,q.Native,q.Speed,q.Duplex,q.Description)});write(w,v,e)})
  m.HandleFunc("/api/ports/settings/bulk",func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}

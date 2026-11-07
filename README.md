@@ -17,6 +17,7 @@ Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948
 - Diagnostyka CLI z allowlistą poleceń show.
 - Monitoring RX/TX per port, wykres ostatnich 60 próbek oraz historia błędów i zmian linku.
 - Topologia sieci: wizualizacja portów i urządzeń z FDB/MAC, ARP, LLDP oraz stanu SNMP; lokalne rozpoznawanie ograniczonej listy producentów po prefiksie MAC (OUI). Nieznane prefiksy pozostają nierozpoznane, a mapa nie jest gwarantowanym schematem fizycznego okablowania.
+- Topologia: ostrożna klasyfikacja urządzeń wyłącznie na podstawie jawnych słów w opisie LLDP (switch/router/AP/kamera/drukarka/telefon/komputer); OUI nie służy do ustalania typu urządzenia. Port z sąsiadem LLDP opisanym jako switch/router i aktywnym linkiem jest oznaczany jako prawdopodobny uplink. Odczyt `show spanning-tree` pokazuje rozpoznane stany forwarding oraz alternate/discarding/blocking; nie oznacza automatycznie wykrycia pętli. Klasyfikacja i parser STP są heurystyczne i zależą od formatu CLI.
 - Historia ruchu per port jest zapisywana lokalnie w `data/monitor-history.jsonl` i odtwarzana po ponownym otwarciu panelu; retencja jest ograniczona do 60 próbek na port w odpowiedzi API, a plik ma limit 2 MiB i uprawnienia 0600.
 
 ## Instalacja — Debian 13

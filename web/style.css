@@ -290,3 +290,8 @@ main pre#config-diff{display:block!important;white-space:normal!important;font:i
 #diagnostics .neighbor-tools{display:block!important}
 #diagnostics .diag-grid>div,#diagnostics .neighbor-tools{min-width:0}
 #diagnostics .friendly-result{margin:8px 0}
+
+/* Port views emphasize service state and throughput, not raw counters */
+.port-detail-grid{display:none!important}
+.diagnostic-tables>div:first-child{display:none!important}
+:root[data-theme="light"] pre.friendly-result{background:linear-gradient(110deg,#f4f8fc,#fff)!important}

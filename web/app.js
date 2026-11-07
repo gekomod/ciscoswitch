@@ -195,21 +195,34 @@ async function restoreMonitorHistory(){try{const d=await api('/api/monitor/histo
  renderPortDetail();renderPortTraffic();renderEvents();drawTraffic();$('traffic-samples').textContent=trafficHistory.length;if(trafficHistory.length){const last=trafficHistory[trafficHistory.length-1];$('traffic-rx').textContent=formatRate(last.rx);$('traffic-tx').textContent=formatRate(last.tx);}}catch(e){console.warn('Historia monitoringu niedostępna:',e.message);}}
 function recordStatusEvents(d){if(previousReachable!==null&&d.reachable!==previousReachable)addEvent(d.reachable?'Połączenie SNMP zostało przywrócone':'Utracono połączenie SNMP',d.reachable?'success':'danger');if(d.reachable){if(hasPortBaseline){for(const p of latestPorts){const oldState=previousPortStates.get(p.name);if(oldState&&oldState!==p.oper){addEvent(p.name+': link '+oldState.toUpperCase()+' → '+String(p.oper||'unknown').toUpperCase(),p.oper==='up'?'success':'danger');if((oldState==='up'||oldState==='down')&&(p.oper==='up'||p.oper==='down')){persistMonitorRecord({kind:'port',port:p.name,state:p.oper});portHistory.push({port:p.name,state:p.oper,timestamp:new Date().toISOString()});renderPortHistory();renderPortDetail();}}const old=previousErrorCounters.get(p.name);if(old){const inErrors=Number(p.inErrors||0),outErrors=Number(p.outErrors||0),inDiscards=Number(p.inDiscards||0),outDiscards=Number(p.outDiscards||0),errorRXDelta=inErrors-old.inErrors,errorTXDelta=outErrors-old.outErrors,discardRXDelta=inDiscards-old.inDiscards,discardTXDelta=outDiscards-old.outDiscards;if(errorRXDelta>0||errorTXDelta>0||discardRXDelta>0||discardTXDelta>0){const parts=[];if(errorRXDelta>0)parts.push('RX +'+errorRXDelta+' błędów');if(errorTXDelta>0)parts.push('TX +'+errorTXDelta+' błędów');if(discardRXDelta>0)parts.push('RX +'+discardRXDelta+' discard');if(discardTXDelta>0)parts.push('TX +'+discardTXDelta+' discard');addEvent(p.name+': '+parts.join(', '),'warning');const rec={kind:'counter',port:p.name,errorRxDelta:Math.max(0,errorRXDelta),errorTxDelta:Math.max(0,errorTXDelta),discardRxDelta:Math.max(0,discardRXDelta),discardTxDelta:Math.max(0,discardTXDelta),errorRxTotal:inErrors,errorTxTotal:outErrors,discardRxTotal:inDiscards,discardTxTotal:outDiscards};persistMonitorRecord(rec);counterHistory.push({...rec,timestamp:new Date().toISOString()});counterHistory=counterHistory.slice(-2000);renderCounterHistory();renderPortDetail();}}}}previousPortStates=new Map(latestPorts.map(p=>[p.name,p.oper]));previousErrorCounters=new Map(latestPorts.map(p=>[p.name,{inErrors:Number(p.inErrors||0),outErrors:Number(p.outErrors||0),inDiscards:Number(p.inDiscards||0),outDiscards:Number(p.outDiscards||0)}]));hasPortBaseline=true;}previousReachable=d.reachable;}
 function renderMap(){
- const el=$('port-map');if(!el)return;
- const counts={up:0,down:0,unknown:0};
- latestPorts.forEach(p=>{const state=['up','down'].includes(p.oper)?p.oper:'unknown';counts[state]++;});
- const summary=$('port-map-summary');
- if(summary)summary.textContent=latestPorts.length+' portów wykrytych · '+counts.up+' aktywnych · '+counts.down+' nieaktywnych'+(counts.unknown?' · '+counts.unknown+' bez danych':'');
- const filter=$('port-map-filter')?.value||'all';
- const visible=latestPorts.filter(p=>filter==='all'||(p.oper||'unknown')===filter);
- el.innerHTML=visible.map(p=>{
-  const state=['up','down'].includes(p.oper)?p.oper:'unknown';
-  const label=(p.name||String(p.index)).replace(/^port1\.0\./,'');
-  const speed=p.speed||'Prędkość nieznana';
-  const admin=p.admin==='up'?'Włączony':p.admin==='down'?'Wyłączony':'Nieznany';
-  return '<button type="button" class="map-port '+(state==='up'?'is-up':state==='down'?'is-down':'is-unknown')+'" data-map-port="'+esc(p.name)+'" aria-label="'+esc(p.name)+', link '+esc(state==='up'?'Połączony':state==='down'?'Brak linku':'Nieznany')+', administracyjnie '+esc(admin)+', '+esc(speed)+'" title="'+esc(p.name)+' · '+(state==='up'?'Połączony':state==='down'?'Brak linku':'Stan nieznany')+' · port administracyjnie '+esc(admin)+' · '+esc(speed)+'"><b>'+esc(label)+'</b><small>'+esc(speed.replace(' Mb/s','M'))+'</small></button>';
- }).join('')||'<div class="empty">Brak portów dla wybranego filtra.</div>';
-}
+  const el=$('port-map');if(!el)return;
+  const counts={up:0,down:0,unknown:0};
+  latestPorts.forEach(p=>{const state=['up','down'].includes(p.oper)?p.oper:'unknown';counts[state]++;});
+  const summary=$('port-map-summary');
+  if(summary)summary.textContent=latestPorts.length+' portów wykrytych · '+counts.up+' aktywnych · '+counts.down+' nieaktywnych'+(counts.unknown?' · '+counts.unknown+' bez danych':'');
+  const filter=$('port-map-filter')?.value||'all';
+  const visible=latestPorts.filter(p=>filter==='all'||(p.oper||'unknown')===filter);
+  const banks=[
+   {id:'copper-a',title:'PORTY 1–24 · 1 Gb/s',test:n=>n>=1&&n<=24,cols:24},
+   {id:'copper-b',title:'PORTY 25–48 · 1 Gb/s',test:n=>n>=25&&n<=48,cols:24},
+   {id:'combo',title:'PORTY COMBO 49–50',test:n=>n>=49&&n<=50,cols:2},
+   {id:'sfp',title:'PORTY SFP+ 51–52 · 10 Gb/s',test:n=>n>=51&&n<=52,cols:2},
+   {id:'other',title:'POZOSTAŁE INTERFEJSY',test:n=>!Number.isFinite(n)||n<1||n>52,cols:12}
+  ];
+  const numberOf=p=>{const match=String(p.name||'').match(/(\d+)$/);const n=match?Number(match[1]):Number(p.index);return Number.isFinite(n)?n:NaN;};
+  const renderPort=p=>{
+   const state=['up','down'].includes(p.oper)?p.oper:'unknown';
+   const label=(p.name||String(p.index)).replace(/^port1\.0\./,'');
+   const speed=p.speed||'Prędkość nieznana';
+   const admin=p.admin==='up'?'Włączony':p.admin==='down'?'Wyłączony':'Nieznany';
+   return '<button type="button" class="map-port '+(state==='up'?'is-up':state==='down'?'is-down':'is-unknown')+'" data-map-port="'+esc(p.name)+'" aria-label="'+esc(p.name)+', link '+esc(state==='up'?'Połączony':state==='down'?'Brak linku':'Nieznany')+', administracyjnie '+esc(admin)+', '+esc(speed)+'" title="'+esc(p.name)+' · '+(state==='up'?'Połączony':state==='down'?'Brak linku':'Stan nieznany')+' · port administracyjnie '+esc(admin)+' · '+esc(speed)+'"><b>'+esc(label)+'</b><small>'+esc(speed.replace(' Mb/s','M'))+'</small></button>';
+  };
+  el.innerHTML=banks.map(bank=>{
+   const ports=visible.filter(p=>bank.test(numberOf(p))).sort((a,b)=>numberOf(a)-numberOf(b));
+   if(!ports.length)return '';
+   return '<section class="port-bank port-bank-'+bank.id+'"><h3 class="port-bank-title">'+bank.title+'</h3><div class="port-bank-grid">'+ports.map(renderPort).join('')+'</div></section>';
+  }).join('')||'<div class="empty">Brak portów dla wybranego filtra.</div>';
+ }
 function fmtCount(v){const n=Number(v||0);return Number.isFinite(n)?new Intl.NumberFormat('pl-PL',{notation:n>999999?'compact':'standard',maximumFractionDigits:1}).format(n):'—';}
 function portContextLines(output,port){
  const lines=String(output||'').split(/\r?\n/),tokens=[port.toLowerCase(),port.toLowerCase().replace(/^port/,'')].filter(Boolean);

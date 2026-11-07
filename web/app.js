@@ -8,26 +8,29 @@ async function api(path,body){const controller=new AbortController(),timer=setTi
 function activatePage(hash){
  const main=document.querySelector('.main');if(!main)return;
  const targetId=(hash||'#overview').slice(1),target=document.getElementById(targetId);
- const navLinks=[...document.querySelectorAll('.sidebar .nav')];
- navLinks.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+targetId));
  const topbar=main.querySelector('.topbar');
- [...main.children].forEach(node=>{if(node===topbar||node.id==='port-dialog')return;node.hidden=true;});
+ [...main.children].forEach(node=>{if(node!==topbar&&node.id!=='port-dialog')node.hidden=true;});
+ document.querySelectorAll('.sidebar .nav').forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+targetId));
  if(targetId==='overview'){
   ['overview','warning','network-dashboard'].forEach(id=>{const el=document.getElementById(id);if(el)el.hidden=false;});
   const metrics=main.querySelector('.metrics');if(metrics)metrics.hidden=false;
   return;
  }
- if(!target){activatePage('#overview');return;}
+ if(!target||!main.contains(target)){activatePage('#overview');return;}
+ const branch=[];
  let node=target;
- while(node&&node!==main){
-  node.hidden=false;
-  const parent=node.parentElement;
+ while(node&&node!==main){branch.push(node);node=node.parentElement;}
+ if(node!==main){activatePage('#overview');return;}
+ for(let i=0;i<branch.length;i++){
+  const current=branch[i];
+  current.hidden=false;
+  const parent=branch[i+1];
   if(parent&&parent!==main){
-   [...parent.children].forEach(sibling=>{if(sibling!==node)sibling.hidden=true;});
+   for(const sibling of parent.children){sibling.hidden=sibling!==current;}
    parent.hidden=false;
   }
-  node=parent;
  }
+ target.querySelectorAll('[hidden]').forEach(el=>{el.hidden=false;});
 }
 function initPageNavigation(){
  document.querySelectorAll('.sidebar .nav').forEach(a=>a.addEventListener('click',e=>{
@@ -117,13 +120,13 @@ function recordStatusEvents(d){if(previousReachable!==null&&d.reachable!==previo
 function renderMap(){const el=$('port-map');if(!el)return;el.innerHTML=latestPorts.map(p=>{const state=p.oper||'unknown',label=(p.name||String(p.index)).replace(/^port1\.0\./,'');return '<button class="map-port '+(state==='up'?'is-up':state==='down'?'is-down':'is-unknown')+'" data-map-port="'+esc(p.name)+'" title="'+esc(p.name)+' · '+esc(state)+'"><b>'+esc(label)+'</b><small>'+(p.speed||'—').replace(' Mb/s','M')+'</small></button>';}).join('')||'<div class="empty">Brak interfejsów SNMP.</div>';}
 function fmtCount(v){const n=Number(v||0);return Number.isFinite(n)?new Intl.NumberFormat('pl-PL',{notation:n>999999?'compact':'standard',maximumFractionDigits:1}).format(n):'—';}
 function portContextLines(output,port){
- const lines=String(output||'').split(/\\r?\\n/),tokens=[port.toLowerCase(),port.toLowerCase().replace(/^port/,'')].filter(Boolean);
+ const lines=String(output||'').split(/\r?\n/),tokens=[port.toLowerCase(),port.toLowerCase().replace(/^port/,'')].filter(Boolean);
  const matches=line=>{const value=line.toLowerCase();return tokens.some(token=>{let from=0,index;while((index=value.indexOf(token,from))>=0){const after=value[index+token.length]||'';if(!/[0-9]/.test(after))return true;from=index+1;}return false;});};
  return lines.filter(matches).slice(0,40);
 }
 function renderPortNetworkContext(){
  const port=$('detail-port')?.value,ctx=portNetworkContext.get(port);
- const macPattern=/\\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\\b/ig;
+ const macPattern=/\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b/ig;
  for(const [id,key] of [['detail-vlan-context','vlan'],['detail-mac-context','mac'],['detail-lldp-context','lldp']]){
   const el=$(id);if(!el)continue;
   if(!port){el.textContent='Wybierz port.';continue;}
@@ -131,25 +134,24 @@ function renderPortNetworkContext(){
   const result=ctx[key];if(result.error){el.textContent='Nie udało się odczytać danych: '+result.error;continue;}
   const output=String(result.output||'');
   if(key==='vlan'){
-   const parts=output.split('\\n\\n--- show vlan all ---\\n');
+   const parts=output.split('\n\n--- show vlan all ---\n');
    const switchport=parts[0]||'';
-   const lines=switchport.split('\\n').filter(Boolean);
    const vlanLines=portContextLines(parts[1]||'',port);
-   const ids=[...new Set(vlanLines.flatMap(line=>[...line.split(port).join('').matchAll(/\\b(?:VLAN\\s*)?(\\d{1,4})\\b/gi)].map(m=>m[1])).filter(n=>Number(n)>=1&&Number(n)<=4094))];
-   const mode=(switchport.match(/TRYB:\\s*([^\\n]+)/i)||[])[1]||'Brak danych';
-   const native=(switchport.match(/DEFAULT \\/ NATIVE VLAN:\\s*([^\\n]+)/i)||[])[1]||'Brak danych';
-   const allowed=(switchport.match(/DOZWOLONE VLAN:\\s*([^\\n]+)/i)||[])[1]||'Brak danych';
-   el.textContent='Port: '+port+'\\nTryb: '+mode+'\\nNative / PVID: '+native+'\\nDozwolone VLAN: '+allowed+'\\nWpisy członkostwa: '+vlanLines.length+(ids.length?'\\nRozpoznane identyfikatory VLAN: '+ids.join(', '):'');
+   const ids=[...new Set(vlanLines.flatMap(line=>[...line.split(port).join('').matchAll(/\b(?:VLAN\s*)?(\d{1,4})\b/gi)].map(m=>m[1])).filter(n=>Number(n)>=1&&Number(n)<=4094))];
+   const mode=(switchport.match(/TRYB:\s*([^\n]+)/i)||[])[1]||'Brak danych';
+   const native=(switchport.match(/DEFAULT \/ NATIVE VLAN:\s*([^\n]+)/i)||[])[1]||'Brak danych';
+   const allowed=(switchport.match(/DOZWOLONE VLAN:\s*([^\n]+)/i)||[])[1]||'Brak danych';
+   el.textContent='Port: '+port+'\nTryb: '+mode+'\nNative / PVID: '+native+'\nDozwolone VLAN: '+allowed+'\nWpisy członkostwa: '+vlanLines.length+(ids.length?'\nRozpoznane identyfikatory VLAN: '+ids.join(', '):'');
    continue;
   }
   const lines=portContextLines(output,port);
   if(key==='mac'){
    const macs=[...new Set(lines.flatMap(line=>line.match(macPattern)||[]).map(v=>v.toUpperCase()))];
-   el.textContent=macs.length?'Urządzenia wykryte na porcie '+port+': '+macs.length+'\\n'+macs.slice(0,20).join('\\n'):'Brak rozpoznanych adresów MAC dla tego portu.';
+   el.textContent=macs.length?'Urządzenia wykryte na porcie '+port+': '+macs.length+'\n'+macs.slice(0,20).join('\n'):'Brak rozpoznanych adresów MAC dla tego portu.';
    continue;
   }
-  const names=[...new Set(lines.map(line=>line.trim()).filter(Boolean).map(line=>line.replace(/\\s+/g,' ').slice(0,100)))];
-  el.textContent=names.length?'Sąsiedzi LLDP przypisani do portu '+port+': '+names.length+'\\n'+names.slice(0,8).join('\\n'):'Nie wykryto sąsiada LLDP na tym porcie.';
+  const names=[...new Set(lines.map(line=>line.trim()).filter(Boolean).map(line=>line.replace(/\s+/g,' ').slice(0,100)))];
+  el.textContent=names.length?'Sąsiedzi LLDP przypisani do portu '+port+': '+names.length+'\n'+names.slice(0,8).join('\n'):'Nie wykryto sąsiada LLDP na tym porcie.';
  }
 }
 async function loadPortNetworkContext(){

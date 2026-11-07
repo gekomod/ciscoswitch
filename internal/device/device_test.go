@@ -149,3 +149,15 @@ func TestBuildBulkPortSettingsCommandsRejectsInvalidBatch(t *testing.T) {
   if _,err:=BuildBulkPortSettingsCommands(ports,"access",10,"",1,"auto","auto","");err==nil{t.Errorf("expected invalid batch to fail: %v",ports)}
  }
 }
+
+func TestBuildBulkPortActionCommands(t *testing.T) {
+ cmds,err:=BuildBulkPortActionCommands([]string{"port1.0.5","port1.0.6","port1.0.5"},"enable")
+ if err!=nil{t.Fatal(err)}
+ joined:=strings.Join(cmds,"\n")
+ if strings.Count(joined,"interface port1.0.5")!=1||strings.Count(joined,"interface port1.0.6")!=1{t.Fatalf("ports not deduplicated: %v",cmds)}
+ if !strings.Contains(joined,"no shutdown")||cmds[0]!="configure terminal"||cmds[len(cmds)-1]!="end"{t.Fatalf("unexpected commands: %v",cmds)}
+ if _,err:=BuildBulkPortActionCommands([]string{"port1.0.1"},"disable");err!=nil{t.Fatal(err)}
+ for _,tc:=range []struct{ports []string;action string}{{nil,"enable"},{[]string{"bad"},"enable"},{[]string{"port1.0.1"},"restart"}} {
+  if _,err:=BuildBulkPortActionCommands(tc.ports,tc.action);err==nil{t.Errorf("expected rejection: %#v",tc)}
+ }
+}

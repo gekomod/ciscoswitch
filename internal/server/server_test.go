@@ -65,24 +65,24 @@ func TestConfigExportHandlerHidesDeviceErrorDetails(t *testing.T) {
 
 
 func TestCompareConfigLinesReportsAddedAndRemoved(t *testing.T) {
- got := compareConfigLines("hostname sw1\\ninterface port1.0.1\\n description AP\\n", "hostname sw1\\r\\ninterface port1.0.1\\r\\n description old\\r\\n")
- if len(got.Added) != 1 || got.Added[0] != "description AP" { t.Fatalf("added=%v", got.Added) }
- if len(got.Removed) != 1 || got.Removed[0] != "description old" { t.Fatalf("removed=%v", got.Removed) }
+ got := compareConfigLines("hostname sw1\ninterface port1.0.1\n description AP\n", "hostname sw1\r\ninterface port1.0.1\r\n description old\r\n")
+ if got.Added != 1 { t.Fatalf("added=%d want 1", got.Added) }
+ if got.Removed != 1 { t.Fatalf("removed=%d want 1", got.Removed) }
  if got.RunningLines != 3 || got.StartupLines != 3 { t.Fatalf("line counts: %+v", got) }
 }
 
 func TestCompareConfigLinesHandlesDuplicateLines(t *testing.T) {
- got := compareConfigLines("x\\nx\\ny\\n", "x\\ny\\ny\\n")
- if len(got.Added) != 1 || got.Added[0] != "x" { t.Fatalf("added=%v", got.Added) }
- if len(got.Removed) != 1 || got.Removed[0] != "y" { t.Fatalf("removed=%v", got.Removed) }
+ got := compareConfigLines("x\nx\ny\n", "x\ny\ny\n")
+ if got.Added != 1 { t.Fatalf("added=%d want 1", got.Added) }
+ if got.Removed != 1 { t.Fatalf("removed=%d want 1", got.Removed) }
 }
 
 func TestConfigCompareHandlerReadsBothSources(t *testing.T) {
  calls := []string{}
  h := configCompareHandler(func(command string) (string, error) {
   calls = append(calls, command)
-  if command == "show running-config" { return "hostname sw1\\n", nil }
-  if command == "show startup-config" { return "hostname sw0\\n", nil }
+  if command == "show running-config" { return "hostname sw1\n", nil }
+  if command == "show startup-config" { return "hostname sw0\n", nil }
   t.Fatalf("unexpected command %q", command)
   return "", nil
  })
@@ -90,10 +90,10 @@ func TestConfigCompareHandlerReadsBothSources(t *testing.T) {
  h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/config/compare", nil))
  if rec.Code != http.StatusOK { t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String()) }
  if len(calls) != 2 { t.Fatalf("commands=%v", calls) }
- if !strings.Contains(rec.Body.String(), `"added":["hostname sw1"]`) { t.Fatalf("unexpected JSON: %s", rec.Body.String()) }
+ if !strings.Contains(rec.Body.String(), `"added":1`) || !strings.Contains(rec.Body.String(), `"removed":1`) { t.Fatalf("unexpected JSON: %s", rec.Body.String()) }
+ if strings.Contains(rec.Body.String(), "hostname sw1") || strings.Contains(rec.Body.String(), "hostname sw0") { t.Fatalf("configuration lines leaked: %s", rec.Body.String()) }
  if rec.Header().Get("Cache-Control") != "no-store" { t.Fatal("expected no-store") }
 }
-
 
 func TestConfigBackupCreatesRestrictedSnapshotAndListsIt(t *testing.T) {
  dir := t.TempDir()

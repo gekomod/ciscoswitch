@@ -164,6 +164,30 @@ function renderEvents(){
  const visible=recentEvents.filter(x=>filter==='all'||x.type===filter).slice(0,100);
  el.innerHTML=visible.length?visible.map(x=>'<div class="event-row is-'+esc(x.type)+'"><i></i><span>'+esc(x.message)+'</span><small>'+esc(x.at)+'</small></div>').join(''):'<div class="empty">Brak zdarzeń dla wybranego poziomu.</div>';
 }
+function receiveMonitorRecord(record){
+ if(!record||typeof record!=='object')return;
+ const timestamp=record.timestamp||new Date().toISOString(),at=Date.parse(timestamp)||Date.now();
+ if(record.kind==='event'){
+  const duplicate=recentEvents.some(item=>item.message===record.message&&item.type===record.type&&Math.abs((Date.parse(item.timestamp)||0)-at)<30000);
+  if(duplicate)return;
+  recentEvents.unshift({message:String(record.message||'Zdarzenie monitoringu'),type:record.type||'info',at:new Date(at).toLocaleString(),timestamp});
+  recentEvents=recentEvents.slice(0,200);renderEvents();return;
+ }
+ if(record.kind==='port'){
+  portHistory.push({port:record.port,state:record.state,timestamp});portHistory=portHistory.slice(-2000);renderPortHistory();renderPortDetail();renderPortQuality();return;
+ }
+ if(record.kind==='counter'){
+  counterHistory.push({...record,timestamp});counterHistory=counterHistory.slice(-2000);renderCounterHistory();renderPortDetail();renderPortQuality();
+ }
+}
+function connectMonitorStream(){
+ const state=$('monitor-stream-state');if(typeof EventSource==='undefined'){if(state)state.textContent='BRAK OBSŁUGI STREAMU';return;}
+ const stream=new EventSource('/api/monitor/stream');
+ stream.addEventListener('ready',()=>{if(state){state.textContent='NA ŻYWO';state.classList.remove('stream-offline');state.classList.add('stream-online');}});
+ stream.addEventListener('monitor',event=>{try{receiveMonitorRecord(JSON.parse(event.data));}catch(_e){}});
+ stream.onerror=()=>{if(state){state.textContent='PONOWNE ŁĄCZENIE';state.classList.remove('stream-online');state.classList.add('stream-offline');}};
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&stream.readyState===EventSource.CLOSED){stream.close();connectMonitorStream();}});
+}
 function persistMonitorRecord(record){fetch('/api/monitor/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(record),keepalive:true}).catch(()=>{});}
 function addEvent(message,type='info',persist=true){const now=new Date();recentEvents.unshift({message,at:now.toLocaleTimeString(),timestamp:now.toISOString(),type});recentEvents=recentEvents.slice(0,12);renderEvents();if(persist)persistMonitorRecord({kind:'event',message,type});}
 async function restoreMonitorHistory(){try{const d=await api('/api/monitor/history');portHistory=d.portEvents||[];counterHistory=d.counterEvents||[];renderPortHistory();renderCounterHistory();renderPortQuality();recentEvents=(d.events||[]).slice(-12).reverse().map(x=>({message:x.message,type:x.type,at:new Date(x.timestamp).toLocaleString()}));trafficHistory=(d.samples||[]).slice(-30).map(x=>({rx:Number(x.rx)||0,tx:Number(x.tx)||0}));
@@ -720,7 +744,7 @@ $('config-backups').addEventListener('click',async event=>{const button=event.ta
 $('create-config-backup').onclick=async()=>{const b=$('create-config-backup');if(!confirm('Pobrać running-config i zapisać lokalną kopię na serwerze panelu? Plik może zawierać hasła i inne dane poufne.'))return;b.disabled=true;try{const r=await fetch('/api/config/backups',{method:'POST'});if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();$('config-diff').textContent='Utworzono kopię '+d.id+'\nSHA256: '+d.sha256;await refreshConfigBackups();}catch(e){$('config-diff').textContent='Nie udało się utworzyć kopii: '+e.message;}finally{b.disabled=false;}};
 $('compare-config').onclick=async()=>{const box=$('config-diff'),button=$('compare-config');button.disabled=true;box.textContent='Pobieranie i porównywanie konfiguracji…';try{const response=await fetch('/api/config/compare');if(!response.ok)throw new Error('Błąd porównania: HTTP '+response.status);const d=await response.json();const added=Number(d.added)||0,removed=Number(d.removed)||0;box.textContent='Różnice: '+added+' dodanych w running-config · '+removed+' usuniętych względem startup-config · Linie: running '+d.runningLines+' / startup '+d.startupLines+'. '+(added===0&&removed===0?'Konfiguracje są zgodne.':'Szczegółowe linie pominięto, ponieważ mogą zawierać dane poufne.');}catch(e){box.textContent=e.message;}finally{button.disabled=false;}};
 $('save-config').onclick=async()=>{if(!confirm('Zapisać running-config do startup-config?'))return;try{const d=await api('/api/save',{});showFriendlyResult('output',d.output,'Zapis konfiguracji');alert('Polecenie zapisu wysłane.');}catch(x){alert(x.message);}};
-$('run').onclick=async()=>{const command=$('cmd').value;$('output').textContent='Łączenie przez SSH…';try{const d=await api('/api/command',{command});showFriendlyResult('output',d.output,'Diagnostyka urządzenia');}catch(x){showFriendlyResult('output',x.message,'Operacja na switchu');}};load();setInterval(load,15000);refreshSystem();setInterval(refreshSystem,60000);restoreMonitorHistory();refreshConfigBackups();refreshAudit();
+$('run').onclick=async()=>{const command=$('cmd').value;$('output').textContent='Łączenie przez SSH…';try{const d=await api('/api/command',{command});showFriendlyResult('output',d.output,'Diagnostyka urządzenia');}catch(x){showFriendlyResult('output',x.message,'Operacja na switchu');}};load();setInterval(()=>{if(document.visibilityState==='visible')load();},15000);refreshSystem();setInterval(()=>{if(document.visibilityState==='visible')refreshSystem();},60000);restoreMonitorHistory();connectMonitorStream();refreshConfigBackups();refreshAudit();
 async function loadPanelUsers(){
  const body=$('panel-users-rows'),status=$('panel-users-status');if(!body)return;
  try{

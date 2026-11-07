@@ -11,6 +11,8 @@ import (
  "net/http/httptest"
  "testing"
  "strings"
+
+ "gs948mx-manager/internal/device"
 )
 
 func TestConfigExportHandlerSelectsCorrectSource(t *testing.T) {
@@ -265,4 +267,16 @@ func TestAuditHistoryRejectsLargeFile(t *testing.T) {
  rec:=httptest.NewRecorder()
  auditHistoryHandler(path).ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/audit",nil))
  if rec.Code!=http.StatusRequestEntityTooLarge{t.Fatalf("status=%d",rec.Code)}
+}
+
+func TestEdgePortChangeRejectsProtectedPortBeforeBackupOrSSH(t *testing.T) {
+ t.Setenv("PROTECTED_PORTS", "port1.0.49")
+ mux := http.NewServeMux()
+ Register(mux, device.New(device.Config{}))
+ req := httptest.NewRequest(http.MethodPost, "/api/edgeport", strings.NewReader(`{"port":"port1.0.49","enabled":true}`))
+ req.Header.Set("Content-Type", "application/json")
+ rec := httptest.NewRecorder()
+ mux.ServeHTTP(rec, req)
+ if rec.Code != http.StatusBadRequest { t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String()) }
+ if !strings.Contains(rec.Body.String(), "chroniony przez PROTECTED_PORTS") { t.Fatalf("unexpected response: %s", rec.Body.String()) }
 }

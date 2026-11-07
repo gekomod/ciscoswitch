@@ -397,3 +397,19 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 :root[data-theme="light"] .topology-vlan-devices{color:#60738a}
 :root[data-theme="light"] .topology-vlan-devices code{color:#24364b}
 :root[data-theme="light"] footer{color:#8491a1;border-color:#e3e8ef}
+
+
+/* Physical front-panel layout: two 24-port copper banks plus combo and SFP+. */
+.port-map{display:flex;flex-direction:column;gap:13px;padding:8px 0}
+.port-bank{min-width:0;padding:11px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.port-bank-title{margin:0 0 9px;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:1.15px}
+.port-bank-grid{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:5px}
+.port-bank-combo .port-bank-grid,.port-bank-sfp .port-bank-grid{grid-template-columns:repeat(2,minmax(0,54px))}
+.port-bank-other .port-bank-grid{grid-template-columns:repeat(12,minmax(0,1fr))}
+.port-bank .map-port{min-width:0;min-height:43px;padding:3px 1px}
+.port-bank .map-port b{font-size:10px}
+.port-bank .map-port small{font-size:7px}
+:root[data-theme="light"] .port-bank{background:#f5f8fb;border-color:#dce4ed}
+:root[data-theme="light"] .port-bank-title{color:#64768b}
+@media(max-width:1100px){.port-bank-grid{grid-template-columns:repeat(12,minmax(0,1fr))}}
+@media(max-width:600px){.port-bank{padding:8px}.port-bank-grid{grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}.port-bank-combo .port-bank-grid,.port-bank-sfp .port-bank-grid{grid-template-columns:repeat(2,minmax(0,48px))}.port-bank .map-port{min-height:39px}}

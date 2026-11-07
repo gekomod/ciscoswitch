@@ -15,6 +15,8 @@ Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948
 - Eksport running-config i startup-config do plików tekstowych z poziomu panelu (wymaga logowania).
 - Porównanie running-config i startup-config z listą dodanych oraz usuniętych linii.
 - Diagnostyka CLI z allowlistą poleceń show.
+- Monitoring RX/TX per port, wykres ostatnich 60 próbek oraz historia błędów i zmian linku.
+- Historia ruchu per port jest zapisywana lokalnie w `data/monitor-history.jsonl` i odtwarzana po ponownym otwarciu panelu; retencja jest ograniczona do 60 próbek na port w odpowiedzi API, a plik ma limit 2 MiB i uprawnienia 0600.
 
 ## Instalacja — Debian 13
 

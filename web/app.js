@@ -183,9 +183,9 @@ const ouiVendors={
  '000c29':'VMware','005056':'VMware','001c42':'Parallels',
  '001b63':'Apple','3c22fb':'Apple','f0d1a9':'Apple','a4b1c1':'Apple','acde48':'Apple','f0dbf8':'Apple',
  '001b21':'Intel','001f3b':'Intel','3c970e':'Intel','a4c494':'Intel','b4d5bd':'Intel',
- '001b54':'Cisco','001e49':'Cisco','0024f7':'Cisco','f4cfE2':'Cisco',
- '0418d6':'Ubiquiti','245a4c':'Ubiquiti','687d6b':'Ubiquiti','802aa8':'Ubiquiti','d0:21:f9':'Ubiquiti',
- '50c7bf':'TP-Link','98daC4':'TP-Link','b0487a':'TP-Link','ec086b':'TP-Link',
+ '001b54':'Cisco','001e49':'Cisco','0024f7':'Cisco','f4cfe2':'Cisco',
+ '0418d6':'Ubiquiti','245a4c':'Ubiquiti','687d6b':'Ubiquiti','802aa8':'Ubiquiti','d021f9':'Ubiquiti',
+ '50c7bf':'TP-Link','98dac4':'TP-Link','b0487a':'TP-Link','ec086b':'TP-Link',
  'b827eb':'Raspberry Pi','dca632':'Raspberry Pi','e45f01':'Raspberry Pi',
  '3cd92b':'HPE','001a4b':'HPE','001f29':'HPE','2c233a':'HPE',
  '001a8a':'Samsung','002454':'Samsung','8c7712':'Samsung',
@@ -210,7 +210,7 @@ function parseLLDP(raw){
  return byPort;
 }
 function renderTopology(){
- const q=$('topology-filter').value.trim().toLowerCase(),rows=topologyData.rows.filter(r=>[r.port,r.link,r.vlans,r.macs,r.ips,r.lldp].join(' ').toLowerCase().includes(q));
+ const q=$('topology-filter').value.trim().toLowerCase(),rows=topologyData.rows.filter(r=>[r.port,r.link,r.vlans,r.macs,r.ips,r.lldp,...(r.macs?r.macs.split(', ').map(macVendor):[])].join(' ').toLowerCase().includes(q));
  $('topology-rows').innerHTML=rows.length?rows.map(r=>'<tr><td><button class="port-diagnostic-link" data-topology-port="'+esc(r.port)+'">'+esc(r.port)+'</button></td><td><span class="state '+(r.link==='up'?'up':r.link==='down'?'down':'unknown')+'">'+esc(r.link)+'</span></td><td>'+esc(r.vlans||'—')+'</td><td>'+esc(r.macs||'—')+'</td><td>'+esc(r.ips||'—')+'</td><td>'+esc(r.lldp||'—')+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">Brak danych pasujących do filtra.</td></tr>';
  $('topology-map').innerHTML=rows.length?rows.map(r=>{const macs=r.macs?r.macs.split(', ').filter(Boolean):[],ips=r.ips?r.ips.split(', ').filter(Boolean):[];return '<article class="topology-port-card"><div class="topology-port-node"><span class="state '+(r.link==='up'?'up':r.link==='down'?'down':'unknown')+'">'+esc(r.link)+'</span><button data-topology-port="'+esc(r.port)+'">'+esc(r.port)+'</button><small>VLAN '+esc(r.vlans||'—')+'</small></div><div class="topology-device-list">'+(macs.length?macs.map(mac=>{const vendor=macVendor(mac);return '<div class="topology-device"><b>'+esc(vendor)+'</b><code>'+esc(mac)+'</code><small>'+esc(ips.join(', ')||'Brak adresu IP w ARP')+'</small></div>';}).join(''):'<div class="topology-device empty-device">Brak wpisu FDB dla tego portu</div>')+(r.lldp?'<div class="topology-lldp"><small>LLDP</small>'+esc(r.lldp)+'</div>':'')+'</div></article>';}).join(''):'<div class="empty">Brak danych pasujących do filtra.</div>';
 }

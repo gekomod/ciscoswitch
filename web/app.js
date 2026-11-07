@@ -454,13 +454,24 @@ function meterBucket(value){return Math.max(0,Math.min(100,Math.round(Number(val
 function setMeterPercent(element,value){element.classList.remove(...Array.from(element.classList).filter(name=>name.startsWith('meter-pct-')));element.classList.add('meter-pct-'+meterBucket(value));}
 function formatRate(v){if(!Number.isFinite(v))return '—';if(v>=1e9)return (v/1e9).toFixed(2)+' Gb/s';if(v>=1e6)return (v/1e6).toFixed(1)+' Mb/s';if(v>=1e3)return (v/1e3).toFixed(0)+' kb/s';return Math.round(v)+' b/s';}
 let statusLoading=false;async function load(){if(statusLoading)return;statusLoading=true;try{const d=await api('/api/status');latestPorts=sorted(d.ports||[]);recordStatusEvents(d);const up=latestPorts.filter(p=>p.oper==='up').length;$('host').textContent=d.host||'—';$('snmp-status').textContent=(d.snmpVersion==='3'?'SNMPv3':'SNMPv2c')+(d.reachable?' ONLINE':' OFFLINE');$('connection').classList.toggle('offline',!d.reachable);$('connection').innerHTML='<i></i> '+(d.reachable?'Połączono':'Brak połączenia');$('device-state').textContent=d.reachable?'ONLINE':'OFFLINE';$('device-state').classList.toggle('device-state-online',d.reachable);$('device-state').classList.toggle('device-state-offline',!d.reachable);$('count').textContent=latestPorts.length;$('up').textContent=up;$('updated').textContent=new Date().toLocaleTimeString();$('warning').textContent=d.warning||'';$('warning').classList.toggle('hidden',!d.warning);$('health-snmp').textContent=d.reachable?'Połączono':'Brak połączenia';$('health-snmp').className=d.reachable?'good':'bad';$('health-interfaces').textContent=latestPorts.length;$('health-up').textContent=up+' / '+latestPorts.length;$('health-time').textContent=new Date().toLocaleTimeString();$('map-online').textContent=(d.snmpVersion==='3'?'SNMPv3':'SNMPv2c')+(d.reachable?' ONLINE':' OFFLINE');syncPortChoices();render();renderMap();renderPortHistory();renderPortQuality();sampleTraffic();}catch(e){$('warning').textContent='Nie udało się pobrać danych switcha: '+e.message;$('warning').classList.remove('hidden');$('connection').classList.add('offline');$('connection').innerHTML='<i></i> Błąd odczytu';$('device-state').textContent='BRAK DANYCH';$('device-state').classList.remove('device-state-online');$('device-state').classList.add('device-state-offline');$('health-snmp').textContent='Błąd odczytu';$('health-snmp').className='bad';$('map-online').textContent='ODCZYT NIEUDANY';}finally{statusLoading=false;}}
+function parseVlanSelection(value){
+ const result=new Set();
+ for(const token of String(value||'').split(/[\\s,]+/).filter(Boolean)){
+  const match=token.match(/^(\\d{1,4})(?:-(\\d{1,4}))?$/);
+  if(!match)return null;
+  const start=Number(match[1]),end=Number(match[2]||match[1]);
+  if(start<1||end>4094||end<start||end-start>4093)return null;
+  for(let vlan=start;vlan<=end;vlan++)result.add(vlan);
+ }
+ return [...result].sort((a,b)=>a-b);
+}
 $('bulk-apply').onclick=async()=>{
  const numbers=[...new Set($('bulk-ports').value.split(',').map(x=>x.trim()).filter(Boolean))];
  if(!numbers.length){alert('Wpisz numery portów, np. 1,2,3.');return;}
  if(numbers.some(n=>!/^[0-9]+$/.test(n)||Number(n)<1||Number(n)>52)){alert('Porty muszą być numerami od 1 do 52.');return;}
  const payload={ports:numbers.map(n=>'port1.0.'+n),mode:$('bulk-mode').value,accessVlan:Number($('bulk-access-vlan').value),allowed:$('bulk-allowed').value,native:Number($('bulk-native').value),speed:$('bulk-speed').value,duplex:$('bulk-duplex').value,description:$('bulk-description').value};
  if(payload.mode==='access'&&(!Number.isInteger(payload.accessVlan)||payload.accessVlan<1||payload.accessVlan>4094)){alert('Access VLAN musi mieścić się w zakresie 1–4094.');return;}
- if(payload.mode==='trunk'&&(!Number.isInteger(payload.native)||payload.native<1||payload.native>4094||!payload.allowed.trim())){alert('Dla trunk podaj poprawny Native VLAN i listę dozwolonych VLAN.');return;}
+ if(payload.mode==='trunk'&&(!Number.isInteger(payload.native)||payload.native<1||payload.native>4094||!parseVlanSelection(payload.allowed)?.length)){alert('Dla trunk podaj poprawny Native VLAN i listę dozwolonych VLAN (np. 10,20 lub 10-20).');return;}
  const button=$('bulk-apply');button.disabled=true;
  try{
   const previews=await Promise.all(payload.ports.map(async port=>({port,...await api('/api/port/preview',{port,mode:payload.mode,accessVlan:payload.accessVlan,allowed:payload.allowed,native:payload.native,speed:payload.speed,duplex:payload.duplex,description:payload.description})})));
@@ -474,7 +485,7 @@ $('bulk-apply').onclick=async()=>{
     const state=await api('/api/port/switchport?port='+encodeURIComponent(port));
     const mode=String(state.mode||'').toLowerCase(),native=Number.parseInt(state.defaultVlan,10);
     const modeOK=mode===payload.mode;
-    const vlanOK=payload.mode==='access'?native===payload.accessVlan:(native===payload.native&&Array.isArray(state.configuredVlans)&&payload.allowed.split(/[\\s,]+/).filter(Boolean).every(v=>state.configuredVlans.map(String).includes(String(v))));
+    const vlanOK=payload.mode==='access'?native===payload.accessVlan:(native===payload.native&&Array.isArray(state.configuredVlans)&&parseVlanSelection(payload.allowed).every(v=>state.configuredVlans.map(Number).includes(v)));
     return {port,ok:modeOK&&vlanOK,detail:!modeOK?'Tryb: '+(mode||'nieustalony'):!vlanOK?'VLAN wymaga sprawdzenia':'Konfiguracja potwierdzona'};
    }catch(error){return {port,ok:false,detail:'Nie udało się odczytać konfiguracji zwrotnej: '+error.message};}
   }));
@@ -931,7 +942,24 @@ $('show-vlans').onclick=async()=>{
 $('apply-port-settings').onclick=async()=>{
  const payload={port:$('cfg-port').value,mode:$('cfg-mode').value,accessVlan:Number($('cfg-access-vlan').value),allowed:$('cfg-allowed').value,native:Number($('cfg-native').value),speed:$('cfg-speed').value,duplex:$('cfg-duplex').value,description:$('cfg-description').value};
  if(!payload.port){alert('Wybierz port.');return;}
- try{const p=await api('/api/port/preview',payload);const summary='Zmiana ustawień portu '+payload.port+'. Tryb: '+(payload.mode==='access'?'Access':'Trunk')+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\\n\\nUwagi: '+p.warnings.join(' · '):'');showFriendlyResult('output',summary,'Podgląd portu');if(!confirm(summary+'\\n\\nZastosować konfigurację?'))return;const d=await api('/api/port/settings',payload);showFriendlyResult('output',d.output,'Konfiguracja portu');addEvent('Zmieniono konfigurację '+payload.port);alert('Zlecenie konfiguracji portu przekazane.');$('port-dialog').close();await load();}catch(e){showFriendlyResult('output',e.message,'Konfiguracja portu');}
+ if(payload.mode==='access'&&(!Number.isInteger(payload.accessVlan)||payload.accessVlan<1||payload.accessVlan>4094)){alert('Access VLAN musi mieścić się w zakresie 1–4094.');return;}
+ if(payload.mode==='trunk'&&(!Number.isInteger(payload.native)||payload.native<1||payload.native>4094||!parseVlanSelection(payload.allowed)?.length)){alert('Dla trunk podaj poprawny Native VLAN i listę dozwolonych VLAN.');return;}
+ const button=$('apply-port-settings');button.disabled=true;
+ try{
+  const p=await api('/api/port/preview',payload);
+  const summary='Zmiana ustawień portu '+payload.port+'. Tryb: '+(payload.mode==='access'?'Access':'Trunk')+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\\n\\nUwagi: '+p.warnings.join(' · '):'');
+  showFriendlyResult('output',summary,'Podgląd portu');
+  if(!confirm(summary+'\\n\\nZastosować konfigurację?'))return;
+  await api('/api/port/settings',payload);
+  const state=await api('/api/port/switchport?port='+encodeURIComponent(payload.port));
+  const modeOK=String(state.mode||'').toLowerCase()===payload.mode,native=Number.parseInt(state.defaultVlan,10);
+  const vlanOK=payload.mode==='access'?native===payload.accessVlan:(native===payload.native&&Array.isArray(state.configuredVlans)&&parseVlanSelection(payload.allowed).every(v=>state.configuredVlans.map(Number).includes(v)));
+  if(!modeOK||!vlanOK)throw new Error('Switch przyjął zlecenie, ale odczyt zwrotny nie potwierdził wszystkich ustawień. Sprawdź konfigurację portu przed kolejną zmianą.');
+  showFriendlyResult('output','Konfiguracja portu '+payload.port+' została odczytana ponownie i potwierdzona.','Konfiguracja portu');
+  addEvent('Potwierdzono konfigurację '+payload.port,'success');
+  $('port-dialog').close();await load();
+ }catch(e){showFriendlyResult('output',e.message,'Konfiguracja portu');}
+ finally{button.disabled=false;}
 };
 $('detail-port').addEventListener('change',renderPortDetail);
 $('load-port-network').addEventListener('click',loadPortNetworkContext);

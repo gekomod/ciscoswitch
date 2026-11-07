@@ -483,15 +483,19 @@ $('bulk-apply').onclick=async()=>{
   showFriendlyResult('bulk-output',summary,'Podgląd profilu portów');
   if(!confirm(summary+'\\n\\nZastosować profil?'))return;
   const result=await api('/api/ports/settings/bulk',payload);
-  const checks=await Promise.all(payload.ports.map(async port=>{
-   try{
-    const state=await api('/api/port/switchport?port='+encodeURIComponent(port));
+   let verification;
+   try{verification=await api('/api/ports/switchport/bulk',{ports:payload.ports});}
+   catch(error){throw new Error('Konfiguracja została wysłana, ale zbiorczy odczyt zwrotny nie powiódł się: '+error.message);}
+   const states=Array.isArray(verification.ports)?verification.ports:[];
+   const byPort=new Map(states.map(state=>[state.port,state]));
+   const checks=payload.ports.map(port=>{
+    const state=byPort.get(port);
+    if(!state)return {port,ok:false,detail:'Brak odczytu zwrotnego'};
     const mode=String(state.mode||'').toLowerCase(),native=Number.parseInt(state.defaultVlan,10);
     const modeOK=mode===payload.mode;
     const vlanOK=payload.mode==='access'?native===payload.accessVlan:(native===payload.native&&Array.isArray(state.configuredVlans)&&parseVlanSelection(payload.allowed).every(v=>state.configuredVlans.map(Number).includes(v)));
     return {port,ok:modeOK&&vlanOK,detail:!modeOK?'Tryb: '+(mode||'nieustalony'):!vlanOK?'VLAN wymaga sprawdzenia':'Konfiguracja potwierdzona'};
-   }catch(error){return {port,ok:false,detail:'Nie udało się odczytać konfiguracji zwrotnej: '+error.message};}
-  }));
+   });
   const verified=checks.filter(x=>x.ok).length;
   const report='Weryfikacja po zastosowaniu: '+verified+'/'+checks.length+' portów potwierdzonych.\\n'+checks.map(x=>(x.ok?'✓ ':'! ')+x.port+' — '+x.detail).join('\\n');
   showFriendlyResult('bulk-output',report,'Wynik konfiguracji portów');

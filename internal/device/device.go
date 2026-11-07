@@ -439,7 +439,7 @@ func BuildVLANPortMembershipCommands(runningConfig string, ports []string, vlan 
   if lower == "switchport mode access" { cfg.mode = "access" }
   if strings.HasPrefix(lower, "switchport trunk native vlan ") {
    fields := strings.Fields(line)
-   if len(fields) == 5 { if n,err:=strconv.Atoi(fields[4]); err==nil && n>=1 && n<=4094 { cfg.native=n } }
+   if len(fields) == 5 { if strings.EqualFold(fields[4],"none") { cfg.native=0 } else if n,err:=strconv.Atoi(fields[4]); err==nil && n>=1 && n<=4094 { cfg.native=n } }
   }
   configs[current] = cfg
  }

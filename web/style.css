@@ -424,3 +424,13 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 #compare-summary{margin:12px 0}
 #compare-rows td:first-child{min-width:150px}
 :root[data-theme="light"] .port-compare-panel{background:linear-gradient(145deg,#fff,#f7f9fc);border-color:#dce4ed}
+
+/* Read-only port audit */
+.port-audit-panel{margin-top:16px}
+.audit-summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+.audit-summary-grid .metric{padding:13px 15px}
+.audit-summary-grid .metric b{display:block;font-size:24px;margin-top:7px}
+#port-audit-status{margin:12px 0}
+#port-audit-rows td{vertical-align:top}
+@media(max-width:650px){.audit-summary-grid{grid-template-columns:1fr}}
+:root[data-theme="light"] .port-audit-panel{background:linear-gradient(145deg,#fff,#f7f9fc);border-color:#dce4ed}

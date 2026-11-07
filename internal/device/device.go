@@ -469,6 +469,44 @@ func BuildVLANPortMembershipCommands(runningConfig string, ports []string, vlan 
  return commands, nil
 }
 
+
+type SwitchportDetails struct {
+ Port string `json:"port"`
+ Mode string `json:"mode"`
+ IngressFilter string `json:"ingressFilter"`
+ AcceptableFrameTypes string `json:"acceptableFrameTypes"`
+ DefaultVLAN string `json:"defaultVlan"`
+ ConfiguredVLANs []int `json:"configuredVlans"`
+ Raw string `json:"raw"`
+}
+
+// ParseSwitchportDetails extracts one exact interface block from AlliedWare Plus
+// "show interface switchport". Missing fields stay empty; the parser never guesses.
+func ParseSwitchportDetails(output, port string) (SwitchportDetails, error) {
+ if !validPort(port) { return SwitchportDetails{}, fmt.Errorf("nieprawidłowy port") }
+ blocks := regexp.MustCompile(`(?im)^\s*Interface name\s*:\s*(\S+)\s*$`).FindAllStringSubmatchIndex(output, -1)
+ for i, loc := range blocks {
+  name := strings.TrimSpace(output[loc[2]:loc[3]])
+  if !strings.EqualFold(name, port) { continue }
+  end := len(output)
+  if i+1 < len(blocks) { end = blocks[i+1][0] }
+  block := output[loc[0]:end]
+  value := func(label string) string {
+   re := regexp.MustCompile(`(?im)^\s*`+regexp.QuoteMeta(label)+`\s*:\s*(.*?)\s*$`)
+   m := re.FindStringSubmatch(block); if len(m) < 2 { return "" }; return strings.TrimSpace(m[1])
+  }
+  details := SwitchportDetails{Port:port,Mode:value("Switchport mode"),IngressFilter:value("Ingress filter"),AcceptableFrameTypes:value("Acceptable frame types"),DefaultVLAN:value("Default Vlan"),Raw:strings.TrimSpace(block)}
+  if raw := value("Configured Vlans"); raw != "" {
+   for _, token := range strings.Fields(raw) {
+    n, err := strconv.Atoi(strings.Trim(token, ","))
+    if err == nil && n >= 1 && n <= 4094 { details.ConfiguredVLANs = append(details.ConfiguredVLANs, n) }
+   }
+  }
+  return details, nil
+ }
+ return SwitchportDetails{}, fmt.Errorf("brak bloku konfiguracji dla portu %s w odpowiedzi show interface switchport", port)
+}
+
 func (s *Service) ConfigureVLANPortMembership(ports []string, vlan int, membership string) (string,error) {
  running,err:=s.RunReadOnly("show running-config")
  if err!=nil { return "",fmt.Errorf("nie udało się odczytać bieżącej konfiguracji portów: %w",err) }

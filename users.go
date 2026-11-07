@@ -133,7 +133,8 @@ func (s *panelUserStore) saveLocked(users map[string]panelUserRecord) error {
 		tmp.Close()
 		return err
 	}
-	if _, err := tmp.Write(append(data, '\n')); err != nil {
+	if _, err := tmp.Write(append(data, '
+')); err != nil {
 		tmp.Close()
 		return err
 	}
@@ -281,7 +282,9 @@ func (s *panelUserStore) update(id string, role *string, active *bool, password 
 			return panelUserPublic{}, errors.New("nie można zablokować ani zdegradować ostatniego aktywnego administratora")
 		}
 	}
-	updatedAt := time.Now().UTC()\n\tif !updatedAt.After(user.UpdatedAt) { updatedAt = user.UpdatedAt.Add(time.Nanosecond) }\n\tuser.UpdatedAt = updatedAt
+	updatedAt := time.Now().UTC()
+\tif !updatedAt.After(user.UpdatedAt) { updatedAt = user.UpdatedAt.Add(time.Nanosecond) }
+\tuser.UpdatedAt = updatedAt
 	next := make(map[string]panelUserRecord, len(s.users))
 	for key, value := range s.users {
 		next[key] = value

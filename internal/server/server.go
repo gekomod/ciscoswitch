@@ -33,6 +33,7 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/api/monitor/stream", monitorStreamHandler())
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
  m.Handle("/api/ports/protection", protectedPortsHandler())
+ m.Handle("/api/ports/preview/bulk", bulkPortPreviewHandler(svc.RunReadOnly))
  m.HandleFunc("/api/port/preview",func(w http.ResponseWriter,r *http.Request){
  if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
  r.Body=http.MaxBytesReader(w,r.Body,4096)
@@ -598,6 +599,63 @@ func protectedPortNumberList(raw string) bool {
   if isProtectedPort(fmt.Sprintf("port1.0.%d",n)) { return true }
  }
  return false
+}
+
+type bulkPortPreviewRequest struct {
+ Ports []string `json:"ports"`
+ Mode string `json:"mode"`
+ AccessVLAN int `json:"accessVlan"`
+ Allowed string `json:"allowed"`
+ Native int `json:"native"`
+ Speed string `json:"speed"`
+ Duplex string `json:"duplex"`
+ Description string `json:"description"`
+}
+
+type bulkPortPreviewItem struct {
+ Port string `json:"port"`
+ Current map[string]any `json:"current"`
+ Warnings []string `json:"warnings"`
+}
+
+func bulkPortPreviewHandler(read func(string) (string,error)) http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request) {
+  if r.Method != http.MethodPost { http.Error(w,"method not allowed",http.StatusMethodNotAllowed); return }
+  r.Body = http.MaxBytesReader(w,r.Body,8192)
+  var q bulkPortPreviewRequest
+  if err := json.NewDecoder(r.Body).Decode(&q); err != nil { http.Error(w,"invalid JSON",http.StatusBadRequest); return }
+  if _,err := device.BuildBulkPortSettingsCommands(q.Ports,q.Mode,q.AccessVLAN,q.Allowed,q.Native,q.Speed,q.Duplex,q.Description); err != nil {
+   http.Error(w,err.Error(),http.StatusBadRequest); return
+  }
+  ports := make([]string,0,len(q.Ports))
+  seen := make(map[string]bool,len(q.Ports))
+  for _,raw := range q.Ports {
+   port := strings.TrimSpace(raw)
+   if isProtectedPort(port) { http.Error(w,"port "+port+" jest chroniony przez PROTECTED_PORTS",http.StatusBadRequest); return }
+   key := strings.ToLower(port)
+   if !seen[key] { seen[key]=true; ports=append(ports,port) }
+  }
+  raw,err := read("show interface switchport")
+  if err != nil { http.Error(w,"nie udało się odczytać bieżącej konfiguracji portów; podgląd i zapis zostały zablokowane",http.StatusBadGateway); return }
+  previews := make([]bulkPortPreviewItem,0,len(ports))
+  for _,port := range ports {
+   current,parseErr := device.ParseSwitchportDetails(raw,port)
+   if parseErr != nil {
+    http.Error(w,"nie udało się jednoznacznie rozpoznać bieżącej konfiguracji portu "+port+"; podgląd i zapis zostały zablokowane",http.StatusConflict); return
+   }
+   warnings := []string{"Bieżąca konfiguracja została odczytana bez wprowadzania zmian."}
+   if strings.ToLower(current.Mode) != q.Mode { warnings=append(warnings,"Zmiana trybu portu z "+current.Mode+" na "+q.Mode+" może przerwać łączność urządzeń.") }
+   if q.Mode == "trunk" { warnings=append(warnings,"Zmiana listy allowed VLAN może przerwać ruch urządzeń korzystających z tego portu.") }
+   previews=append(previews,bulkPortPreviewItem{
+    Port:port,
+    Current:map[string]any{"port":current.Port,"mode":current.Mode,"defaultVlan":current.DefaultVLAN,"configuredVlans":current.ConfiguredVLANs},
+    Warnings:warnings,
+   })
+  }
+  w.Header().Set("Content-Type","application/json")
+  w.Header().Set("Cache-Control","no-store")
+  _ = json.NewEncoder(w).Encode(map[string]any{"previews":previews,"applies":false,"readOperations":1})
+ })
 }
 
 func switchportDetailsHandler(read func(string) (string,error)) http.Handler {

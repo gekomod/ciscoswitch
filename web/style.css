@@ -434,3 +434,6 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 #port-audit-rows td{vertical-align:top}
 @media(max-width:650px){.audit-summary-grid{grid-template-columns:1fr}}
 :root[data-theme="light"] .port-audit-panel{background:linear-gradient(145deg,#fff,#f7f9fc);border-color:#dce4ed}
+
+/* VLAN inventory: readable status first, device output on demand. */
+.vlan-raw-details{margin-top:12px;border:1px solid var(--border,rgba(148,163,184,.2));border-radius:12px;padding:12px 14px;background:var(--panel-soft,rgba(148,163,184,.04))}.vlan-raw-details summary{cursor:pointer;color:var(--muted,#94a3b8);font-size:12px;font-weight:650}.vlan-raw-details[open] summary{margin-bottom:10px}.vlan-raw-details pre{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}.vlan-raw-details+#unused{display:none}

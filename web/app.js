@@ -174,32 +174,26 @@ function portContextLines(output,port){
 }
 function renderPortNetworkContext(){
  const port=$('detail-port')?.value,ctx=portNetworkContext.get(port);
- const macPattern=/\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b/ig;
- for(const [id,key] of [['detail-vlan-context','vlan'],['detail-mac-context','mac'],['detail-lldp-context','lldp']]){
+ for(const [id,key,label] of [['detail-vlan-context','vlan','Konfiguracja VLAN portu'],['detail-mac-context','mac','Urządzenia wykryte na porcie'],['detail-lldp-context','lldp','Sąsiedzi sieciowi']]){
   const el=$(id);if(!el)continue;
-  if(!port){el.textContent='Wybierz port.';continue;}
-  if(!ctx){el.textContent='Kliknij „Odczytaj VLAN / MAC / LLDP”.';continue;}
-  const result=ctx[key];if(result.error){el.textContent='Nie udało się odczytać danych: '+result.error;continue;}
+  if(!port){showFriendlyResult(id,'','Wybierz port');continue;}
+  if(!ctx){showFriendlyResult(id,'','Oczekiwanie na odczyt');continue;}
+  const result=ctx[key];if(result.error){showFriendlyResult(id,result.error,label);continue;}
   const output=String(result.output||'');
   if(key==='vlan'){
-   const parts=output.split('\n\n--- show vlan all ---\n');
-   const switchport=parts[0]||'';
-   const vlanLines=portContextLines(parts[1]||'',port);
-   const ids=[...new Set(vlanLines.flatMap(line=>[...line.split(port).join('').matchAll(/\b(?:VLAN\s*)?(\d{1,4})\b/gi)].map(m=>m[1])).filter(n=>Number(n)>=1&&Number(n)<=4094))];
-   const mode=(switchport.match(/TRYB:\s*([^\n]+)/i)||[])[1]||'Brak danych';
-   const native=(switchport.match(/DEFAULT \/ NATIVE VLAN:\s*([^\n]+)/i)||[])[1]||'Brak danych';
-   const allowed=(switchport.match(/DOZWOLONE VLAN:\s*([^\n]+)/i)||[])[1]||'Brak danych';
-   el.textContent='Port: '+port+'\nTryb: '+mode+'\nNative / PVID: '+native+'\nDozwolone VLAN: '+allowed+'\nWpisy członkostwa: '+vlanLines.length+(ids.length?'\nRozpoznane identyfikatory VLAN: '+ids.join(', '):'');
+   const parts=output.split('\\n\\n--- show vlan all ---\\n'),switchport=parts[0]||'',vlanLines=portContextLines(parts[1]||'',port);
+   const mode=(switchport.match(/TRYB:\\s*([^\\n]+)/i)||[])[1]||'nieznany';
+   const native=(switchport.match(/DEFAULT \\/ NATIVE VLAN:\\s*([^\\n]+)/i)||[])[1]||'brak danych';
+   const allowed=(switchport.match(/DOZWOLONE VLAN:\\s*([^\\n]+)/i)||[])[1]||'brak danych';
+   showFriendlyResult(id,'Port '+port+' · tryb '+mode+' · VLAN domyślny '+native+' · wpisy VLAN '+vlanLines.length,'Konfiguracja VLAN portu');
    continue;
   }
-  const lines=portContextLines(output,port);
   if(key==='mac'){
-   const macs=[...new Set(lines.flatMap(line=>line.match(macPattern)||[]).map(v=>v.toUpperCase()))];
-   el.textContent=macs.length?'Urządzenia wykryte na porcie '+port+': '+macs.length+'\n'+macs.slice(0,20).join('\n'):'Brak rozpoznanych adresów MAC dla tego portu.';
-   continue;
+   const macs=[...new Set((output.match(/\\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\\b/ig)||[]).map(v=>v.toUpperCase()))];
+   showFriendlyResult(id,macs.length?'Wykryto '+macs.length+' urządzeń na tym porcie.':'Brak urządzeń w tablicy adresów.',label);continue;
   }
-  const names=[...new Set(lines.map(line=>line.trim()).filter(Boolean).map(line=>line.replace(/\s+/g,' ').slice(0,100)))];
-  el.textContent=names.length?'Sąsiedzi LLDP przypisani do portu '+port+': '+names.length+'\n'+names.slice(0,8).join('\n'):'Nie wykryto sąsiada LLDP na tym porcie.';
+  const names=portContextLines(output,port).filter(Boolean);
+  showFriendlyResult(id,names.length?'Wykryto '+names.length+' sąsiadów LLDP na tym porcie.':'Nie wykryto sąsiada LLDP.',label);
  }
 }
 async function loadPortNetworkContext(){
@@ -438,7 +432,18 @@ $('alert-refresh')?.addEventListener('click',async()=>{const b=$('alert-refresh'
 
 const vlanSelectedPorts=new Set();
 function updateVLANSelection(){const count=$('vlan-select-count');if(count)count.textContent='Zaznaczono: '+vlanSelectedPorts.size;const use=$('vlan-use-selected');if(use)use.disabled=vlanSelectedPorts.size===0;const apply=$('vlan-apply-membership');if(apply)apply.disabled=vlanSelectedPorts.size===0;}
-async function inspectVLAN(){const id=Number($('vlan-inspect-id').value);if(!Number.isInteger(id)||id<1||id>4094){alert('VLAN ID musi być w zakresie 1–4094.');return;}vlanSelectedPorts.clear();updateVLANSelection();const box=$('vlan-inspect-raw'),map=$('vlan-port-map');box.textContent='Odczyt VLAN '+id+'…';map.innerHTML='';try{const d=await api('/api/command',{command:'show vlan '+id});const raw=d.output||'';box.textContent=raw||'Brak odpowiedzi CLI';const members=new Map();for(const m of raw.matchAll(/(port\d+\.\d+\.\d+)\s*\(([ut])\)/gi))members.set(m[1],m[2].toLowerCase());const ports=latestPorts.map(p=>{const mode=members.get(p.name)||'none';return '<div class="vlan-port-cell '+(mode==='u'?'is-untagged':mode==='t'?'is-tagged':'is-none')+'"><b>'+esc(p.name.replace(/^port1\.0\./,''))+'</b><small>'+(mode==='u'?'UNTAGGED':mode==='t'?'TAGGED':'—')+'</small><label class="vlan-port-select"><input type="checkbox" data-vlan-select="'+esc(p.name)+'" '+(vlanSelectedPorts.has(p.name)?'checked':'')+'> Zaznacz</label><button type="button" class="vlan-port-config" data-vlan-port="'+esc(p.name)+'" aria-label="Konfiguruj port '+esc(p.name)+'">Konfiguruj</button></div>';});map.innerHTML=ports.join('')||'<p class="empty">Najpierw odczytaj porty SNMP.</p>';if(members.size===0)map.insertAdjacentHTML('beforeend','<p class="note">Nie rozpoznano członków portów w odpowiedzi CLI. Sprawdź surowy wynik powyżej.</p>');}catch(e){box.textContent=e.message;map.innerHTML='<p class="empty">Nie udało się pobrać członkostwa VLAN.</p>';}}
+async function inspectVLAN(){
+ const id=Number($('vlan-inspect-id').value);if(!Number.isInteger(id)||id<1||id>4094){alert('VLAN ID musi być w zakresie 1–4094.');return;}
+ vlanSelectedPorts.clear();updateVLANSelection();const box=$('vlan-inspect-raw'),map=$('vlan-port-map');map.innerHTML='';
+ try{
+  const d=await api('/api/command',{command:'show vlan '+id}),raw=d.output||'',members=new Map();
+  for(const m of raw.matchAll(/(port\\d+\\.\\d+\\.\\d+)\\s*\\(([ut])\\)/gi))members.set(m[1],m[2].toLowerCase());
+  showFriendlyResult('vlan-inspect-raw',raw,'Członkostwo VLAN '+id);
+  const ports=latestPorts.map(p=>{const mode=members.get(p.name)||'none';return '<div class="vlan-port-cell '+(mode==='u'?'is-untagged':mode==='t'?'is-tagged':'is-none')+'"><b>'+esc(p.name.replace(/^port1\\.0\\./,''))+'</b><small>'+(mode==='u'?'UNTAGGED':mode==='t'?'TAGGED':'Brak przypisania')+'</small><label class="vlan-port-select"><input type="checkbox" data-vlan-select="'+esc(p.name)+'" '+(vlanSelectedPorts.has(p.name)?'checked':'')+'> Zaznacz</label><button type="button" class="vlan-port-config" data-vlan-port="'+esc(p.name)+'" aria-label="Konfiguruj port '+esc(p.name)+'">Konfiguruj</button></div>';});
+  map.innerHTML=ports.join('')||'<p class="empty">Najpierw odczytaj porty.</p>';
+  if(!members.size)map.insertAdjacentHTML('beforeend','<p class="note">Nie udało się rozpoznać przypisań portów dla tego VLAN.</p>');
+ }catch(e){showFriendlyResult('vlan-inspect-raw',e.message,'Odczyt VLAN');map.innerHTML='<p class="empty">Nie udało się pobrać członkostwa VLAN.</p>';}
+}
 $('inspect-vlan').onclick=inspectVLAN;
 $('vlan-port-map').addEventListener('click',e=>{const button=e.target.closest('[data-vlan-port]');if(!button)return;openPortDialog(button.dataset.vlanPort);});
 $('vlan-port-map').addEventListener('change',e=>{const input=e.target.closest('[data-vlan-select]');if(!input)return;if(input.checked)vlanSelectedPorts.add(input.dataset.vlanSelect);else vlanSelectedPorts.delete(input.dataset.vlanSelect);updateVLANSelection();});
@@ -449,28 +454,19 @@ async function applyVLANMembership(){
  const ports=[...vlanSelectedPorts].sort(),vlan=Number($('vlan-inspect-id').value),membership=$('vlan-membership-mode').value,output=$('vlan-membership-output'),button=$('vlan-apply-membership');
  if(!ports.length){alert('Zaznacz co najmniej jeden port.');return;}
  if(!Number.isInteger(vlan)||vlan<1||vlan>4094){alert('VLAN ID musi być w zakresie 1–4094.');return;}
- const payload={ports,vlan,membership};button.disabled=true;output.textContent='Sprawdzanie aktualnej konfiguracji portów…';
+ const payload={ports,vlan,membership};button.disabled=true;
  try{
   const preview=await api('/api/vlan/ports/preview',payload);
-  const summary='PODGLĄD — bez zmian na switchu\n\n'+preview.commands.join('\n')+'\n\n'+preview.warnings.join('\n');
-  output.textContent=summary;
-  if(!confirm(summary+'\n\nCzy wykonać te komendy?'))return;
-  const result=await api('/api/vlan/ports/apply',payload);
-  let verificationText='WERYFIKACJA: nie udało się potwierdzić stanu portów.';
-  try{
-   const check=await api('/api/command',{command:'show vlan '+vlan});
-   const observed=new Map();
-   for(const match of String(check.output||'').matchAll(/(port\\d+\\.\\d+\\.\\d+)\\s*\\(([ut])\\)/gi))observed.set(match[1],match[2].toLowerCase());
-   const expected=membership==='tagged'?'t':'u';
-   const rows=ports.map(port=>{const actual=observed.get(port);return {port,actual,ok:actual===expected};});
-   const good=rows.filter(row=>row.ok).length;
-   verificationText='WERYFIKACJA '+(good===rows.length?'OK':'NIEPEŁNA')+' — '+good+'/'+rows.length+' portów ma oczekiwane członkostwo '+membership.toUpperCase()+' w VLAN '+vlan+'.\\n'+rows.map(row=>row.port+': '+(row.actual==='t'?'TAGGED':row.actual==='u'?'UNTAGGED':'BRAK W TABLICY')+(row.ok?' ✓':' — OCZEKIWANO '+membership.toUpperCase())).join('\\n');
-  }catch(checkError){verificationText+='\\n'+checkError.message;}
-  output.textContent='WYNIK KOMEND\\n'+(result.output||'Komendy przekazane.')+'\\n\\n'+verificationText;
-  addEvent('Zmieniono członkostwo VLAN '+vlan+' na portach '+ports.join(', '));
-  alert(verificationText);
-  await inspectVLAN();
- }catch(e){output.textContent='Operacja zablokowana lub nieudana: '+e.message;alert(e.message);}
+  const summary='Zmiana członkostwa '+membership.toUpperCase()+' dla VLAN '+vlan+' na '+ports.length+' portach. Podgląd nie zmienia konfiguracji.'+(preview.warnings?.length?'\\n\\nUwagi: '+preview.warnings.join(' · '):'');
+  showFriendlyResult('vlan-membership-output',summary,'Podgląd zmiany VLAN');
+  if(!confirm(summary+'\\n\\nZastosować zmianę?'))return;
+  await api('/api/vlan/ports/apply',payload);
+  let good=0;
+  try{const check=await api('/api/command',{command:'show vlan '+vlan}),observed=new Map();for(const match of String(check.output||'').matchAll(/(port\\d+\\.\\d+\\.\\d+)\\s*\\(([ut])\\)/gi))observed.set(match[1],match[2].toLowerCase());const expected=membership==='tagged'?'t':'u';good=ports.filter(port=>observed.get(port)===expected).length;}
+  catch(_e){}
+  showFriendlyResult('vlan-membership-output','Zweryfikowano '+good+' z '+ports.length+' portów. Oczekiwany tryb: '+membership.toUpperCase()+', VLAN '+vlan+'.','Weryfikacja członkostwa VLAN');
+  addEvent('Zmieniono członkostwo VLAN '+vlan+' na '+ports.length+' portach');await inspectVLAN();
+ }catch(e){showFriendlyResult('vlan-membership-output',e.message,'Operacja VLAN');}
  finally{button.disabled=vlanSelectedPorts.size===0;}
 }
 $('vlan-apply-membership').onclick=applyVLANMembership;

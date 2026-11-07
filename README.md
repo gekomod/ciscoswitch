@@ -74,6 +74,15 @@ ssh-keyscan -T 5 -p 22 -t rsa,ecdsa,ed25519 192.168.31.2 2>/dev/null | ssh-keyge
 
 Jeśli pojawi się kilka odcisków, upewnij się, który algorytm klucza hosta jest negocjowany przez aplikację. Nie ustawiaj `ssh.InsecureIgnoreHostKey`, nie wyłączaj kontroli odcisku i nie zapisuj lokalnego `.env` do GitHub.
 
+## Role panelu
+
+Panel obsługuje bazowy model ról dla konta skonfigurowanego przez `PANEL_USER` i `PANEL_PASSWORD`. Rola jest ustawiana przez `PANEL_ROLE` (domyślnie `admin`):
+- `viewer` — podgląd dashboardu i danych; bez surowego CLI, eksportu konfiguracji i pobierania backupów.
+- `operator` — odczyt oraz operacje konfiguracyjne; bez administracji kontami panelu.
+- `admin` — pełny dostęp.
+
+Autoryzacja jest egzekwowana po stronie backendu, a nie przez ukrywanie przycisków w przeglądarce. Każda sesja otrzymuje rolę przy logowaniu; endpoint `/api/session` zwraca nazwę zalogowanego konta i rolę. To jest pierwszy etap RBAC — obecnie istnieje jedno konto z konfiguracji środowiskowej. Trwały rejestr wielu użytkowników, zarządzanie kontami i reset haseł będą osobnym etapem; nie należy tworzyć dodatkowych kont przez ręczną edycję plików.
+
 ## Bezpieczeństwo i ograniczenia
 - Wyłączanie portów jest domyślnie zablokowane; świadome odblokowanie wymaga `ALLOW_PORT_SHUTDOWN=true`. Nie ustawiaj tej opcji bez lokalnego planu odzyskania dostępu.
 - Zmiany klienta DHCP na interfejsie zarządzającym VLAN 1 są domyślnie zablokowane; odblokowanie wymaga `ALLOW_MANAGEMENT_DHCP_CHANGE=true` i zapewnienia alternatywnego dostępu.

@@ -183,7 +183,7 @@ function receiveMonitorRecord(record){
 function connectMonitorStream(){
  const state=$('monitor-stream-state');if(typeof EventSource==='undefined'){if(state)state.textContent='BRAK OBSŁUGI STREAMU';return;}
  const stream=new EventSource('/api/monitor/stream');
- stream.addEventListener('ready',()=>{if(state){state.textContent='NA ŻYWO';state.classList.remove('stream-offline');state.classList.add('stream-online');}});
+ stream.addEventListener('ready',()=>{if(state){state.textContent='NA ŻYWO';state.classList.remove('stream-offline');state.classList.add('stream-online');}restoreMonitorHistory();});
  stream.addEventListener('monitor',event=>{try{receiveMonitorRecord(JSON.parse(event.data));}catch(_e){}});
  stream.onerror=()=>{if(state){state.textContent='PONOWNE ŁĄCZENIE';state.classList.remove('stream-online');state.classList.add('stream-offline');}};
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&stream.readyState===EventSource.CLOSED){stream.close();connectMonitorStream();}});

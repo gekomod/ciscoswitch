@@ -108,7 +108,8 @@ func validPanelRole(role string) bool { return role=="viewer" || role=="operator
 func roleAllows(role, method, path string) bool {
  if role=="admin" { return true }
  if method==http.MethodGet || method==http.MethodHead || method==http.MethodOptions { return true }
- safePost := path=="/api/command" || path=="/api/network/probe" || strings.HasSuffix(path,"/preview")
+ if role=="viewer" && (path=="/api/config/export" || path=="/api/config/backups/download" || path=="/api/audit") { return false }
+ safePost := path=="/api/network/probe" || strings.HasSuffix(path,"/preview")
  if safePost { return true }
  return role=="operator" && !strings.HasPrefix(path,"/api/users")
 }

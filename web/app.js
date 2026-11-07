@@ -181,15 +181,15 @@ function renderPortNetworkContext(){
   const result=ctx[key];if(result.error){showFriendlyResult(id,result.error,label);continue;}
   const output=String(result.output||'');
   if(key==='vlan'){
-   const parts=output.split('\\n\\n--- show vlan all ---\\n'),switchport=parts[0]||'',vlanLines=portContextLines(parts[1]||'',port);
-   const mode=(switchport.match(/TRYB:\\s*([^\\n]+)/i)||[])[1]||'nieznany';
-   const native=(switchport.match(/DEFAULT \\/ NATIVE VLAN:\\s*([^\\n]+)/i)||[])[1]||'brak danych';
-   const allowed=(switchport.match(/DOZWOLONE VLAN:\\s*([^\\n]+)/i)||[])[1]||'brak danych';
+   const parts=output.split('\n\n--- show vlan all ---\n'),switchport=parts[0]||'',vlanLines=portContextLines(parts[1]||'',port);
+   const mode=(switchport.match(/TRYB:\s*([^\n]+)/i)||[])[1]||'nieznany';
+   const native=(switchport.match(/DEFAULT \/ NATIVE VLAN:\s*([^\n]+)/i)||[])[1]||'brak danych';
+   const allowed=(switchport.match(/DOZWOLONE VLAN:\s*([^\n]+)/i)||[])[1]||'brak danych';
    showFriendlyResult(id,'Port '+port+' · tryb '+mode+' · VLAN domyślny '+native+' · wpisy VLAN '+vlanLines.length,'Konfiguracja VLAN portu');
    continue;
   }
   if(key==='mac'){
-   const macs=[...new Set((output.match(/\\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\\b/ig)||[]).map(v=>v.toUpperCase()))];
+   const macs=[...new Set((output.match(/\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b/ig)||[]).map(v=>v.toUpperCase()))];
    showFriendlyResult(id,macs.length?'Wykryto '+macs.length+' urządzeń na tym porcie.':'Brak urządzeń w tablicy adresów.',label);continue;
   }
   const names=portContextLines(output,port).filter(Boolean);
@@ -437,9 +437,9 @@ async function inspectVLAN(){
  vlanSelectedPorts.clear();updateVLANSelection();const box=$('vlan-inspect-raw'),map=$('vlan-port-map');map.innerHTML='';
  try{
   const d=await api('/api/command',{command:'show vlan '+id}),raw=d.output||'',members=new Map();
-  for(const m of raw.matchAll(/(port\\d+\\.\\d+\\.\\d+)\\s*\\(([ut])\\)/gi))members.set(m[1],m[2].toLowerCase());
+  for(const m of raw.matchAll(/(port\d+\.\d+\.\d+)\s*\(([ut])\)/gi))members.set(m[1],m[2].toLowerCase());
   showFriendlyResult('vlan-inspect-raw',raw,'Członkostwo VLAN '+id);
-  const ports=latestPorts.map(p=>{const mode=members.get(p.name)||'none';return '<div class="vlan-port-cell '+(mode==='u'?'is-untagged':mode==='t'?'is-tagged':'is-none')+'"><b>'+esc(p.name.replace(/^port1\\.0\\./,''))+'</b><small>'+(mode==='u'?'UNTAGGED':mode==='t'?'TAGGED':'Brak przypisania')+'</small><label class="vlan-port-select"><input type="checkbox" data-vlan-select="'+esc(p.name)+'" '+(vlanSelectedPorts.has(p.name)?'checked':'')+'> Zaznacz</label><button type="button" class="vlan-port-config" data-vlan-port="'+esc(p.name)+'" aria-label="Konfiguruj port '+esc(p.name)+'">Konfiguruj</button></div>';});
+  const ports=latestPorts.map(p=>{const mode=members.get(p.name)||'none';return '<div class="vlan-port-cell '+(mode==='u'?'is-untagged':mode==='t'?'is-tagged':'is-none')+'"><b>'+esc(p.name.replace(/^port1\.0\./,''))+'</b><small>'+(mode==='u'?'UNTAGGED':mode==='t'?'TAGGED':'Brak przypisania')+'</small><label class="vlan-port-select"><input type="checkbox" data-vlan-select="'+esc(p.name)+'" '+(vlanSelectedPorts.has(p.name)?'checked':'')+'> Zaznacz</label><button type="button" class="vlan-port-config" data-vlan-port="'+esc(p.name)+'" aria-label="Konfiguruj port '+esc(p.name)+'">Konfiguruj</button></div>';});
   map.innerHTML=ports.join('')||'<p class="empty">Najpierw odczytaj porty.</p>';
   if(!members.size)map.insertAdjacentHTML('beforeend','<p class="note">Nie udało się rozpoznać przypisań portów dla tego VLAN.</p>');
  }catch(e){showFriendlyResult('vlan-inspect-raw',e.message,'Odczyt VLAN');map.innerHTML='<p class="empty">Nie udało się pobrać członkostwa VLAN.</p>';}

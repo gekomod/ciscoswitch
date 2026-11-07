@@ -213,3 +213,14 @@ func TestBuildVLANPortMembershipCommandsRejectsInvalidAndRoutedPorts(t *testing.
   if _,err:=BuildVLANPortMembershipCommands(config,tc.ports,tc.vlan,tc.membership);err==nil{t.Errorf("expected rejection: %#v",tc)}
  }
 }
+
+func TestBuildVLANPortMembershipAllowsTaggingNativeNone(t *testing.T) {
+ config := `interface port1.0.5
+ switchport
+ switchport mode trunk
+ switchport trunk native vlan none
+!`
+ cmds,err:=BuildVLANPortMembershipCommands(config,[]string{"port1.0.5"},1,"tagged")
+ if err!=nil{t.Fatal(err)}
+ if !strings.Contains(strings.Join(cmds,"\n"),"switchport trunk allowed vlan add 1"){t.Fatalf("expected VLAN 1 to be tagged when native VLAN is none: %v",cmds)}
+}

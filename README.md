@@ -91,7 +91,7 @@ Jeśli pojawi się kilka odcisków, upewnij się, który algorytm klucza hosta j
 - Nie commituj pliku .env, haseł ani community SNMP.
 
 ## Dodatkowe moduły
-- Diagnostyka systemu: wersja, CPU, pamięć, środowisko, boot.
+- Diagnostyka systemu: wersja firmware, CPU, pamięć, temperatura, wentylatory, zasilacze i uptime w formie czytelnych wskaźników; nieparsowane odpowiedzi CLI nie są prezentowane użytkownikowi.
 - Routing statyczny i testy ping/traceroute.
 - SNMP: diagnostyka agenta, odbiorcy Trap v2c/v3 oraz tworzenie/usuwanie użytkownika SNMPv3 authPriv (SHA + DES).
 - SSH: podgląd i zarządzanie lokalnymi użytkownikami; panel blokuje usunięcie konta wskazanego w `SWITCH_SSH_USER`, aby nie odciąć własnego dostępu.

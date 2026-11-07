@@ -114,7 +114,52 @@ function initNavigationSearch(){
 }
 initNavigationSearch();
 
-function syncPortChoices(){for(const id of ['cfg-port','edgeport-port','detail-port']){const sel=$(id),old=sel.value;sel.innerHTML=latestPorts.map(p=>'<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>').join('');if([...sel.options].some(o=>o.value===old))sel.value=old;}}
+function syncPortChoices(){for(const id of ['cfg-port','edgeport-port','detail-port','bulk-source-port']){const sel=$(id),old=sel.value;sel.innerHTML=latestPorts.map(p=>'<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>').join('');if([...sel.options].some(o=>o.value===old))sel.value=old;}}
+$('bulk-profile').onchange=()=>{
+ const profile=$('bulk-profile').value;
+ if(!profile)return;
+ $('bulk-mode').value=profile;
+ if(profile==='access'){
+  $('bulk-allowed').value='';
+  $('bulk-allowed').disabled=true;
+  $('bulk-access-vlan').disabled=false;
+  $('bulk-native').disabled=true;
+ }else{
+  $('bulk-allowed').disabled=false;
+  $('bulk-access-vlan').disabled=true;
+  $('bulk-native').disabled=false;
+ }
+ $('bulk-output').textContent='Wybrano szablon '+(profile==='access'?'Access':'Trunk')+'. To tylko wstępne ustawienie formularza — przed zmianą sprawdź VLAN-y i porty.';
+};
+$('bulk-mode').onchange=()=>{
+ const trunk=$('bulk-mode').value==='trunk';
+ $('bulk-profile').value='';
+ $('bulk-access-vlan').disabled=trunk;
+ $('bulk-allowed').disabled=!trunk;
+ $('bulk-native').disabled=!trunk;
+};
+$('bulk-copy-source').onclick=async()=>{
+ const port=$('bulk-source-port').value,button=$('bulk-copy-source');
+ if(!port){alert('Najpierw wybierz port wzorcowy.');return;}
+ button.disabled=true;button.textContent='Odczytuję…';
+ try{
+  const details=await api('/api/port/switchport?port='+encodeURIComponent(port));
+  const mode=String(details.mode||'').toLowerCase(),native=Number.parseInt(details.defaultVlan,10);
+  if(!['access','trunk'].includes(mode))throw new Error('Nie rozpoznano trybu Access/Trunk portu wzorcowego.');
+  if(!Number.isInteger(native)||native<1||native>4094)throw new Error('Brak wiarygodnego odczytu domyślnego VLAN.');
+  if(mode==='trunk'&&(!Array.isArray(details.configuredVlans)||!details.configuredVlans.length))throw new Error('Nie udało się odczytać listy VLAN trunk.');
+  $('bulk-mode').value=mode;$('bulk-profile').value='';
+  $('bulk-access-vlan').value=String(native);$('bulk-native').value=String(native);
+  $('bulk-allowed').value=mode==='trunk'?details.configuredVlans.join(','):'';
+  $('bulk-access-vlan').disabled=mode==='trunk';$('bulk-allowed').disabled=mode!=='trunk';$('bulk-native').disabled=mode!=='trunk';
+  const source=latestPorts.find(p=>p.name===port);
+  if(source?.description)$('bulk-description').value=source.description;
+  if(source?.speed){const speed=String(source.speed).match(/(10|100|1000)\s*Mb/i);if(speed)$('bulk-speed').value=speed[1];}
+  $('bulk-output').textContent='Wczytano ustawienia '+port+': '+mode.toUpperCase()+', VLAN '+native+(mode==='trunk'?', dozwolone: '+details.configuredVlans.join(', '):'')+'. Ustaw listę portów docelowych i sprawdź podgląd przed zastosowaniem.';
+ }catch(e){$('bulk-output').textContent='Nie udało się skopiować konfiguracji: '+e.message;}
+ finally{button.disabled=false;button.textContent='Wczytaj ustawienia z portu';}
+};
+
 function render(){
  const q=$('filter').value.toLowerCase(),st=$('state-filter').value;
  const ps=latestPorts.filter(p=>(p.name||'').toLowerCase().includes(q)&&(st==='all'||p.oper===st));

@@ -83,7 +83,7 @@ Role:
 - `operator` — odczyt oraz operacje konfiguracyjne; bez administracji kontami panelu.
 - `admin` — pełny dostęp, w tym zarządzanie użytkownikami.
 
-Administrator zarządza kontami w sekcji „Użytkownicy i role”: może tworzyć konta, zmieniać role, blokować/odblokowywać dostęp i resetować hasła. Nowe hasła muszą mieć co najmniej 12 znaków. Hasła są przechowywane jako bcrypt; API nigdy nie zwraca hashy. Nie można zablokować ani zdegradować ostatniego aktywnego administratora. Konta panelu są niezależne od kont SSH na przełączniku.
+Administrator zarządza kontami w sekcji „Użytkownicy i role”: może tworzyć konta, zmieniać role, blokować/odblokowywać dostęp i resetować hasła. Nowe hasła muszą mieć co najmniej 12 znaków. Hasła są przechowywane jako bcrypt; API nigdy nie zwraca hashy. Nie można zablokować ani zdegradować ostatniego aktywnego administratora. Zmiana roli, blokada konta lub reset hasła unieważnia jego dotychczasowe sesje. Konta panelu są niezależne od kont SSH na przełączniku.
 
 Autoryzacja jest egzekwowana po stronie backendu. Sesja otrzymuje rolę przy logowaniu; endpoint `/api/session` zwraca nazwę zalogowanego konta i rolę. Rejestr JSON jest zapisywany atomowo, z uprawnieniami katalogu `0700` i pliku `0600`. Wykonaj kopię `data/users.json` razem z innymi lokalnymi danymi panelu; nie publikuj tego pliku w repozytorium. Uszkodzony lub pusty rejestr blokuje start zamiast automatycznie tworzyć nowe konto i nadpisywać dane.
 

@@ -144,7 +144,11 @@ func TestPanelUserStoreCreatesUpdatesAndProtectsLastAdmin(t *testing.T) {
 	if _, err := store.update(created.ID, nil, &disabled, nil); err != nil { t.Fatal(err) }
 	if _, ok := store.authenticate("network.operator", "a-long-new-password"); ok { t.Fatal("disabled user authenticated") }
 	demote := "viewer"
-	admin := store.list()[0]
+	var admin panelUserPublic
+	for _, candidate := range store.list() {
+		if candidate.Username == "rootadmin" { admin = candidate }
+	}
+	if admin.ID == "" { t.Fatal("bootstrap administrator missing from list") }
 	if _, err := store.update(admin.ID, &demote, nil, nil); err == nil || !strings.Contains(err.Error(), "ostatniego aktywnego administratora") { t.Fatalf("last admin demotion was not blocked: %v", err) }
 	if _, err := store.create("bad user", "a-long-new-password", "viewer"); err == nil { t.Fatal("invalid username accepted") }
 	if _, err := store.create("second.user", "short", "viewer"); err == nil { t.Fatal("short password accepted") }

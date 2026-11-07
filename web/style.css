@@ -105,3 +105,14 @@ body{background:#f4f6f9;color:var(--text)}.sidebar{background:#fff;border-right:
 .lacp-stats small,.lacp-stats b{display:block;overflow-wrap:anywhere}
 .lacp-stats small{color:var(--muted);font-size:10px;margin-bottom:5px}
 .lacp-stats b{font-size:12px}
+
+/* Sidebar section search */
+.nav-search-wrap{display:flex;align-items:center;gap:8px;margin:0 3px 12px;padding:8px 9px;border:1px solid #2a3c51;border-radius:10px;background:#101b29;color:#8196b0}
+.nav-search-wrap>span{font-size:18px;line-height:1}
+.nav-search{min-width:0;width:100%;padding:2px 0;border:0!important;outline:0!important;background:transparent!important;color:#e8f1fb!important;font-size:11px}
+.nav-search::placeholder{color:#71849a}
+.nav-search-wrap kbd{flex:none;padding:3px 5px;border:1px solid #34485e;border-radius:5px;color:#8fa2b8;font-size:9px;font-family:inherit}
+.nav-search:focus-visible{outline:0}
+.nav-search-wrap:focus-within{border-color:#4b91d8;box-shadow:0 0 0 3px #398fe922}
+.nav-search-empty{padding:10px 12px;color:#8196b0;font-size:11px}
+.sidebar .nav[hidden],.nav-search-empty[hidden]{display:none}

@@ -150,6 +150,14 @@ func TestPanelUserStoreCreatesUpdatesAndProtectsLastAdmin(t *testing.T) {
 	if _, err := store.create("second.user", "short", "viewer"); err == nil { t.Fatal("short password accepted") }
 }
 
+func TestPanelUserStoreExistingRegistryDoesNotNeedBootstrapEnvironment(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "users.json")
+	if _, err := openPanelUserStore(path, "rootadmin", "bootstrap-password", "admin"); err != nil { t.Fatal(err) }
+	store, err := openPanelUserStore(path, "", "", "")
+	if err != nil { t.Fatalf("existing registry should load without bootstrap env: %v", err) }
+	if len(store.list()) != 1 { t.Fatalf("existing registry lost accounts: %#v", store.list()) }
+}
+
 func TestPanelUserStoreDoesNotOverwriteCorruptOrEmptyRegistry(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "users.json")
 	if err := os.WriteFile(path, []byte("{}"), 0600); err != nil { t.Fatal(err) }

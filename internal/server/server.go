@@ -27,6 +27,7 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/api/config/backups", configBackupsHandler(svc.RunReadOnly, backupDir, retention))
  m.Handle("/api/config/backups/download", configBackupDownloadHandler(backupDir))
  m.Handle("/api/config/backups/compare", configBackupCompareHandler(svc.RunReadOnly, backupDir))
+ m.Handle("/api/config/backups/restore-preview", configBackupRestorePreviewHandler(backupDir))
  m.Handle("/api/audit", auditHistoryHandler(os.Getenv("AUDIT_LOG_PATH")))
  m.Handle("/api/monitor/history", monitorHistoryHandler(filepath.Join("data", "monitor-history.jsonl")))
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
@@ -476,6 +477,35 @@ func configBackupCompareHandler(run func(string) (string, error), dir string) ht
   w.Header().Set("Content-Type", "application/json; charset=utf-8")
   w.Header().Set("Cache-Control", "no-store")
   _ = json.NewEncoder(w).Encode(result)
+ })
+}
+
+// configBackupRestorePreviewHandler validates a snapshot for inspection only.
+// It deliberately does not send configuration to the switch: AlliedWare Plus restore
+// semantics are not yet verified for the supported hardware/firmware combination.
+func configBackupRestorePreviewHandler(dir string) http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+  if r.Method != http.MethodGet { http.Error(w, "method not allowed", http.StatusMethodNotAllowed); return }
+  id := r.URL.Query().Get("id")
+  if !validBackupID(id) { http.Error(w, "invalid backup id", http.StatusBadRequest); return }
+  data, err := os.ReadFile(filepath.Join(dir, id+".cfg"))
+  if os.IsNotExist(err) { http.NotFound(w, r); return }
+  if err != nil { http.Error(w, "backup read failed", http.StatusInternalServerError); return }
+  expected, err := os.ReadFile(filepath.Join(dir, id+".sha256"))
+  if os.IsNotExist(err) { http.Error(w, "backup is not verified; restore preview blocked", http.StatusConflict); return }
+  if err != nil { http.Error(w, "backup integrity metadata read failed", http.StatusInternalServerError); return }
+  sum := sha256.Sum256(data)
+  digest := hex.EncodeToString(sum[:])
+  if strings.TrimSpace(string(expected)) != digest { http.Error(w, "backup integrity check failed; restore preview blocked", http.StatusConflict); return }
+  lines := nonEmptyConfigLines(string(data))
+  if len(lines) == 0 { http.Error(w, "backup is empty; restore preview blocked", http.StatusConflict); return }
+  w.Header().Set("Content-Type", "application/json; charset=utf-8")
+  w.Header().Set("Cache-Control", "no-store")
+  _ = json.NewEncoder(w).Encode(map[string]any{
+   "backupId": id, "sha256": digest, "size": len(data), "lineCount": len(lines),
+   "integrityVerified": true, "restoreAvailable": false,
+   "message": "Kopia jest integralna i może być dalej analizowana. Przywracanie pozostaje zablokowane do czasu potwierdzenia bezpiecznej procedury dla AlliedWare Plus.",
+  })
  })
 }
 

@@ -434,14 +434,36 @@ $('apply-stp').onclick=async()=>{const mode=$('stp-mode').value,priority=Number(
 $('show-stp').onclick=async()=>{try{const d=await api('/api/command',{command:'show spanning-tree'});showFriendlyResult('stp-output',d.output,'Stan STP');}catch(e){showFriendlyResult('stp-output',e.message,'Stan STP');}};
 $('edgeport-toggle').onchange=async e=>{const port=$('edgeport-port').value,enabled=e.target.checked;if(!port){alert('Wybierz port edge.');e.target.checked=false;return;}if(!confirm((enabled?'Włączyć':'Wyłączyć')+' edgeport na '+port+'? Włączaj wyłącznie na portach końcowych.')){e.target.checked=!enabled;return;}try{const d=await api('/api/edgeport',{port,enabled});showFriendlyResult('stp-output',d.output,'Operacja STP');}catch(x){e.target.checked=!enabled;alert(x.message);}};
 
-function openPortDialog(port){
+async function openPortDialog(port){
  const dialog=$('port-dialog');if(!dialog)return;
  $('cfg-port').value=port||$('cfg-port').value;
- $('cfg-description').value='';
- $('cfg-mode').value='access';$('cfg-access-vlan').disabled=false;$('cfg-allowed').disabled=true;$('cfg-native').disabled=true;
- const current=latestPorts.find(p=>p.name===$('cfg-port').value);
- if(current&&current.description)$('cfg-description').value=current.description;
+ const selected=$('cfg-port').value,current=latestPorts.find(p=>p.name===selected);
+ const apply=$('apply-port-settings'),status=$('cfg-load-status');
+ $('cfg-description').value=current?.description||'';
+ $('cfg-mode').value='access';$('cfg-access-vlan').value='1';$('cfg-allowed').value='';$('cfg-native').value='1';
+ $('cfg-access-vlan').disabled=false;$('cfg-allowed').disabled=true;$('cfg-native').disabled=true;
+ $('cfg-speed').value='auto';$('cfg-duplex').value='auto';
+ apply.disabled=true;status.classList.remove('is-error');status.textContent='Odczytuję bieżącą konfigurację '+selected+'…';
  if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');
+ try{
+  const details=await api('/api/port/switchport?port='+encodeURIComponent(selected));
+  const mode=String(details.mode||'').toLowerCase();
+  const native=Number.parseInt(details.defaultVlan,10);
+  if(!['access','trunk'].includes(mode))throw new Error('Nie rozpoznano trybu switchport. Edycja została zablokowana, aby nie nadpisać nieznanej konfiguracji.');
+  if(!Number.isInteger(native)||native<1||native>4094)throw new Error('Nie udało się wiarygodnie odczytać domyślnego/native VLAN. Edycja została zablokowana.');
+  $('cfg-mode').value=mode;$('cfg-native').value=String(native);
+  if(mode==='access')$('cfg-access-vlan').value=String(native);
+  else{
+   if(!Array.isArray(details.configuredVlans)||!details.configuredVlans.length)throw new Error('Nie udało się odczytać listy VLAN dozwolonych na trunk. Edycja została zablokowana.');
+   $('cfg-allowed').value=details.configuredVlans.join(',');
+  }
+  $('cfg-access-vlan').disabled=mode==='trunk';$('cfg-allowed').disabled=mode!=='trunk';$('cfg-native').disabled=mode!=='trunk';
+  if(current?.speed){const speed=String(current.speed).match(/(10|100|1000)\s*Mb/i);if(speed)$('cfg-speed').value=speed[1];}
+  apply.disabled=false;
+  status.textContent='Odczytano bieżącą konfigurację: '+mode.toUpperCase()+' · '+(mode==='access'?'Access VLAN '+native:'Native VLAN '+native+' · dozwolone VLAN: '+details.configuredVlans.join(', '))+'. Sprawdź wartości przed zapisaniem.';
+ }catch(e){
+  status.classList.add('is-error');status.textContent='Nie można bezpiecznie wczytać konfiguracji portu: '+e.message+' Zmiany są zablokowane.';
+ }
 }
 $('close-port-dialog').onclick=()=>{const d=$('port-dialog');if(d.close)d.close();else d.removeAttribute('open');};
 $('port-dialog').addEventListener('click',e=>{if(e.target===$('port-dialog'))$('port-dialog').close();});

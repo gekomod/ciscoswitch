@@ -44,6 +44,41 @@ func TestSessionAuthLoginAndProtectedRoutes(t *testing.T) {
  if rec.Code!=http.StatusSeeOther {t.Fatalf("revoked session still accepted: %d",rec.Code)}
 }
 
+func TestSessionRolesEnforceReadOnlyAndOperatorPermissions(t *testing.T) {
+ cases:=[]struct{name,role,method,path string; want int}{
+  {"viewer blocks config change","viewer",http.MethodPost,"/api/port/settings",http.StatusForbidden},
+  {"viewer allows diagnostics","viewer",http.MethodPost,"/api/command",http.StatusNoContent},
+  {"viewer allows preview","viewer",http.MethodPost,"/api/vlan/preview",http.StatusNoContent},
+  {"operator allows config change","operator",http.MethodPost,"/api/port/settings",http.StatusNoContent},
+  {"operator blocks user administration","operator",http.MethodPost,"/api/users",http.StatusForbidden},
+  {"admin allows user administration","admin",http.MethodPost,"/api/users",http.StatusNoContent},
+ }
+ for _,tc:=range cases { t.Run(tc.name,func(t *testing.T){
+  mux:=http.NewServeMux()
+  for _,path:=range []string{"/api/command","/api/vlan/preview","/api/port/settings","/api/users"} { mux.HandleFunc(path,func(w http.ResponseWriter,r *http.Request){w.WriteHeader(http.StatusNoContent)}) }
+  h:=sessionAuthWithRole(mux,"admin","password8",tc.role)
+  login:=httptest.NewRequest(http.MethodPost,"/api/login",strings.NewReader("{\"username\":\"admin\",\"password\":\"password8\"}"))
+  login.Host="panel.local";login.Header.Set("Origin","http://panel.local")
+  loginRec:=httptest.NewRecorder();h.ServeHTTP(loginRec,login)
+  if loginRec.Code!=http.StatusOK {t.Fatalf("login status=%d body=%s",loginRec.Code,loginRec.Body.String())}
+  cookie:=loginRec.Result().Cookies()[0]
+  req:=httptest.NewRequest(tc.method,tc.path,nil);req.AddCookie(cookie);req.Host="panel.local"
+  if tc.method!=http.MethodGet {req.Header.Set("Origin","http://panel.local")}
+  rec:=httptest.NewRecorder();h.ServeHTTP(rec,req)
+  if rec.Code!=tc.want {t.Fatalf("status=%d want=%d body=%s",rec.Code,tc.want,rec.Body.String())}
+ }) }
+}
+
+func TestSessionEndpointReturnsIdentityAndRole(t *testing.T) {
+ h:=sessionAuthWithRole(http.NewServeMux(),"operator","password8","operator")
+ login:=httptest.NewRequest(http.MethodPost,"/api/login",strings.NewReader("{\"username\":\"operator\",\"password\":\"password8\"}"))
+ login.Host="panel.local";login.Header.Set("Origin","http://panel.local")
+ loginRec:=httptest.NewRecorder();h.ServeHTTP(loginRec,login)
+ cookie:=loginRec.Result().Cookies()[0]
+ req:=httptest.NewRequest(http.MethodGet,"/api/session",nil);req.AddCookie(cookie)
+ rec:=httptest.NewRecorder();h.ServeHTTP(rec,req)
+ if rec.Code!=http.StatusOK || !strings.Contains(rec.Body.String(),"\"username\":\"operator\"") || !strings.Contains(rec.Body.String(),"\"role\":\"operator\"") {t.Fatalf("identity response status=%d body=%s",rec.Code,rec.Body.String())}
+}
 func TestSessionAuthRejectsForeignOrigin(t *testing.T) {
  h:=sessionAuth(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){w.WriteHeader(http.StatusNoContent)}),"admin","password8")
  req:=httptest.NewRequest(http.MethodPost,"/api/login",strings.NewReader(`{"username":"admin","password":"password8"}`))

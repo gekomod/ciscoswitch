@@ -127,3 +127,11 @@ W szczegółach wybranego portu przycisk „Odczytaj VLAN / MAC / LLDP” pobier
 
 ### Centrum alarmów
 Panel agreguje zapisane zdarzenia monitoringu w jednym widoku, pokazuje liczniki według poziomu i umożliwia filtrowanie historii. Zdarzenia powstają z odczytów SNMP wykonywanych podczas działania panelu; zamknięta przeglądarka nie prowadzi samodzielnego pollingu.
+
+## Monitoring na żywo
+
+Dashboard odczytuje stan przełącznika przez `/api/status` co 15 sekund i parametry systemowe co 60 sekund, gdy karta panelu jest widoczna. Historia zdarzeń, zmian stanu portów, liczników błędów i próbek ruchu jest przechowywana lokalnie w `data/monitor-history.jsonl`.
+
+Endpoint `GET /api/monitor/stream` udostępnia uwierzytelniony strumień Server-Sent Events (SSE). Zdarzenia zapisane przez aktywne sesje panelu są rozsyłane do pozostałych otwartych sesji bez przeładowywania strony. Wolni odbiorcy nie blokują monitoringu; po rozłączeniu przeglądarka automatycznie nawiązuje połączenie ponownie. Strumień używa wyłącznie metadanych zdarzeń, bez surowego wyjścia CLI, konfiguracji ani sekretów.
+
+**Ważne:** nie jest to niezależny daemon monitorujący switch. Odczyty SNMP i wykrywanie zmian są wykonywane podczas działania otwartej sesji panelu. Jeśli wszystkie przeglądarki zostaną zamknięte, zbieranie nowych zdarzeń ustaje. Serwer wysyła heartbeat co 20 sekund, aby utrzymać połączenie SSE przez proxy.

@@ -227,6 +227,25 @@ func TestPortShutdownRequiresExplicitOptIn(t *testing.T) {
  if !portShutdownEnabled(){t.Fatal("explicit true should enable shutdown")}
 }
 
+func TestProtectedPortsHandlerReportsConfiguredInterfaces(t *testing.T) {
+ t.Setenv("PROTECTED_PORTS","port1.0.49, PORT1.0.52,port1.0.49,invalid,port1.0.99")
+ h:=protectedPortsHandler()
+ rec:=httptest.NewRecorder()
+ h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/ports/protection",nil))
+ if rec.Code!=http.StatusOK { t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String()) }
+ var got struct { Configured bool `json:"configured"`; Ports []string `json:"ports"`; Count int `json:"count"`; AutomaticDetection bool `json:"automaticDetection"` }
+ if err:=json.Unmarshal(rec.Body.Bytes(),&got);err!=nil { t.Fatal(err) }
+ if !got.Configured || got.Count!=2 || len(got.Ports)!=2 || got.Ports[0]!="port1.0.49" || got.Ports[1]!="port1.0.52" { t.Fatalf("unexpected protection state: %+v",got) }
+ if got.AutomaticDetection { t.Fatal("protection must not claim automatic detection") }
+ if rec.Header().Get("Cache-Control")!="no-store" { t.Fatal("expected no-store") }
+}
+
+func TestProtectedPortsHandlerRejectsWrites(t *testing.T) {
+ rec:=httptest.NewRecorder()
+ protectedPortsHandler().ServeHTTP(rec,httptest.NewRequest(http.MethodPost,"/api/ports/protection",nil))
+ if rec.Code!=http.StatusMethodNotAllowed { t.Fatalf("status=%d",rec.Code) }
+}
+
 func TestProtectedPortsAreMatchedExactly(t *testing.T) {
  t.Setenv("PROTECTED_PORTS","port1.0.49, port1.0.52")
  if !isProtectedPort("port1.0.49") || !isProtectedPort("port1.0.52"){t.Fatal("configured protected port not recognized")}

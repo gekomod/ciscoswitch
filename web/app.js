@@ -224,6 +224,23 @@ $('bulk-admin-apply').onclick=async()=>{
  }catch(e){out.textContent='BŁĄD: '+e.message;alert(e.message);}
  finally{button.disabled=false;}
 };
+$('bulk-edge-apply').onclick=async()=>{
+ const numbers=[...new Set($('bulk-edge-ports').value.split(',').map(x=>x.trim()).filter(Boolean))];
+ const enabled=$('bulk-edge-enabled').value==='true',out=$('bulk-edge-output'),button=$('bulk-edge-apply');
+ if(!numbers.length){alert('Wpisz numery portów, np. 1,2,3.');return;}
+ if(numbers.some(n=>!/^[0-9]+$/.test(n)||Number(n)<1||Number(n)>52)){alert('Porty muszą być numerami od 1 do 52.');return;}
+ const ports=numbers.map(n=>'port1.0.'+n);
+ const summary=(enabled?'WŁĄCZYĆ':'WYŁĄCZYĆ')+' EdgePort na: '+ports.join(', ')+'.\n\nNie obejmuj uplinków, LACP ani połączeń switch-switch. Przed zmianą zostanie wykonana kopia konfiguracji. Kontynuować?';
+ if(!confirm(summary))return;
+ button.disabled=true;out.textContent='Sprawdzanie zabezpieczeń i wykonywanie…';
+ try{
+  const result=await api('/api/ports/edgeport/bulk',{ports,enabled});
+  out.textContent=result.output||'Polecenia przekazane do switcha.';
+  addEvent((enabled?'Włączono':'Wyłączono')+' EdgePort: '+ports.join(', '),'warning');
+  await load();
+ }catch(e){out.textContent='BŁĄD: '+e.message;alert(e.message);}
+ finally{button.disabled=false;}
+};
 $('lacp-create').onclick=async()=>{const group=Number($('lacp-group').value),ports=$('lacp-ports').value,mode=$('lacp-mode').value;if(!confirm('Utworzyć LACP group '+group+' na portach '+ports+'? Porty powinny być wcześniej skonfigurowane identycznie po obu stronach łącza.'))return;try{const d=await api('/api/lacp',{group,ports,mode,delete:false});$('lacp-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
 $('lacp-delete').onclick=async()=>{const group=Number($('lacp-group').value),ports=$('lacp-ports').value;if(!confirm('Usunąć konfigurację channel-group z portów '+ports+'?'))return;try{const d=await api('/api/lacp',{group,ports,mode:$('lacp-mode').value,delete:true});$('lacp-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
 function parseLACPDetail(raw){

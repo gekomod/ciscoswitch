@@ -235,6 +235,69 @@ func TestConfigBackupDetectsTamperingAndBlocksDownload(t *testing.T) {
  if rec.Code!=http.StatusConflict{t.Fatalf("tampered download status=%d body=%s",rec.Code,rec.Body.String())}
 }
 
+func TestConfigBackupCompareReturnsCountsWithoutConfigurationContent(t *testing.T) {
+ dir := t.TempDir()
+ fixed := time.Date(2026, 11, 6, 15, 0, 0, 0, time.UTC)
+ backupContent := "hostname old\ninterface port1.0.1\n"
+ entry, err := writeConfigBackup(dir, backupContent, fixed)
+ if err != nil { t.Fatal(err) }
+
+ calls := 0
+ h := configBackupCompareHandler(func(command string) (string, error) {
+  calls++
+  if command != "show running-config" { t.Fatalf("unexpected command %q", command) }
+  return "hostname new\ninterface port1.0.1\n", nil
+ }, dir)
+ rec := httptest.NewRecorder()
+ h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/config/backups/compare?id="+entry.ID, nil))
+ if rec.Code != http.StatusOK { t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String()) }
+ if calls != 1 { t.Fatalf("switch reads=%d", calls) }
+
+ var result configBackupCompareResult
+ if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil { t.Fatal(err) }
+ if result.BackupID != entry.ID || result.SHA256 != entry.SHA256 { t.Fatalf("metadata mismatch: %+v", result) }
+ if result.BackupLines != 2 || result.CurrentLines != 2 { t.Fatalf("line counts: %+v", result) }
+ if result.AddedInCurrent != 1 || result.RemovedFromCurrent != 1 || result.Identical { t.Fatalf("unexpected comparison: %+v", result) }
+ if strings.Contains(rec.Body.String(), "hostname old") || strings.Contains(rec.Body.String(), "hostname new") {
+  t.Fatalf("configuration content must not be returned: %s", rec.Body.String())
+ }
+ if rec.Header().Get("Cache-Control") != "no-store" { t.Fatal("expected no-store") }
+}
+
+func TestConfigBackupCompareBlocksUnverifiedOrTamperedBackups(t *testing.T) {
+ dir := t.TempDir()
+ fixed := time.Date(2026, 11, 6, 16, 0, 0, 0, time.UTC)
+ verified, err := writeConfigBackup(dir, "hostname verified\n", fixed)
+ if err != nil { t.Fatal(err) }
+ if err := os.WriteFile(filepath.Join(dir, verified.ID+".cfg"), []byte("hostname tampered\n"), 0600); err != nil { t.Fatal(err) }
+
+ legacyID := fixed.Add(time.Second).Format("20060102T150405.000000000Z")
+ if err := os.WriteFile(filepath.Join(dir, legacyID+".cfg"), []byte("hostname legacy\n"), 0600); err != nil { t.Fatal(err) }
+
+ h := configBackupCompareHandler(func(string) (string, error) {
+  t.Fatal("switch must not be queried for an unverified backup")
+  return "", nil
+ }, dir)
+ for _, id := range []string{verified.ID, legacyID} {
+  rec := httptest.NewRecorder()
+  h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/config/backups/compare?id="+id, nil))
+  if rec.Code != http.StatusConflict { t.Fatalf("id=%s status=%d body=%s", id, rec.Code, rec.Body.String()) }
+ }
+}
+
+func TestConfigBackupCompareValidatesMethodAndBackupID(t *testing.T) {
+ h := configBackupCompareHandler(func(string) (string, error) {
+  t.Fatal("switch must not be queried")
+  return "", nil
+ }, t.TempDir())
+ rec := httptest.NewRecorder()
+ h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/config/backups/compare?id=invalid", nil))
+ if rec.Code != http.StatusMethodNotAllowed { t.Fatalf("method status=%d", rec.Code) }
+ rec = httptest.NewRecorder()
+ h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/config/backups/compare?id=../../.env", nil))
+ if rec.Code != http.StatusBadRequest { t.Fatalf("id status=%d", rec.Code) }
+}
+
 func TestLegacyBackupCanBeDownloadedAsUnverified(t *testing.T) {
  dir:=t.TempDir()
  id:=time.Date(2026,11,6,14,0,0,0,time.UTC).Format("20060102T150405.000000000Z")

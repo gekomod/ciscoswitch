@@ -225,3 +225,6 @@ body{background:#f4f6f9;color:var(--text)}.sidebar{background:#fff;border-right:
 @media(max-width:1100px){.port-map{grid-template-columns:repeat(8,minmax(0,1fr))}}
 @media(max-width:650px){.port-map{grid-template-columns:repeat(6,minmax(0,1fr))}.port-map-toolbar{align-items:flex-start;flex-direction:column}.port-map-toolbar label{width:100%;justify-content:space-between}.port-map-toolbar select{flex:1}}
 @media(max-width:390px){.port-map{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+.session-identity{display:inline-flex;align-items:center;max-width:220px;padding:7px 11px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--panel)}
+@media(max-width:720px){.session-identity{max-width:130px;font-size:11px;padding:6px 8px}}

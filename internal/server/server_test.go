@@ -139,7 +139,7 @@ func TestConfigBackupDownloadRejectsTraversal(t *testing.T) {
 func TestConfigBackupRestorePreviewOnlyValidatesAndNeverTouchesSwitch(t *testing.T) {
  dir := t.TempDir()
  fixed := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
- entry, err := writeConfigBackup(dir, "hostname sw1\\ninterface port1.0.1\\n", fixed)
+ entry, err := writeConfigBackup(dir, "hostname sw1\ninterface port1.0.1\n", fixed)
  if err != nil { t.Fatal(err) }
  h := configBackupRestorePreviewHandler(dir)
  rec := httptest.NewRecorder()
@@ -156,9 +156,9 @@ func TestConfigBackupRestorePreviewOnlyValidatesAndNeverTouchesSwitch(t *testing
 func TestConfigBackupRestorePreviewBlocksTamperedSnapshot(t *testing.T) {
  dir := t.TempDir()
  fixed := time.Date(2026, 11, 7, 10, 1, 0, 0, time.UTC)
- entry, err := writeConfigBackup(dir, "hostname sw1\\n", fixed)
+ entry, err := writeConfigBackup(dir, "hostname sw1\n", fixed)
  if err != nil { t.Fatal(err) }
- if err := os.WriteFile(filepath.Join(dir, entry.ID+".cfg"), []byte("hostname altered\\n"), 0600); err != nil { t.Fatal(err) }
+ if err := os.WriteFile(filepath.Join(dir, entry.ID+".cfg"), []byte("hostname altered\n"), 0600); err != nil { t.Fatal(err) }
  rec := httptest.NewRecorder()
  configBackupRestorePreviewHandler(dir).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/config/backups/restore-preview?id="+entry.ID, nil))
  if rec.Code != http.StatusConflict { t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String()) }

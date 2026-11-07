@@ -345,9 +345,19 @@ async function applyVLANMembership(){
   output.textContent=summary;
   if(!confirm(summary+'\n\nCzy wykonać te komendy?'))return;
   const result=await api('/api/vlan/ports/apply',payload);
-  output.textContent='WYNIK\n'+(result.output||'Komendy przekazane.')+'\n\nOdczytaj ponownie VLAN, aby zweryfikować członkostwo.';
+  let verificationText='WERYFIKACJA: nie udało się potwierdzić stanu portów.';
+  try{
+   const check=await api('/api/command',{command:'show vlan '+vlan});
+   const observed=new Map();
+   for(const match of String(check.output||'').matchAll(/(port\\d+\\.\\d+\\.\\d+)\\s*\\(([ut])\\)/gi))observed.set(match[1],match[2].toLowerCase());
+   const expected=membership==='tagged'?'t':'u';
+   const rows=ports.map(port=>{const actual=observed.get(port);return {port,actual,ok:actual===expected};});
+   const good=rows.filter(row=>row.ok).length;
+   verificationText='WERYFIKACJA '+(good===rows.length?'OK':'NIEPEŁNA')+' — '+good+'/'+rows.length+' portów ma oczekiwane członkostwo '+membership.toUpperCase()+' w VLAN '+vlan+'.\\n'+rows.map(row=>row.port+': '+(row.actual==='t'?'TAGGED':row.actual==='u'?'UNTAGGED':'BRAK W TABLICY')+(row.ok?' ✓':' — OCZEKIWANO '+membership.toUpperCase())).join('\\n');
+  }catch(checkError){verificationText+='\\n'+checkError.message;}
+  output.textContent='WYNIK KOMEND\\n'+(result.output||'Komendy przekazane.')+'\\n\\n'+verificationText;
   addEvent('Zmieniono członkostwo VLAN '+vlan+' na portach '+ports.join(', '));
-  alert('Komendy przekazane. Odczytaj ponownie VLAN i sprawdź stan portów.');
+  alert(verificationText);
   await inspectVLAN();
  }catch(e){output.textContent='Operacja zablokowana lub nieudana: '+e.message;alert(e.message);}
  finally{button.disabled=vlanSelectedPorts.size===0;}

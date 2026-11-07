@@ -474,6 +474,17 @@ func (s *Service) ConfigureSTP(mode string,priority int)(string,error) {
  if priority<0||priority>61440||priority%4096!=0{return "",fmt.Errorf("priorytet musi być wielokrotnością 4096 w zakresie 0–61440")}
  return s.runConfig([]string{"configure terminal","spanning-tree mode "+mode,fmt.Sprintf("spanning-tree priority %d",priority),"end"})
 }
+func BuildBulkPortEdgePortCommands(ports []string, enabled bool) ([]string,error) {
+ if len(ports)<1||len(ports)>52{return nil,fmt.Errorf("wybierz od 1 do 52 portów")}
+ command:="no spanning-tree edgeport";if enabled{command="spanning-tree edgeport"}
+ seen:=map[string]bool{};commands:=[]string{"configure terminal"}
+ for _,raw:=range ports{name:=strings.TrimSpace(raw);if !validPort(name){return nil,fmt.Errorf("nieprawidłowy port: %s",name)};if seen[name]{continue};seen[name]=true;commands=append(commands,"interface "+name,command)}
+ if len(seen)==0{return nil,fmt.Errorf("nie wybrano portów")}
+ commands=append(commands,"end");return commands,nil
+}
+func (s *Service) ConfigureBulkPortEdgePort(ports []string,enabled bool)(string,error){
+ cmds,err:=BuildBulkPortEdgePortCommands(ports,enabled);if err!=nil{return "",err};return s.runConfig(cmds)
+}
 func (s *Service) SetPortEdgePort(name string,enabled bool)(string,error) {
  if !validPort(name){return "",fmt.Errorf("nieprawidłowy port")}
  cmd:="no spanning-tree edgeport";if enabled{cmd="spanning-tree edgeport"}

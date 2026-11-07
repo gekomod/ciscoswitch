@@ -307,3 +307,7 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 #panel-users .inline-check input{width:16px;height:16px}
 #panel-users-status{margin:12px 0}
 #panel-users[hidden],#panel-users-nav[hidden]{display:none!important}
+
+#monitor-stream-state.stream-online{color:var(--success)}
+#monitor-stream-state.stream-offline{color:var(--warning)}
+#monitor-stream-state i{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 15%,transparent)}

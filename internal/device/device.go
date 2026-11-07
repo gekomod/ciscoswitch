@@ -408,6 +408,27 @@ func BuildPortSettingsCommands(name,mode string,access int,allowed string,native
 func (s *Service) ConfigureVLAN(id int,name string,remove bool)(string,error) {
  cmds,err:=BuildVLANCommands(id,name,remove);if err!=nil{return "",err};return s.runConfig(cmds)
 }
+func BuildBulkPortSettingsCommands(ports []string,mode string,access int,allowed string,native int,speed,duplex,description string)([]string,error) {
+ if len(ports)<1||len(ports)>52{return nil,fmt.Errorf("wybierz od 1 do 52 portów")}
+ seen:=map[string]bool{}
+ commands:=[]string{"configure terminal"}
+ for _,raw:=range ports {
+  name:=strings.TrimSpace(raw)
+  if !validPort(name){return nil,fmt.Errorf("nieprawidłowy port: %s",name)}
+  if seen[name]{continue};seen[name]=true
+  part,err:=BuildPortSettingsCommands(name,mode,access,allowed,native,speed,duplex,description)
+  if err!=nil{return nil,fmt.Errorf("%s: %w",name,err)}
+  commands=append(commands,part[1:len(part)-1]...)
+ }
+ if len(seen)==0{return nil,fmt.Errorf("nie wybrano portów")}
+ commands=append(commands,"end")
+ return commands,nil
+}
+func (s *Service) ConfigureBulkPortSettings(ports []string,mode string,access int,allowed string,native int,speed,duplex,description string)(string,error) {
+ cmds,err:=BuildBulkPortSettingsCommands(ports,mode,access,allowed,native,speed,duplex,description)
+ if err!=nil{return "",err}
+ return s.runConfig(cmds)
+}
 func (s *Service) ConfigurePortSettings(name,mode string,access int,allowed string,native int,speed,duplex,description string)(string,error) {
  cmds,err:=BuildPortSettingsCommands(name,mode,access,allowed,native,speed,duplex,description);if err!=nil{return "",err};return s.runConfig(cmds)
 }

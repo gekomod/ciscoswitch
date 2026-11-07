@@ -429,6 +429,29 @@ func (s *Service) ConfigureBulkPortSettings(ports []string,mode string,access in
  if err!=nil{return "",err}
  return s.runConfig(cmds)
 }
+
+// BuildBulkPortActionCommands builds one validated admin-state change for a set of ports.
+func BuildBulkPortActionCommands(ports []string, action string) ([]string, error) {
+ if len(ports)<1 || len(ports)>52 { return nil, fmt.Errorf("wybierz od 1 do 52 portów") }
+ command := ""
+ switch action { case "enable": command="no shutdown"; case "disable": command="shutdown"; default: return nil,fmt.Errorf("nieobsługiwana operacja portu") }
+ seen:=map[string]bool{}
+ commands:=[]string{"configure terminal"}
+ for _,raw:=range ports {
+  name:=strings.TrimSpace(raw)
+  if !validPort(name) { return nil,fmt.Errorf("nieprawidłowy port: %s",name) }
+  if seen[name] { continue }; seen[name]=true
+  commands=append(commands,"interface "+name,command)
+ }
+ if len(seen)==0 { return nil,fmt.Errorf("nie wybrano portów") }
+ commands=append(commands,"end")
+ return commands,nil
+}
+func (s *Service) ConfigureBulkPortAction(ports []string, action string) (string,error) {
+ cmds,err:=BuildBulkPortActionCommands(ports,action); if err!=nil{return "",err}
+ return s.runConfig(cmds)
+}
+
 func (s *Service) ConfigurePortSettings(name,mode string,access int,allowed string,native int,speed,duplex,description string)(string,error) {
  cmds,err:=BuildPortSettingsCommands(name,mode,access,allowed,native,speed,duplex,description);if err!=nil{return "",err};return s.runConfig(cmds)
 }

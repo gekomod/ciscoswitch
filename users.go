@@ -67,7 +67,9 @@ func openPanelUserStore(path, bootstrapUsername, bootstrapPassword, bootstrapRol
 			if id == "" || user.ID != id || !panelUsernamePattern.MatchString(user.Username) || !validPanelRole(user.Role) || user.PasswordHash == "" {
 				return nil, fmt.Errorf("nieprawidłowy wpis użytkownika %q", id)
 			}
+			if user.Active && user.Role == "admin" { activeAdmins++ }
 		}
+		if activeAdmins == 0 { return nil, errors.New("rejestr nie zawiera aktywnego administratora; start zablokowany") }
 		if err := os.Chmod(path, 0600); err != nil {
 			return nil, fmt.Errorf("nie można ustawić uprawnień rejestru użytkowników: %w", err)
 		}

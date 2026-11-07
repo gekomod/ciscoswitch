@@ -228,3 +228,32 @@ body{background:#f4f6f9;color:var(--text)}.sidebar{background:#fff;border-right:
 
 .session-identity{display:inline-flex;align-items:center;max-width:220px;padding:7px 11px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--panel)}
 @media(max-width:720px){.session-identity{max-width:130px;font-size:11px;padding:6px 8px}}
+
+/* Allied Network Control Center — refreshed application shell */
+:root{--bg:#080e17;--surface:#101a28;--surface-2:#142235;--surface-3:#1a2c42;--line:#263b52;--line-soft:#1b2c40;--accent:#62adff;--accent-2:#378ce9;--green:#42d6a0;--red:#ff7185;--amber:#f0bd67;--radius:15px}
+body{background:radial-gradient(ellipse at 78% -20%,rgba(44,104,165,.19),transparent 42%),linear-gradient(180deg,#0a1320 0%,var(--bg) 360px);font-size:13px}
+.sidebar{width:264px;padding:22px 14px 16px;background:rgba(8,15,25,.97);border-right:1px solid #203249;backdrop-filter:blur(20px)}
+.brand{padding:2px 10px 25px;gap:12px}.brand-mark{width:42px;height:42px;border-radius:12px;background:linear-gradient(145deg,#8bc9ff,#327ed0);color:#061525;font-size:14px;box-shadow:0 6px 20px #3988ed44}
+.brand b{font-size:14px;letter-spacing:-.35px}.brand small{font-size:8px;letter-spacing:2px;color:#718aa6}
+.side-label{font-size:9px;letter-spacing:1.8px;padding:0 12px 10px;color:#607994}
+.nav-search-wrap{margin:0 4px 17px;border:1px solid #263c54;background:#0d1928;border-radius:10px}.nav-search-wrap:focus-within{border-color:#579ee8;box-shadow:0 0 0 3px #579ee81c}
+.sidebar-nav-scroll{overflow:auto;scrollbar-width:thin;scrollbar-color:#30455c transparent;padding:0 2px 10px}
+.nav-group{margin:0 0 17px}.nav-group-title{padding:0 11px 7px;color:#607994;font-size:9px;font-weight:800;letter-spacing:1.55px}
+.nav{gap:11px;padding:9px 11px;margin:2px 0;border-radius:9px;font-size:11px;font-weight:600;color:#9aacc0;border-color:transparent;min-height:36px}
+.nav-icon{width:19px;flex:none;text-align:center;font-size:15px;color:#7895b4}
+.nav.active,.nav:hover{background:linear-gradient(90deg,#183653,#13283e);border-color:#274969;color:#f1f7ff;box-shadow:inset 2px 0 #65b3ff}.nav.active .nav-icon{color:#8bc7ff}
+.side-bottom{margin-top:auto;background:#0d1927;border:1px solid #20344a;border-radius:11px;padding:12px;color:#c6d4e4}
+.main{margin-left:264px;max-width:1760px;padding:0 42px 48px}
+.topbar{height:66px;border-bottom-color:#1e3045;background:rgba(8,14,23,.88)}.topbar b{color:#eef5fc}.top-actions{gap:10px}
+.online{padding:7px 10px;border:1px solid #244c43;border-radius:20px;background:#10271f}
+.session-identity{padding:7px 10px;border:1px solid #293d54;border-radius:9px;background:#101d2c}
+.welcome{padding:37px 0 24px;align-items:center}.welcome h1{font-size:32px;letter-spacing:-1.1px}.welcome h1 em{color:#79baff}
+.device-chip{background:linear-gradient(130deg,#152a40,#101b29);border-color:#2b4561;border-radius:13px}
+.metrics{gap:13px}.metric,.panel{background:linear-gradient(145deg,rgba(20,33,49,.98),rgba(14,24,37,.98));border-color:#253a51;box-shadow:0 8px 26px #0002}
+.metric{border-radius:14px;padding:18px 19px;min-height:118px}.metric-top{font-size:9px;letter-spacing:1.25px}.metric strong{font-size:28px}
+.panel{border-radius:15px;padding:21px}.panel h2{font-size:17px}.section-head{margin-bottom:16px}
+.btn{border-radius:9px}.btn.ghost{background:#14263a;border-color:#2b435e;color:#d3e2f1}.btn.ghost:hover{background:#1c3550;border-color:#47709a}
+.table-wrap{border-color:#23384e;border-radius:11px}table{background:#0d1927}th{background:#142337;color:#8ea7c1;border-bottom-color:#2b4058}td{border-bottom-color:#1b2d41}tbody tr:hover{background:#14273b}
+.nav:focus-visible,.btn:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #71b8ff;outline-offset:2px}
+@media(max-width:1100px){.sidebar{width:230px}.main{margin-left:230px;padding:0 24px 36px}}
+@media(max-width:760px){.sidebar{position:relative;width:auto;height:auto;inset:auto;padding:12px}.brand{padding-bottom:12px}.sidebar-nav-scroll{max-height:210px}.main{margin:0;padding:0 14px 30px}.topbar{position:relative;height:auto;min-height:58px;gap:10px;flex-wrap:wrap;padding:10px 0}.top-actions{flex-wrap:wrap;gap:6px}.welcome{padding:25px 0 18px;align-items:flex-start;flex-direction:column}.welcome h1{font-size:27px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}

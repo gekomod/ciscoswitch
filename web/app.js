@@ -633,16 +633,24 @@ $('alert-refresh')?.addEventListener('click',async()=>{const b=$('alert-refresh'
 const vlanSelectedPorts=new Set();
 function updateVLANSelection(){const count=$('vlan-select-count');if(count)count.textContent='Zaznaczono: '+vlanSelectedPorts.size;const use=$('vlan-use-selected');if(use)use.disabled=vlanSelectedPorts.size===0;const apply=$('vlan-apply-membership');if(apply)apply.disabled=vlanSelectedPorts.size===0;}
 async function inspectVLAN(){
- const id=Number($('vlan-inspect-id').value);if(!Number.isInteger(id)||id<1||id>4094){alert('VLAN ID musi być w zakresie 1–4094.');return;}
- vlanSelectedPorts.clear();updateVLANSelection();const box=$('vlan-inspect-raw'),map=$('vlan-port-map');map.innerHTML='';
+ const id=Number($('vlan-inspect-id').value),status=$('vlan-inspect-status'),map=$('vlan-port-map');
+ if(!Number.isInteger(id)||id<1||id>4094){alert('VLAN ID musi być w zakresie 1–4094.');return;}
+ vlanSelectedPorts.clear();updateVLANSelection();map.innerHTML='';status.textContent='Sprawdzanie dostępności switcha i odświeżanie portów…';
  try{
-  const d=await api('/api/command',{command:'show vlan '+id}),raw=d.output||'',members=new Map();
+  const state=await api('/api/status');
+  if(!state.reachable)throw new Error('Switch jest nieosiągalny.');
+  if(!Array.isArray(state.ports)||!state.ports.length||!state.ports.every(p=>p&&p.name))throw new Error('Brak kompletnej listy portów z aktualnego odczytu.');
+  latestPorts=sorted(state.ports);
+  const d=await api('/api/command',{command:'show vlan '+id}),raw=String(d.output||'').trim();
+  if(!raw)throw new Error('Switch zwrócił pustą odpowiedź dla VLAN '+id+'.');
+  const members=new Map();
   for(const m of raw.matchAll(/(port\d+\.\d+\.\d+)\s*\(([ut])\)/gi))members.set(m[1],m[2].toLowerCase());
-  showFriendlyResult('vlan-inspect-raw',raw,'Członkostwo VLAN '+id);
-  const ports=latestPorts.map(p=>{const mode=members.get(p.name)||'none';return '<div class="vlan-port-cell '+(mode==='u'?'is-untagged':mode==='t'?'is-tagged':'is-none')+'"><b>'+esc(p.name.replace(/^port1\.0\./,''))+'</b><small>'+(mode==='u'?'UNTAGGED':mode==='t'?'TAGGED':'Brak przypisania')+'</small><label class="vlan-port-select"><input type="checkbox" data-vlan-select="'+esc(p.name)+'" '+(vlanSelectedPorts.has(p.name)?'checked':'')+'> Zaznacz</label><button type="button" class="vlan-port-config" data-vlan-port="'+esc(p.name)+'" aria-label="Konfiguruj port '+esc(p.name)+'">Konfiguruj</button></div>';});
-  map.innerHTML=ports.join('')||'<p class="empty">Najpierw odczytaj porty.</p>';
-  if(!members.size)map.insertAdjacentHTML('beforeend','<p class="note">Nie udało się rozpoznać przypisań portów dla tego VLAN.</p>');
- }catch(e){showFriendlyResult('vlan-inspect-raw',e.message,'Odczyt VLAN');map.innerHTML='<p class="empty">Nie udało się pobrać członkostwa VLAN.</p>';}
+  $('vlan-inspect-raw').textContent=raw;
+  const ports=latestPorts.map(p=>{const mode=members.get(p.name)||'none';return '<div class="vlan-port-cell '+(mode==='u'?'is-untagged':mode==='t'?'is-tagged':'is-none')+'"><b>'+esc(p.name.replace(/^port1\.0\./,''))+'</b><small>'+(mode==='u'?'UNTAGGED':mode==='t'?'TAGGED':'Brak przypisania / nieodczytane')+'</small><label class="vlan-port-select"><input type="checkbox" data-vlan-select="'+esc(p.name)+'"> Zaznacz</label><button type="button" class="vlan-port-config" data-vlan-port="'+esc(p.name)+'" aria-label="Konfiguruj port '+esc(p.name)+'">Konfiguruj</button></div>';});
+  map.innerHTML=ports.join('')||'<p class="empty">Brak portów.</p>';
+  const tagged=[...members.values()].filter(v=>v==='t').length,untagged=[...members.values()].filter(v=>v==='u').length;
+  status.textContent=members.size?'VLAN '+id+': rozpoznano '+members.size+' przypisań portów ('+tagged+' tagged, '+untagged+' untagged). Pozostałe porty pokazano jako „Brak przypisania / nieodczytane”.':'Odczytano odpowiedź VLAN '+id+', ale parser nie rozpoznał formatu członkostwa. Nie oznaczamy portów jako nieprzypisanych — sprawdź szczegóły odpowiedzi poniżej.';
+ }catch(e){$('vlan-inspect-raw').textContent='';status.textContent='Nie udało się wiarygodnie odczytać VLAN: '+e.message;map.innerHTML='<p class="empty">Brak aktualnych danych — mapa VLAN nie została zaktualizowana.</p>';}
 }
 $('inspect-vlan').onclick=inspectVLAN;
 $('vlan-port-map').addEventListener('click',e=>{const button=e.target.closest('[data-vlan-port]');if(!button)return;openPortDialog(button.dataset.vlanPort);});

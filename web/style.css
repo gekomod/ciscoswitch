@@ -150,3 +150,10 @@ body{background:#f4f6f9;color:var(--text)}.sidebar{background:#fff;border-right:
 .device-state-online{color:var(--green)}.device-state-offline{color:var(--red)}
 
 .vlan-membership-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 8px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}.vlan-membership-tools label{font-size:11px;color:var(--muted)}.vlan-membership-tools select{min-width:190px;max-width:100%}#vlan-membership-output{max-height:180px;margin:0 0 12px;white-space:pre-wrap;overflow:auto}
+
+/* Compact, human-readable hardware health metrics */
+.system-output-grid article{display:flex;flex-direction:column;gap:7px;min-height:92px;justify-content:center}
+.system-output-grid article small{font-size:10px;letter-spacing:1px;font-weight:800;color:var(--muted)}
+.system-output-grid article b{font-size:18px;line-height:1.35;overflow-wrap:anywhere;color:var(--text)}
+.system-output-grid .system-wide b{font-size:14px}
+.lacp-source{font-size:11px;color:var(--muted)}

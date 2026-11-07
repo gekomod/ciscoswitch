@@ -257,7 +257,7 @@ func compareConfigLines(running, startup string) configCompareResult {
 }
 
 func nonEmptyConfigLines(raw string) []string {
- lines := strings.Split(strings.ReplaceAll(raw, "\\r\\n", "\\n"), "\\n")
+ lines := strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n")
  out := make([]string, 0, len(lines))
  for _, line := range lines {
   line = strings.TrimSpace(line)

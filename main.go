@@ -128,16 +128,20 @@ func sessionAuthWithRole(next http.Handler, username, password, role string) htt
 }
 
 func sessionAuthWithUsers(next http.Handler, users *panelUserStore) http.Handler {
-	return sessionAuthWithAuthenticator(next, func(username, password string) (string, string, bool) {
+	return sessionAuthWithAuthenticatorAndValidator(next, func(username, password string) (string, string, bool) {
 		user, ok := users.authenticate(username, password)
 		if !ok {
 			return "", "", false
 		}
 		return user.Username, user.Role, true
-	})
+	}, users.sessionValid)
 }
 
 func sessionAuthWithAuthenticator(next http.Handler, authenticate func(string, string) (string, string, bool)) http.Handler {
+	return sessionAuthWithAuthenticatorAndValidator(next, authenticate, nil)
+}
+
+func sessionAuthWithAuthenticatorAndValidator(next http.Handler, authenticate func(string, string) (string, string, bool), validate func(string, string) bool) http.Handler {
 	sessions := &panelSessions{values: make(map[string]panelSession)}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -180,6 +184,11 @@ func sessionAuthWithAuthenticator(next http.Handler, authenticate func(string, s
 		cookie, err := r.Cookie(panelSessionCookie)
 		session, valid := panelSession{}, false
 		if err == nil { session, valid = sessions.get(cookie.Value) }
+		if valid && validate != nil && !validate(session.username, session.role) {
+			if err == nil { sessions.revoke(cookie.Value) }
+			valid = false
+			clearPanelCookie(w, r)
+		}
 		if !valid {
 			w.Header().Set("Cache-Control", "no-store")
 			if strings.HasPrefix(path, "/api/") { http.Error(w, "session expired", http.StatusUnauthorized); return }

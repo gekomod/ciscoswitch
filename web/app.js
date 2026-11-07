@@ -2,8 +2,8 @@ function showFriendlyResult(id,raw,label){
  const el=$(id);if(!el)return;
  const value=String(raw||'').trim();
  const lines=value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
- const failed=!value||/timed out|przekroczono|permission denied|authentication failed|not supported|nie udało|odmowa|failed|error:/i.test(value);
- const empty=/no entries|no records|not found|empty|brak wpis|no .* found/i.test(value);
+ const failed=/timed out|przekroczono|permission denied|authentication failed|not supported|nie udało|odmowa|failed|error:/i.test(value);
+ const empty=!value||/no entries|no records|not found|empty|brak wpis|brak danych|brak odpowiedzi|nie wykryto|no data|no .* found/i.test(value);
  const count=lines.filter(x=>!/^[-=+| ]+$/.test(x)&&!/^\s*(vlan|port|interface|address|protocol|destination|neighbor|mac)\b/i.test(x)).length;
  el.classList.add('friendly-result');
  el.innerHTML='<div class="friendly-result-icon '+(failed?'is-muted':empty?'is-muted':'is-ok')+'">'+(failed?'—':empty?'○':'✓')+'</div><div class="friendly-result-copy"><b>'+esc(failed?'Nie udało się odczytać':empty?'Brak aktywnych wpisów':label+' — odczytano')+'</b><span>'+esc(failed?'Sprawdź łączność z urządzeniem i uprawnienia odczytu.':empty?'Switch nie zgłosił obecnie danych w tej kategorii.':'Odczyt zakończony poprawnie. Wykryto '+count+' pozycji.')+'</span></div><span class="friendly-result-count">'+(failed||empty?'—':fmtCount(count))+'</span>';

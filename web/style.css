@@ -284,3 +284,9 @@ main pre#config-diff{display:block!important;white-space:normal!important;font:i
 :root[data-theme="light"] .friendly-result-copy span{color:#60738a}
 :root[data-theme="light"] .friendly-result-icon.is-muted{background:#e9eff5;color:#65778b}
 :root[data-theme="light"] .friendly-result-count{color:#2878d0}
+
+/* Keep guided diagnostic actions visible while raw payload containers stay hidden */
+#diagnostics .diag-grid{display:grid!important}
+#diagnostics .neighbor-tools{display:block!important}
+#diagnostics .diag-grid>div,#diagnostics .neighbor-tools{min-width:0}
+#diagnostics .friendly-result{margin:8px 0}

@@ -224,3 +224,32 @@ func TestBuildVLANPortMembershipAllowsTaggingNativeNone(t *testing.T) {
  if err!=nil{t.Fatal(err)}
  if !strings.Contains(strings.Join(cmds,"\n"),"switchport trunk allowed vlan add 1"){t.Fatalf("expected VLAN 1 to be tagged when native VLAN is none: %v",cmds)}
 }
+
+func TestParseSwitchportDetailsExactPort(t *testing.T) {
+ output := `Interface name : port1.0.1
+Switchport mode : access
+Ingress filter : enable
+Acceptable frame types : all
+Default Vlan : 20
+Configured Vlans : 20
+
+Interface name : port1.0.10
+Switchport mode : trunk
+Ingress filter : enable
+Acceptable frame types : all
+Default Vlan : 1
+Configured Vlans : 1 4 5 6 7 8
+`
+ got, err := ParseSwitchportDetails(output, "port1.0.10")
+ if err != nil { t.Fatal(err) }
+ if got.Mode != "trunk" || got.DefaultVLAN != "1" || len(got.ConfiguredVLANs) != 6 || got.ConfiguredVLANs[1] != 4 {
+  t.Fatalf("unexpected parsed details: %+v", got)
+ }
+ if !strings.Contains(got.Raw, "port1.0.10") || strings.Contains(got.Raw, "port1.0.1\n") { t.Fatalf("wrong interface block: %q", got.Raw) }
+}
+func TestParseSwitchportDetailsDoesNotGuessMissingFields(t *testing.T) {
+ got, err := ParseSwitchportDetails("Interface name : port1.0.5\nSwitchport mode : access\n", "port1.0.5")
+ if err != nil { t.Fatal(err) }
+ if got.Mode != "access" || got.DefaultVLAN != "" || len(got.ConfiguredVLANs) != 0 { t.Fatalf("missing fields must stay empty: %+v", got) }
+ if _, err := ParseSwitchportDetails("Interface name : port1.0.50\nSwitchport mode : trunk", "port1.0.5"); err == nil { t.Fatal("must not match a prefix port name") }
+}

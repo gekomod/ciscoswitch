@@ -107,8 +107,8 @@ type panelIdentity struct { Username string; Role string }
 func validPanelRole(role string) bool { return role=="viewer" || role=="operator" || role=="admin" }
 func roleAllows(role, method, path string) bool {
  if role=="admin" { return true }
- if method==http.MethodGet || method==http.MethodHead || method==http.MethodOptions { return true }
  if role=="viewer" && (path=="/api/config/export" || path=="/api/config/backups/download" || path=="/api/audit") { return false }
+ if method==http.MethodGet || method==http.MethodHead || method==http.MethodOptions { return true }
  safePost := path=="/api/network/probe" || strings.HasSuffix(path,"/preview")
  if safePost { return true }
  return role=="operator" && !strings.HasPrefix(path,"/api/users")

@@ -236,8 +236,9 @@ function renderPortNetworkContext(){
    const macs=[...new Set((output.match(/\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b/ig)||[]).map(v=>v.toUpperCase()))];
    showFriendlyResult(id,macs.length?'Wykryto '+macs.length+' urządzeń na tym porcie.':'Brak urządzeń w tablicy adresów.',label);continue;
   }
-  const names=portContextLines(output,port).filter(Boolean);
-  showFriendlyResult(id,names.length?'Wykryto '+names.length+' sąsiadów LLDP na tym porcie.':'Nie wykryto sąsiada LLDP.',label);
+  const neighbors=parseLLDPDetails(output).filter(item=>item.localPort.toLowerCase()===port.toLowerCase());
+  const summary=neighbors.map(item=>[item.systemName||item.chassisId||'Sąsiad bez nazwy',item.portId?'port zdalny '+item.portId:'',item.capabilities].filter(Boolean).join(' · '));
+  showFriendlyResult(id,summary.length?summary.join(' | '):'Nie wykryto sąsiada LLDP na tym porcie.',label);
  }
 }
 async function loadPortNetworkContext(){

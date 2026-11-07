@@ -179,10 +179,24 @@ $('refresh-system').onclick=refreshSystem;
 async function inspectVLAN(){const id=Number($('vlan-inspect-id').value);if(!Number.isInteger(id)||id<1||id>4094){alert('VLAN ID musi być w zakresie 1–4094.');return;}const box=$('vlan-inspect-raw'),map=$('vlan-port-map');box.textContent='Odczyt VLAN '+id+'…';map.innerHTML='';try{const d=await api('/api/command',{command:'show vlan '+id});const raw=d.output||'';box.textContent=raw||'Brak odpowiedzi CLI';const members=new Map();for(const m of raw.matchAll(/(port\d+\.\d+\.\d+)\s*\(([ut])\)/gi))members.set(m[1],m[2].toLowerCase());const ports=latestPorts.map(p=>{const mode=members.get(p.name)||'none';return '<div class="vlan-port-cell '+(mode==='u'?'is-untagged':mode==='t'?'is-tagged':'is-none')+'"><b>'+esc(p.name.replace(/^port1\.0\./,''))+'</b><small>'+(mode==='u'?'UNTAGGED':mode==='t'?'TAGGED':'—')+'</small></div>';});map.innerHTML=ports.join('')||'<p class="empty">Najpierw odczytaj porty SNMP.</p>';if(members.size===0)map.insertAdjacentHTML('beforeend','<p class="note">Nie rozpoznano członków portów w odpowiedzi CLI. Sprawdź surowy wynik powyżej.</p>');}catch(e){box.textContent=e.message;map.innerHTML='<p class="empty">Nie udało się pobrać członkostwa VLAN.</p>';}}
 $('inspect-vlan').onclick=inspectVLAN;
 let topologyData={rows:[],raw:{}};
+const ouiVendors={
+ '000c29':'VMware','005056':'VMware','001c42':'Parallels',
+ '001b63':'Apple','3c22fb':'Apple','f0d1a9':'Apple','a4b1c1':'Apple','acde48':'Apple','f0dbf8':'Apple',
+ '001b21':'Intel','001f3b':'Intel','3c970e':'Intel','a4c494':'Intel','b4d5bd':'Intel',
+ '001b54':'Cisco','001e49':'Cisco','0024f7':'Cisco','f4cfE2':'Cisco',
+ '0418d6':'Ubiquiti','245a4c':'Ubiquiti','687d6b':'Ubiquiti','802aa8':'Ubiquiti','d0:21:f9':'Ubiquiti',
+ '50c7bf':'TP-Link','98daC4':'TP-Link','b0487a':'TP-Link','ec086b':'TP-Link',
+ 'b827eb':'Raspberry Pi','dca632':'Raspberry Pi','e45f01':'Raspberry Pi',
+ '3cd92b':'HPE','001a4b':'HPE','001f29':'HPE','2c233a':'HPE',
+ '001a8a':'Samsung','002454':'Samsung','8c7712':'Samsung',
+ '001e68':'Dell','14feb5':'Dell','f8bc12':'Dell',
+ '0015c5':'Sony','001d0d':'Sony'
+};
+function macVendor(mac){const key=normalizeMAC(mac).replace(/:/g,'').slice(0,6);return ouiVendors[key]||'Nieznany producent';}
 function normalizeMAC(value){const hex=String(value||'').replace(/[^0-9a-f]/gi,'').toLowerCase();return hex.length===12?hex.match(/.{2}/g).join(':'):'';}
 function parseFDB(raw){
  const rows=[],macPattern=/(?:[0-9a-f]{4}\.){2}[0-9a-f]{4}|(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}|\b[0-9a-f]{12}\b/ig,portPattern=/\bport\d+\.\d+\.\d+\b/i;
- for(const line of String(raw||'').split(/\r?\n/)){const mm=line.match(macPattern),pm=line.match(portPattern);if(!mm||!pm)continue;const mac=normalizeMAC(mm[0]);if(!mac)continue;const beforeMAC=line.slice(0,line.toLowerCase().indexOf(mm[0].toLowerCase())).trim(),vlanMatch=beforeMAC.match(/^(?:vlan\\s*)?(\\d{1,4})$/i);rows.push({mac,port:pm[0],vlan:vlanMatch?vlanMatch[1]:'',source:line.trim()});}
+ for(const line of String(raw||'').split(/\r?\n/)){const mm=line.match(macPattern),pm=line.match(portPattern);if(!mm||!pm)continue;const mac=normalizeMAC(mm[0]);if(!mac)continue;const beforeMAC=line.slice(0,line.toLowerCase().indexOf(mm[0].toLowerCase())).trim(),vlanMatch=beforeMAC.match(/^(?:vlan\s*)?(\d{1,4})$/i);rows.push({mac,port:pm[0],vlan:vlanMatch?vlanMatch[1]:'',source:line.trim()});}
  return rows;
 }
 function parseARP(raw){
@@ -198,6 +212,7 @@ function parseLLDP(raw){
 function renderTopology(){
  const q=$('topology-filter').value.trim().toLowerCase(),rows=topologyData.rows.filter(r=>[r.port,r.link,r.vlans,r.macs,r.ips,r.lldp].join(' ').toLowerCase().includes(q));
  $('topology-rows').innerHTML=rows.length?rows.map(r=>'<tr><td><button class="port-diagnostic-link" data-topology-port="'+esc(r.port)+'">'+esc(r.port)+'</button></td><td><span class="state '+(r.link==='up'?'up':r.link==='down'?'down':'unknown')+'">'+esc(r.link)+'</span></td><td>'+esc(r.vlans||'—')+'</td><td>'+esc(r.macs||'—')+'</td><td>'+esc(r.ips||'—')+'</td><td>'+esc(r.lldp||'—')+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">Brak danych pasujących do filtra.</td></tr>';
+ $('topology-map').innerHTML=rows.length?rows.map(r=>{const macs=r.macs?r.macs.split(', ').filter(Boolean):[],ips=r.ips?r.ips.split(', ').filter(Boolean):[];return '<article class="topology-port-card"><div class="topology-port-node"><span class="state '+(r.link==='up'?'up':r.link==='down'?'down':'unknown')+'">'+esc(r.link)+'</span><button data-topology-port="'+esc(r.port)+'">'+esc(r.port)+'</button><small>VLAN '+esc(r.vlans||'—')+'</small></div><div class="topology-device-list">'+(macs.length?macs.map(mac=>{const vendor=macVendor(mac);return '<div class="topology-device"><b>'+esc(vendor)+'</b><code>'+esc(mac)+'</code><small>'+esc(ips.join(', ')||'Brak adresu IP w ARP')+'</small></div>';}).join(''):'<div class="topology-device empty-device">Brak wpisu FDB dla tego portu</div>')+(r.lldp?'<div class="topology-lldp"><small>LLDP</small>'+esc(r.lldp)+'</div>':'')+'</div></article>';}).join(''):'<div class="empty">Brak danych pasujących do filtra.</div>';
 }
 async function refreshTopology(){
  const button=$('refresh-topology');button.disabled=true;button.textContent='Skanowanie…';$('topology-status').textContent='Pobieranie tablic FDB, ARP, LLDP i VLAN…';

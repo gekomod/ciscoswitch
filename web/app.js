@@ -135,7 +135,7 @@ function renderPortNetworkContext(){
    const switchport=parts[0]||'';
    const lines=switchport.split('\\n').filter(Boolean);
    const vlanLines=portContextLines(parts[1]||'',port);
-   const ids=[...new Set(vlanLines.flatMap(line=>[...line.matchAll(/\\b(?:VLAN\\s*)?(\\d{1,4})\\b/gi)].map(m=>m[1])).filter(n=>Number(n)>=1&&Number(n)<=4094))];
+   const ids=[...new Set(vlanLines.flatMap(line=>[...line.split(port).join('').matchAll(/\\b(?:VLAN\\s*)?(\\d{1,4})\\b/gi)].map(m=>m[1])).filter(n=>Number(n)>=1&&Number(n)<=4094))];
    const mode=(switchport.match(/TRYB:\\s*([^\\n]+)/i)||[])[1]||'Brak danych';
    const native=(switchport.match(/DEFAULT \\/ NATIVE VLAN:\\s*([^\\n]+)/i)||[])[1]||'Brak danych';
    const allowed=(switchport.match(/DOZWOLONE VLAN:\\s*([^\\n]+)/i)||[])[1]||'Brak danych';

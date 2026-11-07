@@ -86,6 +86,17 @@ m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method
   v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureBulkPortSettings(q.Ports,q.Mode,q.AccessVLAN,q.Allowed,q.Native,q.Speed,q.Duplex,q.Description)})
   write(w,v,e)
  })
+ m.HandleFunc("/api/ports/action/bulk",func(w http.ResponseWriter,r *http.Request){
+  if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
+  r.Body=http.MaxBytesReader(w,r.Body,4096)
+  var q struct{Ports []string `json:"ports"`;Action string `json:"action"`}
+  if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return}
+  for _,port:=range q.Ports{if isProtectedPort(port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",port));return}}
+  if q.Action=="disable"&&!portShutdownEnabled(){write(w,"",fmt.Errorf("wyłączanie portów jest domyślnie zablokowane; ustaw ALLOW_PORT_SHUTDOWN=true po sprawdzeniu ryzyka utraty dostępu"));return}
+  if _,err:=device.BuildBulkPortActionCommands(q.Ports,q.Action);err!=nil{write(w,"",err);return}
+  v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureBulkPortAction(q.Ports,q.Action)})
+  write(w,v,e)
+ })
  m.HandleFunc("/api/lacp",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,2048);var q struct{Group int `json:"group"`;Ports string `json:"ports"`;Mode string `json:"mode"`;Delete bool `json:"delete"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};if protectedPortNumberList(q.Ports){write(w,"",fmt.Errorf("LACP obejmuje port chroniony przez PROTECTED_PORTS"));return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureLACP(q.Group,q.Ports,q.Mode,q.Delete)});write(w,v,e)})
  m.HandleFunc("/api/stp",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,1024);var q struct{Mode string `json:"mode"`;Priority int `json:"priority"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureSTP(q.Mode,q.Priority)});write(w,v,e)})
  m.HandleFunc("/api/edgeport",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,1024);var q struct{Port string `json:"port"`;Enabled bool `json:"enabled"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.SetPortEdgePort(q.Port,q.Enabled)});write(w,v,e)})

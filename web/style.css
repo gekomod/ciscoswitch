@@ -311,3 +311,89 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 #monitor-stream-state.stream-online{color:var(--success)}
 #monitor-stream-state.stream-offline{color:var(--warning)}
 #monitor-stream-state i{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;margin-right:6px;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 15%,transparent)}
+
+
+/* Light theme completion: keep every extended panel component on the light palette. */
+:root[data-theme="light"]{
+  color-scheme:light;
+  --surface:#ffffff;
+  --surface-2:#f5f8fb;
+  --surface-3:#edf2f7;
+  --panel:#ffffff;
+  --panel-soft:#f5f8fb;
+  --surface-soft:#f5f8fb;
+  --soft:#edf2f7;
+  --border:#dce4ed;
+  --blue:#287fe0;
+  --success:#16894d;
+  --warning:#946d22;
+  --shadow:0 8px 26px #20344a0b;
+}
+:root[data-theme="light"] body{
+  background:radial-gradient(ellipse at 78% -20%,rgba(44,104,165,.08),transparent 42%),linear-gradient(180deg,#f8fbff 0%,var(--bg) 360px);
+}
+:root[data-theme="light"] .sidebar{background:rgba(255,255,255,.97);border-right-color:#e1e8f0}
+:root[data-theme="light"] .brand small,:root[data-theme="light"] .side-label,:root[data-theme="light"] .nav-group-title{color:#71839a}
+:root[data-theme="light"] .nav{color:#52647a}
+:root[data-theme="light"] .nav-icon{color:#7189a5}
+:root[data-theme="light"] .nav.active,:root[data-theme="light"] .nav:hover{background:linear-gradient(90deg,#e8f2ff,#f3f7fc);border-color:#d2e2f4;color:#183b61;box-shadow:inset 2px 0 #287fe0}
+:root[data-theme="light"] .nav.active .nav-icon{color:#2878d0}
+:root[data-theme="light"] .nav-search-wrap{background:#f5f8fb;border-color:#dce4ed;color:#52647a}
+:root[data-theme="light"] .nav-search{color:#24364b!important}
+:root[data-theme="light"] .sidebar-nav-scroll{scrollbar-color:#c3cfdb transparent}
+:root[data-theme="light"] .side-bottom{background:#f5f8fb;border-color:#dce4ed;color:#52647a}
+:root[data-theme="light"] .topbar{background:rgba(248,250,253,.94);border-bottom-color:#e1e8f0}
+:root[data-theme="light"] .topbar b{color:#1d2b3d}
+:root[data-theme="light"] .online{background:#e8f7ef;border-color:#c8ead7;color:#187447}
+:root[data-theme="light"] .session-identity{background:#f2f6fa;border-color:#dce4ed;color:#52647a}
+:root[data-theme="light"] .welcome h1 em{color:#2878d0}
+:root[data-theme="light"] .device-chip{background:linear-gradient(130deg,#fff,#f1f6fb);border-color:#d5e0eb}
+:root[data-theme="light"] .metric,:root[data-theme="light"] .panel{background:linear-gradient(145deg,#fff,#f7f9fc);border-color:#dce4ed;box-shadow:0 8px 26px #20344a0b}
+:root[data-theme="light"] .btn.ghost{background:#fff;border-color:#d2dce8;color:#34465c}
+:root[data-theme="light"] .btn.ghost:hover{background:#edf4fb;border-color:#aebfd2}
+:root[data-theme="light"] .table-wrap{border-color:#e1e8f0}
+:root[data-theme="light"] table{background:#fff}
+:root[data-theme="light"] th{background:#f0f4f8;color:#63758b;border-bottom-color:#e1e8f0}
+:root[data-theme="light"] td{color:#526176;border-bottom-color:#e7edf3}
+:root[data-theme="light"] td b{color:#1b2735}
+:root[data-theme="light"] tbody tr:hover,:root[data-theme="light"] tbody tr:hover td{background:#f3f7fc}
+:root[data-theme="light"] .friendly-result{background:linear-gradient(110deg,#f4f8fc,#fff)!important;border-color:#d8e3ee!important;color:#26384c!important}
+:root[data-theme="light"] .friendly-result-copy b{color:#1e3045}
+:root[data-theme="light"] .friendly-result-copy span{color:#60738a}
+:root[data-theme="light"] .friendly-result-icon.is-muted{background:#e9eff5;color:#65778b}
+:root[data-theme="light"] .friendly-result-count{color:#2878d0}
+:root[data-theme="light"] .user-create-form,:root[data-theme="light"] #panel-users .user-create-form{background:#f5f8fb;border-color:#dce4ed}
+:root[data-theme="light"] .lacp-group-card,:root[data-theme="light"] .lacp-stats>div{background:#f5f8fb;border-color:#dce4ed;color:#34465c}
+:root[data-theme="light"] .port-detail-grid>div,:root[data-theme="light"] .diag-grid>div{background:#f5f8fb;border-color:#e1e8f0}
+:root[data-theme="light"] .port-detail-grid b,:root[data-theme="light"] .diag-grid b{color:#24364b}
+:root[data-theme="light"] .topology-vlan-port,:root[data-theme="light"] .topology-redundancy{background:#f5f8fb;border-color:#dce4ed}
+:root[data-theme="light"] .vlan-membership-tools{background:#f5f8fb;border-color:#dce4ed}
+:root[data-theme="light"] .topology-multi-neighbor{background:#fff2db;color:#8b5a08}
+:root[data-theme="light"] .alert-summary article{background:#f5f8fb;border-color:#dce4ed}
+:root[data-theme="light"] .alert-toolbar select,:root[data-theme="light"] .dashboard-extras .section-head select{background:#fff;color:#24364b;border-color:#d2dce8}
+:root[data-theme="light"] .traffic-meter{background:#e7edf4}
+:root[data-theme="light"] .note{background:#fff8e9;border-color:#ead7aa;color:#795b25}
+:root[data-theme="light"] .state.up{background:#e8f8ef;color:#16894d}
+:root[data-theme="light"] .state.down{background:#fff0f1;color:#b94a56}
+:root[data-theme="light"] .state.unknown{background:#fff7e5;color:#946d22}
+:root[data-theme="light"] .map-port{background:#eef2f6;border-color:#d8e0e8;color:#536174}
+:root[data-theme="light"] .map-port.is-up{background:#e2f6e9;border-color:#a9dfbc;color:#147d42}
+:root[data-theme="light"] .map-port.is-down{background:#edf0f4;border-color:#dce2e9;color:#788596}
+:root[data-theme="light"] .map-port.is-unknown{background:#f5f6f8;border-color:#e3e7ec;color:#65758a}
+:root[data-theme="light"] .setting-row{background:#f9fafc;border-color:#e3e8ef}
+:root[data-theme="light"] .setting-row b{color:#243246}
+:root[data-theme="light"] .setting-row small{color:#77869a}
+:root[data-theme="light"] .port-action{background:#eaf2fb;border-color:#cbdced;color:#28547f}
+:root[data-theme="light"] .port-action:hover{background:#dceafa;border-color:#aec8e4}
+:root[data-theme="light"] .port-action.danger{background:#fff0f1;border-color:#edc5cb;color:#a83243}
+:root[data-theme="light"] .switch-device{background:#eaf0f6;border-color:#dce4ed;color:#26394f}
+:root[data-theme="light"] .event-row{background:transparent;border-color:#e2e9f0;color:#34465c}
+:root[data-theme="light"] .event-row small{color:#8793a3}
+:root[data-theme="light"] .traffic-values{border-color:#e7edf3}
+:root[data-theme="light"] .health-line{border-color:#e7edf3;color:#66768a}
+:root[data-theme="light"] .health-line b{color:#253247}
+:root[data-theme="light"] .port-map-toolbar select,:root[data-theme="light"] .edge-select select{background:#fff;color:#24364b;border-color:#d2dce8}
+:root[data-theme="light"] .session-identity{color:#52647a}
+:root[data-theme="light"] .topology-vlan-devices{color:#60738a}
+:root[data-theme="light"] .topology-vlan-devices code{color:#24364b}
+:root[data-theme="light"] footer{color:#8491a1;border-color:#e3e8ef}

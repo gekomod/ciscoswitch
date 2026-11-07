@@ -133,8 +133,7 @@ func (s *panelUserStore) saveLocked(users map[string]panelUserRecord) error {
 		tmp.Close()
 		return err
 	}
-	if _, err := tmp.Write(append(data, '
-')); err != nil {
+	if _, err := tmp.Write(append(data, '\n')); err != nil {
 		tmp.Close()
 		return err
 	}

@@ -182,8 +182,8 @@ function renderMap(){
   const state=['up','down'].includes(p.oper)?p.oper:'unknown';
   const label=(p.name||String(p.index)).replace(/^port1\.0\./,'');
   const speed=p.speed||'Prędkość nieznana';
-  const admin=p.admin||'unknown';
-  return '<button type="button" class="map-port '+(state==='up'?'is-up':state==='down'?'is-down':'is-unknown')+'" data-map-port="'+esc(p.name)+'" aria-label="'+esc(p.name)+', link '+esc(state)+', administracyjnie '+esc(admin)+', '+esc(speed)+'" title="'+esc(p.name)+' · link '+esc(state)+' · admin '+esc(admin)+' · '+esc(speed)+'"><b>'+esc(label)+'</b><small>'+esc(speed.replace(' Mb/s','M'))+'</small></button>';
+  const admin=p.admin==='up'?'Włączony':p.admin==='down'?'Wyłączony':'Nieznany';
+  return '<button type="button" class="map-port '+(state==='up'?'is-up':state==='down'?'is-down':'is-unknown')+'" data-map-port="'+esc(p.name)+'" aria-label="'+esc(p.name)+', link '+esc(state==='up'?'Połączony':state==='down'?'Brak linku':'Nieznany')+', administracyjnie '+esc(admin)+', '+esc(speed)+'" title="'+esc(p.name)+' · '+(state==='up'?'Połączony':state==='down'?'Brak linku':'Stan nieznany')+' · port administracyjnie '+esc(admin)+' · '+esc(speed)+'"><b>'+esc(label)+'</b><small>'+esc(speed.replace(' Mb/s','M'))+'</small></button>';
  }).join('')||'<div class="empty">Brak portów dla wybranego filtra.</div>';
 }
 function fmtCount(v){const n=Number(v||0);return Number.isFinite(n)?new Intl.NumberFormat('pl-PL',{notation:n>999999?'compact':'standard',maximumFractionDigits:1}).format(n):'—';}
@@ -248,7 +248,7 @@ function renderPortDetail(){
  $('detail-summary').textContent=name+' · '+(p.oper==='up'?'Połączony':p.oper==='down'?'Brak połączenia':'Stan nieznany')+' · '+(p.speed||'prędkość nieznana');
  $('detail-live-rx').textContent=r?formatRate(r.rx):'Oczekiwanie na próbki';
  $('detail-live-tx').textContent=r?formatRate(r.tx):'Oczekiwanie na próbki';
- $('detail-utilization').textContent=pct===null?'—':pct.toFixed(1)+'% (RX + TX / prędkość linku)';
+ $('detail-utilization').textContent=pct===null?'—':pct.toFixed(1)+'% wykorzystania łącza';
  setMeterPercent($('detail-util-meter'),pct||0);
  const errors=counterHistory.filter(x=>x.port===name).slice(-8).reverse();
  $('detail-errors').innerHTML=errors.length?errors.map(x=>'<tr><td>'+esc(new Date(x.timestamp).toLocaleString())+'</td><td>'+fmtCount(x.errorRxDelta)+' / '+fmtCount(x.errorTxDelta)+'</td><td>'+fmtCount(x.discardRxDelta)+' / '+fmtCount(x.discardTxDelta)+'</td></tr>').join(''):'<tr><td colspan="3" class="empty">Brak zarejestrowanych przyrostów błędów.</td></tr>';
@@ -270,7 +270,7 @@ function drawPortDetailTraffic(){
 }
 function openPortDiagnostics(name){const sel=$('detail-port');if(!sel||![...sel.options].some(x=>x.value===name))return;sel.value=name;history.replaceState(null,'','#monitoring');activatePage('#monitoring');renderPortDetail();$('detail-summary')?.scrollIntoView({behavior:'smooth',block:'center'});}
 
-function renderTopPorts(){const el=$('top-ports');if(!el)return;const rows=[...portRates.entries()].map(([name,r])=>({name,...r})).sort((a,b)=>(b.rx+b.tx)-(a.rx+a.tx)).slice(0,10);el.innerHTML=rows.length?rows.map(x=>'<tr><td><button class="port-diagnostic-link" data-diagnostic-port="'+esc(x.name)+'">'+esc(x.name)+'</button></td><td>'+esc(latestPorts.find(p=>p.name===x.name)?.oper||'—')+'</td><td>'+formatRate(x.rx)+'</td><td>'+formatRate(x.tx)+'</td><td><b>'+formatRate(x.rx+x.tx)+'</b></td></tr>').join(''):'<tr><td colspan="5" class="empty">Zbieranie próbek — ranking pojawi się po drugim odczycie.</td></tr>';}
+function renderTopPorts(){const el=$('top-ports');if(!el)return;const rows=[...portRates.entries()].map(([name,r])=>({name,...r})).sort((a,b)=>(b.rx+b.tx)-(a.rx+a.tx)).slice(0,10);el.innerHTML=rows.length?rows.map(x=>'<tr><td><button class="port-diagnostic-link" data-diagnostic-port="'+esc(x.name)+'">'+esc(x.name)+'</button></td><td>'+(latestPorts.find(p=>p.name===x.name)?.oper==='up'?'Połączony':latestPorts.find(p=>p.name===x.name)?.oper==='down'?'Brak linku':'Nieznany')+'</td><td>'+formatRate(x.rx)+'</td><td>'+formatRate(x.tx)+'</td><td><b>'+formatRate(x.rx+x.tx)+'</b></td></tr>').join(''):'<tr><td colspan="5" class="empty">Zbieranie próbek — ranking pojawi się po drugim odczycie.</td></tr>';}
 function drawTraffic(){const canvas=$('traffic-chart');if(!canvas)return;const ctx=canvas.getContext('2d'),w=canvas.clientWidth||600,h=145,dpr=window.devicePixelRatio||1;canvas.width=w*dpr;canvas.height=h*dpr;ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);const pad={l:42,r:8,t:10,b:22},cw=w-pad.l-pad.r,ch=h-pad.t-pad.b,max=Math.max(1,...trafficHistory.flatMap(x=>[x.rx,x.tx]))*1.18;ctx.font='10px system-ui';ctx.strokeStyle='#26384b';ctx.fillStyle='#8294a9';ctx.lineWidth=1;for(let i=0;i<4;i++){const y=pad.t+ch*i/3;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText((max*(1-i/3)/1000000).toFixed(1)+'M',2,y+3);}const plot=(key,color)=>{if(trafficHistory.length<2)return;ctx.beginPath();trafficHistory.forEach((p,i)=>{const x=pad.l+cw*i/(trafficHistory.length-1),y=pad.t+ch-(p[key]/max)*ch;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.strokeStyle=color;ctx.lineWidth=2.2;ctx.stroke();};plot('rx','#398cf0');plot('tx','#9a65e8');}
 function portCapacity(p){
  const s=String(p.speed||'').toLowerCase().replace(/\s/g,'');

@@ -455,3 +455,28 @@ func TestBulkPortPreviewFailsClosedWhenAnyPortCannotBeParsed(t *testing.T) {
  if calls!=1 { t.Fatalf("switch reads=%d want 1",calls) }
  if strings.Contains(rec.Body.String(),"\"previews\"") { t.Fatalf("partial preview must not be returned: %s",rec.Body.String()) }
 }
+
+
+func TestBulkSwitchportDetailsHandlerUsesOneReadForAllPorts(t *testing.T) {
+ calls:=0
+ raw:="Interface name : port1.0.1\nSwitchport mode : access\nDefault Vlan : 10\nConfigured Vlans : 10\n\nInterface name : port1.0.2\nSwitchport mode : trunk\nDefault Vlan : 1\nConfigured Vlans : 1 10 20\n"
+ h:=bulkSwitchportDetailsHandler(func(command string)(string,error){calls++;if command!="show interface switchport"{t.Fatalf("unexpected command %q",command)};return raw,nil})
+ rec:=httptest.NewRecorder()
+ h.ServeHTTP(rec,httptest.NewRequest(http.MethodPost,"/api/ports/switchport/bulk",strings.NewReader(`{"ports":["port1.0.1","port1.0.2"]}`)))
+ if rec.Code!=http.StatusOK{t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String())}
+ if calls!=1{t.Fatalf("switch reads=%d want 1",calls)}
+ var result struct{Ports []map[string]any `json:"ports"`;ReadOperations int `json:"readOperations"`}
+ if err:=json.Unmarshal(rec.Body.Bytes(),&result);err!=nil{t.Fatal(err)}
+ if len(result.Ports)!=2||result.ReadOperations!=1{t.Fatalf("unexpected result: %+v",result)}
+ if rec.Header().Get("Cache-Control")!="no-store"{t.Fatal("expected no-store")}
+ if strings.Contains(rec.Body.String(),"Interface name"){t.Fatalf("raw CLI output leaked: %s",rec.Body.String())}
+}
+
+func TestBulkSwitchportDetailsHandlerRejectsIncompleteReadback(t *testing.T) {
+ calls:=0
+ h:=bulkSwitchportDetailsHandler(func(string)(string,error){calls++;return "Interface name : port1.0.1\nSwitchport mode : access\nDefault Vlan : 10\nConfigured Vlans : 10\n",nil})
+ rec:=httptest.NewRecorder()
+ h.ServeHTTP(rec,httptest.NewRequest(http.MethodPost,"/api/ports/switchport/bulk",strings.NewReader(`{"ports":["port1.0.1","port1.0.2"]}`)))
+ if rec.Code!=http.StatusConflict{t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String())}
+ if calls!=1{t.Fatalf("switch reads=%d want 1",calls)}
+}

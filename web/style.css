@@ -413,3 +413,7 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 :root[data-theme="light"] .port-bank-title{color:#64768b}
 @media(max-width:1100px){.port-bank-grid{grid-template-columns:repeat(12,minmax(0,1fr))}}
 @media(max-width:600px){.port-bank{padding:8px}.port-bank-grid{grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}.port-bank-combo .port-bank-grid,.port-bank-sfp .port-bank-grid{grid-template-columns:repeat(2,minmax(0,48px))}.port-bank .map-port{min-height:39px}}
+
+#cfg-load-status{margin-top:12px}
+#cfg-load-status.is-error{background:#3a202a;border-color:#70404d;color:#ffabb4}
+:root[data-theme="light"] #cfg-load-status.is-error{background:#fff0f1;border-color:#edc5cb;color:#a83243}

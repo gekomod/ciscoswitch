@@ -71,3 +71,14 @@ body{background:#f4f6f9;color:var(--text)}.sidebar{background:#fff;border-right:
 .port-diagnostic-link{border:0;background:transparent;color:#a6cfff;text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-weight:700;padding:2px}
 .port-diagnostic-link:hover{color:white}
 @media(max-width:820px){.diagnostic-tables{grid-template-columns:1fr}.diagnostic-live{grid-template-columns:1fr}}
+
+/* Per-port network topology context */
+.port-network-context{margin:24px 0;padding:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.port-network-context .section-head{align-items:center;gap:14px}
+.port-network-context .section-head h3{margin:4px 0;font-size:15px}
+.port-network-context .section-head p{margin:4px 0;color:var(--muted);font-size:12px}
+.network-context-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
+.network-context-grid article{min-width:0;background:#0d1723;border:1px solid var(--line);border-radius:11px;padding:12px}
+.network-context-grid h4{font-size:12px;margin:0 0 10px;color:#cbd9e9}
+.network-context-grid pre{max-height:260px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;line-height:1.5;color:#aebed0;margin:0}
+@media(max-width:900px){.network-context-grid{grid-template-columns:1fr}.port-network-context .section-head{align-items:flex-start;flex-direction:column}}

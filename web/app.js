@@ -606,11 +606,11 @@ $('dhcp-refresh').onclick=refreshDHCP;
 let arpTableText='';
 async function refreshL3(){
  for(const [cmd,id,label] of [['show ip interface brief','l3-interfaces','Interfejsy IP'],['show ip route','l3-routes','Trasy routingu'],['show arp','l3-arp','Sąsiedzi ARP']]){
-  try{const d=await api('/api/command',{command:cmd});showFriendlyResult(id,d.output,label);}
-  catch(e){showFriendlyResult(id,e.message,label);}
+  try{const d=await api('/api/command',{command:cmd});if(id==='l3-arp')arpTableText=d.output||'';showFriendlyResult(id,d.output,label);}
+  catch(e){if(id==='l3-arp')arpTableText='';showFriendlyResult(id,e.message,label);}
  }
 }
-function filterARP(){if($('l3-arp'))showFriendlyResult('l3-arp',arpTableText,'Sąsiedzi ARP');}
+function filterARP(){const q=$('arp-filter').value.trim().toLowerCase(),matches=arpTableText.split(/\r?\n/).filter(line=>!q||line.toLowerCase().includes(q));showFriendlyResult('l3-arp',matches.join('\n'),'Wyniki wyszukiwania sąsiadów IP');}
 
 
 async function configureStaticRoute(remove){const q={prefix:$('route-prefix').value.trim(),gateway:$('route-gateway').value.trim(),distance:Number($('route-distance').value),delete:remove};const action=remove?'usunąć':'dodać';if(!confirm('Czy na pewno '+action+' trasę '+q.prefix+' przez '+q.gateway+'? Zmiana może wpłynąć na łączność z przełącznikiem.'))return;try{const d=await api('/api/route/static',q);showFriendlyResult('probe-output',d.output,'Konfiguracja trasy');await refreshL3();}catch(e){alert(e.message);}}
@@ -683,7 +683,7 @@ async function refreshFDB(){
  try{const d=await api('/api/command',{command:'show mac address-table'});macFDBText=d.output||'';showFriendlyResult('mac-output',macFDBText,'Tablica urządzeń MAC');showFriendlyResult('mac-table-output',macFDBText,'Urządzenia w sieci');}
  catch(e){showFriendlyResult('mac-output',e.message,'Tablica urządzeń MAC');showFriendlyResult('mac-table-output',e.message,'Urządzenia w sieci');}
 }
-function filterFDB(){if($('mac-table-output'))showFriendlyResult('mac-table-output',macFDBText,'Urządzenia w sieci');}
+function filterFDB(){const q=$('mac-filter').value.trim().toLowerCase(),matches=macFDBText.split(/\r?\n/).filter(line=>!q||line.toLowerCase().includes(q));showFriendlyResult('mac-table-output',matches.join('\n'),'Wyniki wyszukiwania urządzeń');}
 
 $('load-mac').onclick=refreshFDB;
 $('mac-filter').addEventListener('input',filterFDB);

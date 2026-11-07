@@ -292,13 +292,27 @@ function renderLACPDetail(raw){
  }).join('');
 }
 $('show-lacp').onclick=async()=>{
- $('lacp-diagnostics').innerHTML='<div class="empty">Odczytuję szczegóły LACP…</div>';
- try{
-  const d=await api('/api/command',{command:'show etherchannel detail'});
-  const raw=d.output||'Brak agregacji lub pusta odpowiedź.';
-  $('lacp-output').textContent=raw;
-  renderLACPDetail(raw);
- }catch(e){$('lacp-diagnostics').innerHTML='<div class="empty">'+esc(e.message)+'</div>';$('lacp-output').textContent=e.message;}
+ $('lacp-diagnostics').innerHTML='<div class="empty">Sprawdzam dostępne widoki agregacji…</div>';
+ const commands=['show etherchannel detail','show etherchannel summary','show etherchannel'];
+ const attempts=[];
+ let selected=null;
+ for(const command of commands){
+  try{
+   const d=await api('/api/command',{command});
+   const output=String(d.output||'').trim();
+   attempts.push('### '+command+'\n'+(output||'(pusta odpowiedź)'));
+   if(output&&!/(invalid input|unknown command|unrecognized command|incomplete command|ambiguous command|polecenie niedozwolone)/i.test(output)){
+    selected={command,output};break;
+   }
+  }catch(e){attempts.push('### '+command+'\n'+e.message);}
+ }
+ $('lacp-output').textContent=attempts.join('\n\n');
+ if(selected){
+  $('lacp-diagnostics').innerHTML='<div class="lacp-source">Źródło danych: <b>'+esc(selected.command)+'</b></div>';
+  renderLACPDetail(selected.output);
+ }else{
+  $('lacp-diagnostics').innerHTML='<div class="empty">Nie udało się uzyskać obsługiwanej odpowiedzi żadnym z trzech poleceń. Sprawdź surowe wyniki poniżej.</div>';
+ }
 };
 $('apply-stp').onclick=async()=>{const mode=$('stp-mode').value,priority=Number($('stp-priority').value);if(!confirm('Zmienić globalny tryb STP na '+mode.toUpperCase()+' i priorytet bridge na '+priority+'?'))return;try{const d=await api('/api/stp',{mode,priority});$('stp-output').textContent=d.output||'Polecenie przekazane';}catch(e){alert(e.message);}};
 $('show-stp').onclick=async()=>{try{const d=await api('/api/command',{command:'show spanning-tree'});$('stp-output').textContent=d.output||'Brak danych';}catch(e){$('stp-output').textContent=e.message;}};

@@ -1407,8 +1407,8 @@ func diagnosticsAvailabilityMetric(name string, samples []diagnosticsSample, sta
  for i:=1;i<len(samples);i++ {
   prev,cur:=samples[i-1],samples[i]
   if cur.CapturedAt.Before(start)||!prev.CapturedAt.Before(end)||!cur.CapturedAt.After(prev.CapturedAt){continue}
-  span:=cur.CapturedAt.Sub(prev.CapturedAt);if span>maxGap{outageOpen=-1;continue}
-  known,online:=state(prev);if !known{outageOpen=-1;continue}
+  span:=cur.CapturedAt.Sub(prev.CapturedAt);if span>maxGap{if outageOpen>=0{row:=&m.Outages[outageOpen];row.End=prev.CapturedAt;row.DurationSeconds=int64(row.End.Sub(row.Start).Seconds());row.Open=false;outageOpen=-1};continue}
+  known,online:=state(prev);if !known{if outageOpen>=0{row:=&m.Outages[outageOpen];row.End=prev.CapturedAt;row.DurationSeconds=int64(row.End.Sub(row.Start).Seconds());row.Open=false;outageOpen=-1};continue}
   left:=prev.CapturedAt;if left.Before(start){left=start};right:=cur.CapturedAt;if right.After(end){right=end}
   seconds:=int64(right.Sub(left).Seconds());if seconds<=0{continue}
   observed+=seconds;if online{up+=seconds}
@@ -1416,7 +1416,8 @@ func diagnosticsAvailabilityMetric(name string, samples []diagnosticsSample, sta
    prevKnown,prevOnline:=state(prev);curKnown,curOnline:=state(cur)
    if prevKnown&&curKnown {
     if prevOnline&&!curOnline { outageOpen=len(m.Outages);m.Outages=append(m.Outages,availabilityOutage{Start:cur.CapturedAt,Open:true}) }
-    if !prevOnline&&curOnline&&outageOpen>=0 { row:=&m.Outages[outageOpen];row.End=cur.CapturedAt;row.DurationSeconds=int64(cur.CapturedAt.Sub(row.Start).Seconds());row.Open=false;outageOpen=-1 }
+    if !prevOnline&&!curOnline&&outageOpen<0 {outageOpen=len(m.Outages);m.Outages=append(m.Outages,availabilityOutage{Start:prev.CapturedAt,Open:true})}
+    if !prevOnline&&curOnline {if outageOpen<0{outageOpen=len(m.Outages);m.Outages=append(m.Outages,availabilityOutage{Start:prev.CapturedAt,Open:true})};row:=&m.Outages[outageOpen];row.End=cur.CapturedAt;row.DurationSeconds=int64(cur.CapturedAt.Sub(row.Start).Seconds());row.Open=false;outageOpen=-1}
    }
   }
  }

@@ -244,6 +244,23 @@ function runPortAudit(){
  $('port-audit-rows').innerHTML=rows.length?rows.map(x=>'<tr><td><span class="state '+(x.level==='warning'?'down':'unknown')+'">'+(x.level==='warning'?'Uwaga':'Info')+'</span></td><td><b>'+esc(x.port)+'</b></td><td>'+esc(x.title)+'</td><td>'+esc(x.value)+'</td><td>'+esc(x.advice)+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">Nie wykryto problemów w kontrolowanych kryteriach.</td></tr>';
  renderPortRoleAudit();
 }
+
+$('run-security-audit').onclick=async()=>{
+ const button=$('run-security-audit');button.disabled=true;button.textContent='Analizuję…';
+ $('security-audit-summary').textContent='Pobieranie running-config. Nie są wykonywane żadne zmiany.';
+ $('security-audit-rows').innerHTML='<tr><td colspan="4" class="empty">Odczyt konfiguracji…</td></tr>';
+ try{
+  const result=await api('/api/security-audit');
+  if(!result.available||!Array.isArray(result.findings))throw new Error('Odpowiedź audytu jest niekompletna.');
+  const findings=result.findings;
+  const critical=findings.filter(x=>x.severity==='critical').length,warning=findings.filter(x=>x.severity==='warning').length;
+  $('security-audit-summary').textContent='Audyt zakończony · '+findings.length+' wykryć · '+critical+' krytycznych · '+warning+' ostrzeżeń. '+(findings.length?'Wymagana ręczna weryfikacja przed zmianami.':'Nie wykryto jawnych wpisów z kontrolowanej listy. To nie oznacza pełnego bezpieczeństwa.');
+  $('security-audit-rows').innerHTML=findings.length?findings.map(x=>'<tr><td><span class="state '+(x.severity==='critical'?'down':'unknown')+'">'+(x.severity==='critical'?'Krytyczne':'Ostrzeżenie')+'</span></td><td><b>'+esc(x.title)+'</b></td><td>'+esc(x.evidence)+'</td><td>'+esc(x.recommendation)+'</td></tr>').join(''):'<tr><td colspan="4" class="empty">Brak jawnych wpisów wskazujących na kontrolowane ryzyka. Nie jest to pełny audyt bezpieczeństwa.</td></tr>';
+ }catch(error){
+  $('security-audit-summary').textContent='Audyt przerwany: '+error.message;
+  $('security-audit-rows').innerHTML='<tr><td colspan="4" class="empty">Brak wiarygodnych danych — nie wyciągnięto wniosków.</td></tr>';
+ }finally{button.disabled=false;button.textContent='Sprawdź bezpieczeństwo';}
+};
 $('run-port-audit').onclick=async()=>{
  const button=$('run-port-audit');button.disabled=true;button.textContent='Odświeżam dane…';
  $('port-audit-status').textContent='Pobieranie świeżego odczytu SNMP…';

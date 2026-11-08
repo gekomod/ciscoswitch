@@ -516,3 +516,22 @@ func TestPortProfilesHandlerRejectsInvalidProfilesAndIDs(t *testing.T) {
  rec:=httptest.NewRecorder();h.ServeHTTP(rec,httptest.NewRequest(http.MethodDelete,"/api/port-profiles?id=../../users.json",nil))
  if rec.Code!=http.StatusBadRequest{t.Fatalf("expected invalid ID rejection, status=%d",rec.Code)}
 }
+func TestValidatePortRepairRequiresFreshMatchingModeAndOneRead(t *testing.T) {
+ calls:=0
+ raw:="Interface name : port1.0.7\nSwitchport mode : access\nDefault Vlan : 10\nConfigured Vlans : 10\n"
+ q:=device.PortRepairRequest{Port:"port1.0.7",Mode:"access",AccessVLAN:20,UpdateAccessVLAN:true}
+ commands,current,err:=validatePortRepair(func(command string)(string,error){calls++;if command!="show interface switchport"{t.Fatalf("unexpected read %q",command)};return raw,nil},q)
+ if err!=nil{t.Fatal(err)}
+ if calls!=1||current.DefaultVLAN!="10"||!strings.Contains(strings.Join(commands,"\n"),"switchport access vlan 20"){t.Fatalf("unexpected preview: calls=%d current=%+v commands=%v",calls,current,commands)}
+ calls=0
+ q.Mode="trunk"
+ if _,_,err:=validatePortRepair(func(string)(string,error){calls++;return raw,nil},q);err==nil{t.Fatal("mode mismatch must block partial repair")}
+ if calls!=1{t.Fatalf("expected one fresh read, got %d",calls)}
+}
+func TestValidatePortRepairBlocksProtectedPortsBeforeRead(t *testing.T) {
+ t.Setenv("PROTECTED_PORTS","port1.0.49")
+ called:=false
+ q:=device.PortRepairRequest{Port:"port1.0.49",Mode:"access",AccessVLAN:20,UpdateAccessVLAN:true}
+ if _,_,err:=validatePortRepair(func(string)(string,error){called=true;return "",nil},q);err==nil{t.Fatal("protected port must be rejected")}
+ if called{t.Fatal("protected port must be blocked before querying switch")}
+}

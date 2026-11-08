@@ -726,3 +726,20 @@ func TestTopologyMapHandlerExposesProtectedPortsAndUplinkRisk(t *testing.T) {
   if !strings.Contains(body,want) { t.Errorf("expected %q in response: %s",want,body) }
  }
 }
+
+func TestTopologyChangeRisksWarnForUplinkLLDPAndLACPMember(t *testing.T) {
+ commands:=map[string]string{
+  "show running-config":"interface port1.0.48\n description UPLINK-CORE\n switchport mode trunk\n channel-group 3 mode active\ninterface port1.0.47\n channel-group 3 mode active\n",
+  "show interface switchport":"Interface name: port1.0.48\nSwitchport mode: trunk\nDefault Vlan: 1\nConfigured Vlans: 1\n",
+  "show lldp neighbors":"Local Interface Neighbor System\nport1.0.48 CORE-SWITCH Ethernet1/1\n",
+ }
+ risks:=topologyChangeRisks(func(command string)(string,error){value,ok:=commands[command];if !ok{return "",fmt.Errorf("unsupported")};return value,nil},"port1.0.48")
+ codes:=map[string]bool{}
+ for _,risk:=range risks{codes[risk.Code]=true}
+ for _,code:=range []string{"change-uplink-risk","change-lldp-neighbor","change-lacp-member"}{if !codes[code]{t.Errorf("expected %s in %+v",code,risks)}}
+}
+
+func TestTopologyChangeRisksFailInformativelyWhenTopologyCannotBeRead(t *testing.T) {
+ risks:=topologyChangeRisks(func(string)(string,error){return "",fmt.Errorf("offline")},"port1.0.7")
+ if len(risks)!=1||risks[0].Code!="topology-check-unavailable"{t.Fatalf("expected conservative unavailable warning, got %+v",risks)}
+}

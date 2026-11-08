@@ -147,26 +147,42 @@ func panelLoginPageHandler(w http.ResponseWriter,r *http.Request) {
 <head>
  <meta charset="utf-8">
  <meta name="viewport" content="width=device-width,initial-scale=1">
- <meta name="color-scheme" content="dark">
+ <meta name="color-scheme" content="light">
  <title>Logowanie · Allied Network</title>
  <link rel="stylesheet" href="/login.css">
  <script src="/login.js" defer></script>
 </head>
 <body>
- <main class="login-card">
-  <div class="brand-mark" aria-hidden="true">AN</div>
-  <p class="eyebrow">NETWORK MANAGEMENT</p>
-  <h1>Allied Network</h1>
-  <p class="intro">Zaloguj się do lokalnego panelu zarządzania przełącznikiem.</p>
-  <form id="login-form">
-   <label for="username">Login</label>
-   <input id="username" name="username" type="text" autocomplete="username" required autofocus>
-   <label for="password">Hasło</label>
-   <input id="password" name="password" type="password" autocomplete="current-password" required>
-   <button id="login-button" type="submit">Zaloguj się</button>
-   <p id="login-error" role="alert" aria-live="polite"></p>
-  </form>
-  <p class="footer-note">Połączenie lokalne · Bezpieczny dostęp</p>
+ <main class="login-shell">
+  <section class="login-card">
+   <div class="brand">
+    <div class="brand-mark" aria-hidden="true">AN</div>
+    <div><b>Allied Network</b><small>NETWORK MANAGEMENT</small></div>
+   </div>
+   <div class="login-intro">
+    <span class="eyebrow">PANEL ADMINISTRACYJNY</span>
+    <h1>Witaj ponownie</h1>
+    <p>Zaloguj się do lokalnego panelu zarządzania przełącznikiem.</p>
+   </div>
+   <form id="login-form">
+    <label for="username">Login</label>
+    <input id="username" name="username" type="text" autocomplete="username" required autofocus>
+    <label for="password">Hasło</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <button id="login-button" type="submit">Zaloguj się <span>→</span></button>
+    <p id="login-error" class="error" role="alert" aria-live="polite"></p>
+   </form>
+   <div class="login-footer"><i></i><span>Bezpieczne połączenie lokalne</span><small>Dostęp tylko dla upoważnionych użytkowników</small></div>
+  </section>
+  <aside class="login-side">
+   <div class="side-orb orb-one"></div><div class="side-orb orb-two"></div>
+   <div class="side-content">
+    <span>NETWORK CONTROL CENTER</span>
+    <h2>Pełna kontrola.<br>Jedno miejsce.</h2>
+    <p>Zarządzaj infrastrukturą sieciową, monitoruj porty i konfigurację przełącznika z jednego, przejrzystego panelu.</p>
+    <div class="side-device"><div class="device-lights"><i></i><i></i><i></i><i></i><i></i></div><b>SWITCH MANAGEMENT</b><small>SECURE LOCAL ACCESS</small></div>
+   </div>
+  </aside>
  </main>
 </body>
 </html>`))

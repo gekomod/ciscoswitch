@@ -506,3 +506,17 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 #compliance-rows td{vertical-align:top}
 :root[data-theme="light"] .profile-compliance{background:#f5f8fb;border-color:#dce4ed}
 @media(max-width:760px){.profile-compliance{padding:12px}.profile-compliance .form-grid{grid-template-columns:1fr}.profile-compliance select[multiple]{min-height:180px}}
+
+
+/* Safe profile repair recommendations */
+.compliance-repair{margin-top:18px;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.repair-heading,.repair-intro{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.repair-heading h4{margin:0 0 5px;font-size:13px;color:var(--text)}
+.repair-heading p,.repair-intro span{margin:0;color:var(--muted);font-size:11px;line-height:1.5}
+.repair-intro{justify-content:flex-start;flex-direction:column}
+.compliance-repair .table-wrap{max-height:380px;overflow:auto}
+.compliance-repair td{vertical-align:top}
+.repair-reason{display:block;max-width:260px;margin-top:5px;color:var(--muted);font-size:10px;line-height:1.4}
+.compliance-repair .btn{white-space:nowrap}
+:root[data-theme="light"] .compliance-repair{background:#fff;border-color:#dce4ed}
+@media(max-width:720px){.compliance-repair{padding:12px}.repair-heading{flex-direction:column}.compliance-repair .table-wrap{overflow-x:auto}.compliance-repair table{min-width:620px}}

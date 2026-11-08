@@ -165,3 +165,8 @@ Centrum diagnostyki udostępnia podsumowanie 24-godzinne i 7-dniowe. Wskaźnik u
 ### Raporty dostępności i eksport
 
 Panel dostępności pokazuje wykres godzinowy dla 24 godzin oraz dzienny dla 7 dni. Słupki bez wystarczających danych są oznaczane jako brak pomiaru, a nie jako 0% dostępności. Eksport CSV jest dostępny pod `GET /api/diagnostics/availability.csv?window=24h` lub `window=7d`. Plik zawiera podsumowanie urządzenia i każdej agregacji LACP, pokrycie pomiarami, czas nieznany oraz osobne wiersze dla wykrytych przerw. CSV jest kodowany UTF-8 z BOM i używa separatora średnikowego, aby poprawnie otwierać się w polskim Excelu.
+
+
+### Centrum zdarzeń sieciowych
+
+Endpoint `GET /api/events?window=24h&type=all&limit=200` udostępnia wspólną oś czasu alarmów, zmian LACP, sąsiadów LLDP i wyników kontroli zarządzających. Okna: 24h, 7d i 30d; kategorie: all, alarm, lacp, lldp i availability; limit 1–500. Zdarzenia są wyliczane z historii próbek i sortowane od najnowszych, bez dopisywania duplikatów przy odświeżaniu. Zmiany LLDP obejmują wykrycie, zniknięcie i zmianę sąsiada. Oś czasu alarmów pokazuje potwierdzenie, operatora i komentarz. Nieudana kontrola CLI jest opisana jako brak odczytu zarządzającego, a nie jako potwierdzone wyłączenie switcha lub przerwanie ruchu.

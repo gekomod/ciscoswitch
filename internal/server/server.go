@@ -81,9 +81,6 @@ func Register(m *http.ServeMux,svc *device.Service){
   "commands":cmds,"warnings":warnings,"risks":risks,"applies":false,
   "current":map[string]any{"port":current.Port,"mode":current.Mode,"defaultVlan":current.DefaultVLAN,"configuredVlans":current.ConfiguredVLANs},
  })
- m.Handle("/api/",panelUsers.middleware(apiMux))
- m.Handle("/",panelUsers.middleware(apiMux))
- m.HandleFunc("/login",panelLoginPageHandler)
 })
 apiMux.HandleFunc("/api/vlan/preview",func(w http.ResponseWriter,r *http.Request){
  if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
@@ -207,6 +204,9 @@ apiMux.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.M
  apiMux.HandleFunc("/api/system",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.SystemInfo())})
  apiMux.Handle("/api/port/switchport", switchportDetailsHandler(svc.RunReadOnly))
  apiMux.HandleFunc("/api/command",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,4096);var q struct{Command string `json:"command"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=svc.RunReadOnly(strings.TrimSpace(q.Command));write(w,v,e)})
+ m.Handle("/api/",panelUsers.middleware(apiMux))
+ m.Handle("/",panelUsers.middleware(apiMux))
+ m.HandleFunc("/login",panelLoginPageHandler)
 }
 func write(w http.ResponseWriter,v string,e error){w.Header().Set("Content-Type","application/json");if e!=nil{w.WriteHeader(400);_ = json.NewEncoder(w).Encode(map[string]string{"error":e.Error(),"output":v});return};_ = json.NewEncoder(w).Encode(map[string]string{"output":v,"ok":"true"})}
 

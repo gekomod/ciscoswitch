@@ -189,7 +189,7 @@ $('save-port-profile').onclick=async()=>{
  try{
   const result=await api('/api/port-profiles',profile);
   savedPortProfiles=Array.isArray(result.profiles)?result.profiles:[];
-  renderSavedPortProfiles();$('saved-port-profile').value=result.profile.id;
+  renderSavedPortProfiles();renderComplianceProfiles();$('saved-port-profile').value=result.profile.id;$('compliance-profile').value=result.profile.id;
   $('saved-profile-status').textContent='Profil „'+result.profile.name+'” został zapisany na serwerze panelu.';
  }catch(e){$('saved-profile-status').textContent='Nie zapisano profilu: '+e.message;}
  finally{button.disabled=false;}
@@ -201,7 +201,7 @@ $('delete-port-profile').onclick=async()=>{
  try{
   const result=await api('/api/port-profiles?id='+encodeURIComponent(p.id),undefined,'DELETE');
   savedPortProfiles=Array.isArray(result.profiles)?result.profiles:[];
-  renderSavedPortProfiles();$('saved-profile-status').textContent='Profil „'+p.name+'” został usunięty. Konfiguracja switcha pozostała bez zmian.';
+  renderSavedPortProfiles();renderComplianceProfiles();$('saved-profile-status').textContent='Profil „'+p.name+'” został usunięty. Konfiguracja switcha pozostała bez zmian.';
  }catch(e){$('saved-profile-status').textContent='Nie udało się usunąć profilu: '+e.message;}
  finally{button.disabled=false;}
 };

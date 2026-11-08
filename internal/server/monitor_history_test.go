@@ -61,3 +61,9 @@ func TestMonitorStreamDeliversLiveEvents(t *testing.T) {
 		if strings.Contains(line,"Live link restored") { received=true }
 	}
 }
+
+func TestCounterDeltaIgnoresResetAndReturnsIncrease(t *testing.T) {
+ if got:=counterDelta(150,100);got!=50{t.Fatalf("increase delta=%d want=50",got)}
+ if got:=counterDelta(20,100);got!=0{t.Fatalf("reset delta=%d want=0",got)}
+ if got:=counterDelta(100,100);got!=0{t.Fatalf("unchanged delta=%d want=0",got)}
+}

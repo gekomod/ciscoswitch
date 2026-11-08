@@ -211,12 +211,12 @@ function detectPortRole(port){
  const description=String(port.description||'').trim();
  const value=description.toLocaleLowerCase('pl-PL');
  const rules=[
-  {role:'Uplink / switch',profile:'Trunk uplink',pattern:/\b(uplink|up-link|switch|router|core|dist|agregacj|lacp|po[0-9]+)\\b/},
-  {role:'Access Point',profile:'Access Point',pattern:/\b(ap|access.?point|wifi|wi-fi|wlan)\\b/},
-  {role:'CCTV / kamera',profile:'CCTV',pattern:/\b(cctv|kamera|camera|nvr|rejestrator)\\b/},
-  {role:'VoIP / telefon',profile:'VoIP',pattern:/\b(voip|telefon|phone|sip)\\b/},
-  {role:'Serwer / storage',profile:'Server',pattern:/\b(serwer|server|nas|storage|hypervisor|esxi|proxmox|idrac|ilo)\\b/},
-  {role:'Stacja robocza',profile:'Access standard',pattern:/\b(pc|komputer|workstation|desktop|laptop|drukarka|printer)\\b/}
+  {role:'Uplink / switch',profile:'Trunk uplink',pattern:/\b(uplink|up-link|switch|router|core|dist|agregacj|lacp|po[0-9]+)\b/},
+  {role:'Access Point',profile:'Access Point',pattern:/\b(ap|access.?point|wifi|wi-fi|wlan)\b/},
+  {role:'CCTV / kamera',profile:'CCTV',pattern:/\b(cctv|kamera|camera|nvr|rejestrator)\b/},
+  {role:'VoIP / telefon',profile:'VoIP',pattern:/\b(voip|telefon|phone|sip)\b/},
+  {role:'Serwer / storage',profile:'Server',pattern:/\b(serwer|server|nas|storage|hypervisor|esxi|proxmox|idrac|ilo)\b/},
+  {role:'Stacja robocza',profile:'Access standard',pattern:/\b(pc|komputer|workstation|desktop|laptop|drukarka|printer)\b/}
  ];
  const match=rules.find(rule=>rule.pattern.test(value));
  return match?{role:match.role,profile:match.profile,source:'Opis: '+description,confidence:'jawna'}:{role:'Nieustalona',profile:'Brak rekomendacji',source:description?'Opis nie zawiera rozpoznawalnego oznaczenia: '+description:'Brak opisu portu',confidence:'brak'};

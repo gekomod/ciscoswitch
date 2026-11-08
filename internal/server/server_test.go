@@ -601,3 +601,16 @@ func TestSecurityAuditHandlerUsesFreshSwitchportAndKeepsPartialAvailability(t *t
  if rec.Code!=200||len(commands)!=2{t.Fatalf("status=%d commands=%v body=%s",rec.Code,commands,rec.Body.String())}
  if !strings.Contains(rec.Body.String(),"trunk-native-not-allowed"){t.Fatalf("missing trunk finding: %s",rec.Body.String())}
 }
+
+func TestAuditTrunkAllowedVLANAddSyntax(t *testing.T) {
+ config:=`vlan 10
+vlan 20
+interface port1.0.1
+ switchport mode trunk
+ switchport trunk native vlan 10
+ switchport trunk allowed vlan none
+ switchport trunk allowed vlan add 10,20
+`
+ findings:=analyzeVLANAndPortSecurity(config,"")
+ for _,f:=range findings{if f.Code=="trunk-native-not-allowed"{t.Fatalf("native VLAN should be in allowed list after add: %+v",findings)}}
+}

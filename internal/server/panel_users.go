@@ -88,6 +88,10 @@ func (s *panelUserStore) identity(r *http.Request)(panelIdentity,bool) {
 func (s *panelUserStore) middleware(next http.Handler) http.Handler {
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   switch r.URL.Path {
+  case "/login.css", "/login.js":
+   // Login assets are public, but remain same-origin and are covered by CSP.
+   next.ServeHTTP(w,r)
+   return
   case "/login":
    // Keep the login page reachable even if the outer router sends it through
    // the authenticated catch-all handler. Otherwise an unauthenticated
@@ -136,6 +140,34 @@ func (s *panelUserStore) usersHandler() http.Handler {
  })
 }
 func panelLoginPageHandler(w http.ResponseWriter,r *http.Request) {
- w.Header().Set("Content-Type","text/html; charset=utf-8");w.Header().Set("Cache-Control","no-store")
- _,_=w.Write([]byte(`<!doctype html><html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Logowanie · Allied Network</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b1018;color:#eaf1f9;font:15px system-ui}.box{width:min(380px,calc(100% - 40px));padding:30px;background:#111a26;border:1px solid #263548;border-radius:18px}label{display:block;margin:15px 0;color:#9aaabd;font-size:12px}input{display:block;box-sizing:border-box;width:100%;margin-top:6px;padding:12px;border-radius:9px;border:1px solid #30445c;background:#0b1420;color:white}button{width:100%;padding:12px;border:0;border-radius:9px;background:#3988ed;color:white;font-weight:700}p{color:#9aaabd;font-size:12px}#error{color:#ff8997}</style><main class="box"><h2>Allied Network</h2><p>Zaloguj się do lokalnego panelu zarządzania przełącznikiem.</p><form id="f"><label>Login<input name="username" autocomplete="username" required></label><label>Hasło<input name="password" type="password" autocomplete="current-password" required></label><button>Zaloguj</button><p id="error" role="alert"></p></form></main><script>document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({username:f.username.value,password:f.password.value})});if(r.ok)location.href='/';else document.getElementById('error').textContent=await r.text();});</script></html>`))
+ w.Header().Set("Content-Type","text/html; charset=utf-8")
+ w.Header().Set("Cache-Control","no-store")
+ _,_=w.Write([]byte(`<!doctype html>
+<html lang="pl">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta name="color-scheme" content="dark">
+ <title>Logowanie · Allied Network</title>
+ <link rel="stylesheet" href="/login.css">
+ <script src="/login.js" defer></script>
+</head>
+<body>
+ <main class="login-card">
+  <div class="brand-mark" aria-hidden="true">AN</div>
+  <p class="eyebrow">NETWORK MANAGEMENT</p>
+  <h1>Allied Network</h1>
+  <p class="intro">Zaloguj się do lokalnego panelu zarządzania przełącznikiem.</p>
+  <form id="login-form">
+   <label for="username">Login</label>
+   <input id="username" name="username" type="text" autocomplete="username" required autofocus>
+   <label for="password">Hasło</label>
+   <input id="password" name="password" type="password" autocomplete="current-password" required>
+   <button id="login-button" type="submit">Zaloguj się</button>
+   <p id="login-error" role="alert" aria-live="polite"></p>
+  </form>
+  <p class="footer-note">Połączenie lokalne · Bezpieczny dostęp</p>
+ </main>
+</body>
+</html>`))
 }

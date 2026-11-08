@@ -535,3 +535,36 @@ func TestValidatePortRepairBlocksProtectedPortsBeforeRead(t *testing.T) {
  if _,_,err:=validatePortRepair(func(string)(string,error){called=true;return "",nil},q);err==nil{t.Fatal("protected port must be rejected")}
  if called{t.Fatal("protected port must be blocked before querying switch")}
 }
+
+func TestAnalyzeSecurityConfigurationFindsExplicitRisksOnly(t *testing.T) {
+ config:=`snmp-server community public ro
+ip http server
+ip telnet server
+no spanning-tree
+interface port1.0.1
+ description BIURO
+`
+ findings:=analyzeSecurityConfiguration(config)
+ if len(findings)!=4{t.Fatalf("expected four explicit findings, got %+v",findings)}
+ codes:=map[string]bool{};for _,f:=range findings{codes[f.Code]=true}
+ for _,code:=range []string{"snmp-default-community","http-management-enabled","telnet-management-enabled","stp-disabled"}{if !codes[code]{t.Errorf("missing finding %s",code)}}
+}
+func TestAnalyzeSecurityConfigurationDoesNotInventRisks(t *testing.T) {
+ config:=`snmp-server community panel-readonly ro
+spanning-tree mode rstp
+interface port1.0.1
+ description BIURO
+`
+ if findings:=analyzeSecurityConfiguration(config);len(findings)!=0{t.Fatalf("unexpected findings: %+v",findings)}
+}
+func TestSecurityAuditHandlerReadOnlyAndFailsClosed(t *testing.T) {
+ calls:=0
+ h:=securityAuditHandler(func(command string)(string,error){calls++;if command!="show running-config"{t.Fatalf("unexpected command %q",command)};return "snmp-server community public ro\n",nil})
+ rec:=httptest.NewRecorder();h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/security-audit",nil))
+ if rec.Code!=http.StatusOK||calls!=1{t.Fatalf("status=%d calls=%d body=%s",rec.Code,calls,rec.Body.String())}
+ if rec.Header().Get("Cache-Control")!="no-store"{t.Fatal("expected no-store")}
+ calls=0
+ fail:=securityAuditHandler(func(string)(string,error){calls++;return "",fmt.Errorf("offline")})
+ bad:=httptest.NewRecorder();fail.ServeHTTP(bad,httptest.NewRequest(http.MethodGet,"/api/security-audit",nil))
+ if bad.Code!=http.StatusBadGateway||calls!=1{t.Fatalf("failed read must abort audit: status=%d calls=%d",bad.Code,calls)}
+}

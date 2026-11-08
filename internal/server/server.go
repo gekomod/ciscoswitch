@@ -32,6 +32,7 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/api/config/backups/restore-preview", configBackupRestorePreviewHandler(backupDir))
  m.Handle("/api/audit", auditHistoryHandler(os.Getenv("AUDIT_LOG_PATH")))
  m.Handle("/api/security-audit", securityAuditHandler(svc.RunReadOnly))
+ m.Handle("/api/topology/map", topologyMapHandler(svc.RunReadOnly))
  m.Handle("/api/monitor/history", monitorHistoryHandler(filepath.Join("data", "monitor-history.jsonl")))
  m.Handle("/api/monitor/stream", monitorStreamHandler())
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
@@ -928,5 +929,81 @@ func securityAuditHandler(read func(string)(string,error)) http.Handler {
   w.Header().Set("Content-Type","application/json; charset=utf-8")
   w.Header().Set("Cache-Control","no-store")
   _=json.NewEncoder(w).Encode(map[string]any{"available":true,"readOnly":true,"findings":findings,"checks":checks,"note":"VLAN bez jawnego przypisania są kandydatami do weryfikacji, nie dowodem nieużywania. Wnioski trunk wymagają rozpoznanych pól switchport. Brak wykrycia nie jest dowodem bezpieczeństwa."})
+ })
+}
+
+type topologyPort struct { Port string `json:"port"`; Mode string `json:"mode,omitempty"`; VLANs []int `json:"vlans,omitempty"`; NativeVLAN int `json:"nativeVlan,omitempty"`; LAG string `json:"lag,omitempty"`; EdgePort bool `json:"edgePort,omitempty"` }
+type topologyLink struct { LocalPort string `json:"localPort"`; Neighbor string `json:"neighbor"`; Evidence string `json:"evidence"` }
+type topologyAggregation struct { Name string `json:"name"`; Members []string `json:"members"`; Partner string `json:"partner,omitempty"`; Ready string `json:"ready,omitempty"` }
+func parseTopologyConfig(config,switchport string)([]topologyPort,[]topologyAggregation,[]int){
+ ports:=map[string]*topologyPort{};lags:=map[string]*topologyAggregation{};vlans:=map[int]bool{}
+ var current *topologyPort
+ for _,line:=range strings.Split(config,"\n"){
+  line=strings.TrimSpace(line);lower:=strings.ToLower(line)
+  if strings.HasPrefix(lower,"interface "){
+   name:=strings.TrimSpace(line[len("interface "):]);if !regexp.MustCompile(`(?i)^port[0-9.]+$`).MatchString(name){current=nil;continue}
+   current=&topologyPort{Port:name,VLANs:[]int{}};ports[strings.ToLower(name)]=current;continue
+  }
+  if strings.HasPrefix(lower,"vlan "){f:=strings.Fields(lower);if len(f)==2{if n,e:=strconv.Atoi(f[1]);e==nil&&n>=1&&n<=4094{vlans[n]=true}}}
+  if current==nil{continue};f:=strings.Fields(lower)
+  if len(f)>=3&&f[0]=="switchport"&&f[1]=="mode"{current.Mode=f[2]}
+  if len(f)>=4&&f[0]=="switchport"&&f[1]=="access"&&f[2]=="vlan"{if n,e:=strconv.Atoi(f[3]);e==nil&&n>=1&&n<=4094{current.VLANs=append(current.VLANs,n)}}
+  if len(f)>=5&&f[0]=="switchport"&&f[1]=="trunk"&&f[2]=="native"&&f[3]=="vlan"{current.NativeVLAN,_=strconv.Atoi(f[4])}
+  if len(f)>=2&&f[0]=="spanning-tree"&&f[1]=="edgeport"{current.EdgePort=true}
+  if len(f)>=3&&(f[0]=="channel-group"||f[0]=="static-channel-group"){
+   name:="Po"+f[1];current.LAG=name;key:=strings.ToLower(name);if lags[key]==nil{lags[key]=&topologyAggregation{Name:name,Members:[]string{}}};lags[key].Members=append(lags[key].Members,current.Port)
+  }
+ }
+ // Prefer the switch's parsed switchport view for operationally visible VLAN membership.
+ blocks:=regexp.MustCompile(`(?im)^\s*Interface name\s*:\s*(\S+)\s*$`).FindAllStringSubmatchIndex(switchport,-1)
+ for i,loc:=range blocks{
+  name:=strings.TrimSpace(switchport[loc[2]:loc[3]]);p:=ports[strings.ToLower(name)];if p==nil{p=&topologyPort{Port:name,VLANs:[]int{}};ports[strings.ToLower(name)]=p}
+  end:=len(switchport);if i+1<len(blocks){end=blocks[i+1][0]};block:=switchport[loc[0]:end]
+  read:=func(label string)string{re:=regexp.MustCompile(`(?im)^\s*`+regexp.QuoteMeta(label)+`\s*:\s*(.*?)\s*$`);m:=re.FindStringSubmatch(block);if len(m)>1{return strings.TrimSpace(m[1])};return ""}
+  if mode:=read("Switchport mode");mode!=""{p.Mode=strings.ToLower(mode)}
+  if n,e:=strconv.Atoi(read("Default Vlan"));e==nil&&n>0{p.NativeVLAN=n}
+  if raw:=read("Configured Vlans");raw!=""{set:=parseAuditVLANSet(strings.ReplaceAll(raw," ",","));vals:=make([]int,0,len(set));for n:=range set{vals=append(vals,n)};sort.Ints(vals);if len(vals)>0{p.VLANs=vals}}
+ }
+ out:=make([]topologyPort,0,len(ports));for _,p:=range ports{sort.Ints(p.VLANs);out=append(out,*p)}
+ sort.Slice(out,func(i,j int)bool{return out[i].Port<out[j].Port})
+ agg:=make([]topologyAggregation,0,len(lags));for _,l:=range lags{sort.Strings(l.Members);agg=append(agg,*l)}
+ sort.Slice(agg,func(i,j int)bool{return agg[i].Name<agg[j].Name})
+ vlanList:=make([]int,0,len(vlans));for n:=range vlans{vlanList=append(vlanList,n)};sort.Ints(vlanList)
+ return out,agg,vlanList
+}
+func parseTopologyLLDP(raw string)[]topologyLink{
+ links:=make([]topologyLink,0);seen:=map[string]bool{}
+ portRE:=regexp.MustCompile(`(?i)^port[0-9.]+$`)
+ for _,line:=range strings.Split(raw,"\n"){
+  fields:=strings.Fields(strings.TrimSpace(line));if len(fields)<2||!portRE.MatchString(fields[0]){continue}
+  joined:=strings.Join(fields[1:]," ");lower:=strings.ToLower(joined)
+  if strings.Contains(lower,"local interface")||strings.Contains(lower,"neighbor")||strings.Contains(lower,"port id")||strings.Contains(lower,"system name"){continue}
+  key:=strings.ToLower(fields[0]+"|"+joined);if seen[key]{continue};seen[key]=true
+  links=append(links,topologyLink{fields[0],joined,"LLDP"})
+ }
+ return links
+}
+func parseTopologyLACP(raw string)[]topologyAggregation{
+ groups:=make([]topologyAggregation,0);var current *topologyAggregation
+ for _,line:=range strings.Split(raw,"\n"){
+  if m:=regexp.MustCompile(`(?i)^\s*Aggregator\s+(po[0-9]+)\b`).FindStringSubmatch(line);len(m)>1{groups=append(groups,topologyAggregation{Name:m[1],Members:[]string{}});current=&groups[len(groups)-1];continue}
+  if current==nil{continue}
+  if m:=regexp.MustCompile(`(?i)^\s*Partner LAG:\s*(.+)$`).FindStringSubmatch(line);len(m)>1{current.Partner=strings.TrimSpace(m[1])}
+  if m:=regexp.MustCompile(`(?i)^\s*Individual:\s*\d+\s*-\s*Ready:\s*(\d+)`).FindStringSubmatch(line);len(m)>1{if m[1]=="1"{current.Ready="Gotowy"}else{current.Ready="Niegotowy"}}
+  if m:=regexp.MustCompile(`(?i)^\s*Link:\s*(port[0-9.]+)`).FindStringSubmatch(line);len(m)>1{current.Members=append(current.Members,m[1])}
+ }
+ return groups
+}
+func topologyMapHandler(read func(string)(string,error))http.Handler{
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  if r.Method!=http.MethodGet{http.Error(w,"method not allowed",405);return}
+  config,err:=read("show running-config");if err!=nil{http.Error(w,"brak running-config; mapa topologii nie została wygenerowana",http.StatusBadGateway);return}
+  sw,swErr:=read("show interface switchport");ports,lags,vlans:=parseTopologyConfig(config,sw)
+  lldp,lldpErr:=read("show lldp neighbors");links:=parseTopologyLLDP(lldp)
+  lacpRaw,lacpErr:=read("show etherchannel detail");liveLags:=parseTopologyLACP(lacpRaw)
+  for i:=range lags{for _,live:=range liveLags{if strings.EqualFold(lags[i].Name,live.Name){lags[i].Partner=live.Partner;lags[i].Ready=live.Ready}}}
+  checks:=map[string]bool{"runningConfig":true,"switchport":swErr==nil&&strings.Contains(sw,"Interface name"),"lldp":lldpErr==nil&&len(links)>0,"lacp":lacpErr==nil&&len(liveLags)>0}
+  w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
+  _=json.NewEncoder(w).Encode(map[string]any{"available":true,"readOnly":true,"ports":ports,"links":links,"aggregations":lags,"vlans":vlans,"checks":checks,"note":"Połączenia są rysowane tylko na podstawie rozpoznanych rekordów LLDP. Brak sąsiada LLDP nie oznacza braku fizycznego łącza. LACP i VLAN-y zależą od rozpoznanego formatu odpowiedzi urządzenia."})
  })
 }

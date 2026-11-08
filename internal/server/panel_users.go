@@ -27,14 +27,15 @@ type panelUser struct {
  UpdatedAt time.Time `json:"updatedAt"`
 }
 type panelUserView struct { ID string `json:"id"`; Username string `json:"username"`; Role string `json:"role"`; Active bool `json:"active"`; CreatedAt time.Time `json:"createdAt"`; UpdatedAt time.Time `json:"updatedAt"` }
+type panelSession struct { Identity panelIdentity; ExpiresAt time.Time }
 type panelUserStore struct {
  mu sync.Mutex
  path string
  users map[string]panelUser
- sessions map[string]panelIdentity
+ sessions map[string]panelSession
 }
 func newPanelUserStore(path string) *panelUserStore {
- s:=&panelUserStore{path:path,users:map[string]panelUser{},sessions:map[string]panelIdentity{}}
+ s:=&panelUserStore{path:path,users:map[string]panelUser{},sessions:map[string]panelSession{}}
  _=s.load()
  return s
 }
@@ -75,7 +76,7 @@ func (s *panelUserStore) login(w http.ResponseWriter,r *http.Request) {
  s.mu.Lock();var found panelUser;for _,u:=range s.users{if strings.EqualFold(u.Username,strings.TrimSpace(q.Username)){found=u;break}};s.mu.Unlock()
  if found.ID==""||!found.Active||bcrypt.CompareHashAndPassword([]byte(found.PasswordHash),[]byte(q.Password))!=nil{http.Error(w,"Nieprawidłowy login lub hasło",401);return}
  token:=randomPanelToken();if token==""{http.Error(w,"session creation failed",500);return}
- s.mu.Lock();s.sessions[token]=panelIdentity{UserID:found.ID,Username:found.Username,Role:found.Role};s.mu.Unlock()
+ s.mu.Lock();s.sessions[token]=panelSession{Identity:panelIdentity{UserID:found.ID,Username:found.Username,Role:found.Role},ExpiresAt:time.Now().Add(8*time.Hour)};s.mu.Unlock()
  http.SetCookie(w,&http.Cookie{Name:"panel_session",Value:token,Path:"/",HttpOnly:true,SameSite:http.SameSiteStrictMode,Secure:r.TLS!=nil,MaxAge:8*60*60})
  w.Header().Set("Content-Type","application/json");_=json.NewEncoder(w).Encode(map[string]any{"ok":true})
 }
@@ -124,7 +125,7 @@ func (s *panelUserStore) usersHandler() http.Handler {
   if q.Role!=""{u.Role=q.Role};if q.Active!=nil{u.Active=*q.Active};if q.Password!=""{hash,err:=bcrypt.GenerateFromPassword([]byte(q.Password),bcrypt.DefaultCost);if err!=nil{http.Error(w,"password hashing failed",500);return};u.PasswordHash=string(hash)}
   u.UpdatedAt=time.Now().UTC();s.users[id]=u
   if err:=s.writeLocked();err!=nil{http.Error(w,"nie można zapisać zmian",500);return}
-  if !u.Active{for token,identity:=range s.sessions{if identity.UserID==id{delete(s.sessions,token)}}}
+  if !u.Active{for token,identity:=range s.sessions{if identity.Identity.UserID==id{delete(s.sessions,token)}}}
   _=json.NewEncoder(w).Encode(map[string]any{"saved":true})
  })
 }

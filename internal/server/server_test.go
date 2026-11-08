@@ -679,3 +679,26 @@ func TestTopologyConfigIncludesDescriptionsAndExplicitUplinkRole(t *testing.T) {
  ports,_,_:=parseTopologyConfig(config,"")
  if len(ports)!=1||ports[0].Description!="UPLINK-CORE"||ports[0].Role!="Uplink / switch"{t.Fatalf("unexpected uplink metadata: %+v",ports)}
 }
+
+func TestTopologyRiskAnalysisFlagsSingleUplinkLACPDegradationAndProtectedPort(t *testing.T) {
+ ports:=[]topologyPort{
+  {Port:"port1.0.48",Role:"Uplink / switch",Protected:true},
+  {Port:"port1.0.1",Role:"",Protected:false},
+ }
+ lags:=[]topologyAggregation{
+  {Name:"Po1",Members:[]string{"port1.0.1","port1.0.2"},Live:true,LiveMembers:[]string{"port1.0.1"},MemberMismatch:true,Ready:"Niegotowy"},
+  {Name:"Po2",Members:[]string{"port1.0.3"}},
+ }
+ risks:=analyzeTopologyRisks(ports,nil,lags,true)
+ codes:=map[string]bool{}
+ for _,risk:=range risks { codes[risk.Code]=true }
+ for _,code:=range []string{"single-explicit-uplink","protected-port","uplink-no-lldp","lag-member-mismatch","lag-not-ready","lag-single-member"} {
+  if !codes[code] { t.Errorf("expected risk %q, got %+v",code,risks) }
+ }
+}
+
+func TestTopologyRiskDoesNotAssumeUplinkFromPortNumberOrMissingLLDP(t *testing.T) {
+ ports:=[]topologyPort{{Port:"port1.0.52"}}
+ risks:=analyzeTopologyRisks(ports,nil,nil,false)
+ if len(risks)!=1||risks[0].Code!="uplink-role-unknown" { t.Fatalf("unexpected conservative risks: %+v",risks) }
+}

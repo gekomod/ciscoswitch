@@ -669,3 +669,13 @@ func TestTopologyMapHandlerOnlyReadsAndRequiresConfig(t *testing.T) {
  bad:=httptest.NewRecorder();fail.ServeHTTP(bad,httptest.NewRequest(http.MethodGet,"/api/topology/map",nil))
  if bad.Code!=http.StatusBadGateway{t.Fatalf("expected bad gateway, got %d",bad.Code)}
 }
+
+func TestTopologyConfigIncludesDescriptionsAndExplicitUplinkRole(t *testing.T) {
+ config:=`interface port1.0.48
+ description UPLINK-CORE
+ switchport mode trunk
+ channel-group 2 mode active
+`
+ ports,_,_:=parseTopologyConfig(config,"")
+ if len(ports)!=1||ports[0].Description!="UPLINK-CORE"||ports[0].Role!="Uplink / switch"{t.Fatalf("unexpected uplink metadata: %+v",ports)}
+}

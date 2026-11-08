@@ -4,6 +4,13 @@ Panel WWW (Go) do zarządzania przełącznikiem **Allied Telesis AT-GS948MX** z 
 (nie Cisco IOS — nazwa repo jest historyczna). Switch z rynku wtórnego, homelab, zresetowany do ustawień fabrycznych.
 Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 
+## Struktura `internal/server`
+- `server.go` — `Register` (wszystkie trasy API) i `write`.
+- `config_backup.go` — eksport, porównanie, kopie konfiguracji, `runWithPreChangeBackup`.
+- `ports.go`, `port_safety.go`, `port_profiles.go` — operacje na portach, porty chronione, profile.
+- `topology.go` — parsery topologii (config, LLDP, LACP) i analiza ryzyka zmian.
+- `security_audit.go`, `audit_history.go`, `diagnostics.go`, `monitor_history.go`.
+
 ## Komunikacja ze switchem
 - SNMP (v2c lub v3) — stan portów z IF-MIB, `internal/device/device.go` (`readStatus`).
 - SSH — polecenia `show` (lista dozwolonych: `allowed` w device.go) i zmiany konfiguracji (`runConfig`).
@@ -33,10 +40,11 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 1. Pomiary `[perf]` na żywym switchu.
 2. Jeden odczyt `show running-config` na operację zmiany portu (powtórzone odczyty obsługuje już cache 5 s).
 3. Dopasowanie parserów (LACP, STP, LLDP, MAC, VLAN) do prawdziwych wyjść z AW+ 5.4.6 + testy na tych wyjściach.
-4. Rozbicie długich jednolinijkowych handlerów w `internal/server/server.go`.
+4. Zrobione: gofmt i podział server.go. Dalej można wydzielić grupy tras z `Register` (ok. 750 linii).
 5. SNMPv3: AES dostępny (`SWITCH_SNMP_V3_PRIV_PROTOCOL`, wybór w formularzu); potwierdzić, że AW+ 5.4.6 przyjmuje `priv aes`.
 
 ## Zasady
 - Zmiany konfiguracji testować najpierw na nieużywanym porcie; nie dotykać portów z PROTECTED_PORTS.
 - Nie commitować `.env` ani `data/` (hasła, community, kopie konfiguracji).
-- Przed commitem: `go vet ./...` i `go test ./...`.
+- Przed commitem: `gofmt -l .` (musi być puste), `go vet ./...`, `go test ./...`, `node --check web/app.js`.
+- Zmiany w `.github/workflows` wymagają tokena z uprawnieniem Workflows.

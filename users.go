@@ -67,12 +67,20 @@ func openPanelUserStore(path, bootstrapUsername, bootstrapPassword, bootstrapRol
 				return nil, fmt.Errorf("nieprawidłowy wpis użytkownika %q", id)
 			}
 			key := strings.ToLower(user.Username)
-			if seenUsernames[key] { return nil, fmt.Errorf("powtórzony login użytkownika %q", user.Username) }
+			if seenUsernames[key] {
+				return nil, fmt.Errorf("powtórzony login użytkownika %q", user.Username)
+			}
 			seenUsernames[key] = true
-			if _, err := bcrypt.Cost([]byte(user.PasswordHash)); err != nil { return nil, fmt.Errorf("nieprawidłowy hash hasła użytkownika %q", user.Username) }
-			if user.Active && user.Role == "admin" { activeAdmins++ }
+			if _, err := bcrypt.Cost([]byte(user.PasswordHash)); err != nil {
+				return nil, fmt.Errorf("nieprawidłowy hash hasła użytkownika %q", user.Username)
+			}
+			if user.Active && user.Role == "admin" {
+				activeAdmins++
+			}
 		}
-		if activeAdmins == 0 { return nil, errors.New("rejestr nie zawiera aktywnego administratora; start zablokowany") }
+		if activeAdmins == 0 {
+			return nil, errors.New("rejestr nie zawiera aktywnego administratora; start zablokowany")
+		}
 		if err := os.Chmod(path, 0600); err != nil {
 			return nil, fmt.Errorf("nie można ustawić uprawnień rejestru użytkowników: %w", err)
 		}
@@ -282,7 +290,9 @@ func (s *panelUserStore) update(id string, role *string, active *bool, password 
 		}
 	}
 	updatedAt := time.Now().UTC()
-	if !updatedAt.After(user.UpdatedAt) { updatedAt = user.UpdatedAt.Add(time.Nanosecond) }
+	if !updatedAt.After(user.UpdatedAt) {
+		updatedAt = user.UpdatedAt.Add(time.Nanosecond)
+	}
 	user.UpdatedAt = updatedAt
 	next := make(map[string]panelUserRecord, len(s.users))
 	for key, value := range s.users {

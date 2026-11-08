@@ -52,6 +52,14 @@ func Register(m *http.ServeMux,svc *device.Service){
  apiMux.Handle("/api/diagnostics/acknowledge",diagnosticsAcknowledgeHandler(diagnosticsStore,diagnosticsPath+".acks.json"))
  apiMux.Handle("/api/monitor/history", monitorHistoryHandler(filepath.Join("data", "monitor-history.jsonl")))
  apiMux.Handle("/api/monitor/stream", monitorStreamHandler())
+ apiMux.HandleFunc("/api/device/identity",func(w http.ResponseWriter,r *http.Request){
+	if r.Method!=http.MethodGet{http.Error(w,"method not allowed",405);return}
+	identity,err:=svc.DeviceIdentity()
+	w.Header().Set("Content-Type","application/json")
+	w.Header().Set("Cache-Control","no-store")
+	if err!=nil{w.WriteHeader(http.StatusBadGateway);_ = json.NewEncoder(w).Encode(map[string]string{"error":err.Error()});return}
+	_ = json.NewEncoder(w).Encode(identity)
+})
  apiMux.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
  apiMux.Handle("/api/ports/protection", protectedPortsHandler())
  profilePath:=os.Getenv("PORT_PROFILES_PATH");if profilePath==""{profilePath=filepath.Join("data","port-profiles.json")}

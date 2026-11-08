@@ -142,3 +142,7 @@ Endpoint `GET /api/monitor/stream` udostępnia uwierzytelniony strumień Server-
 ### Audyt bezpieczeństwa konfiguracji
 
 Moduł „Audyt bezpieczeństwa konfiguracji” wykonuje wyłącznie odczyty `show running-config` oraz `show interface switchport`. Wykrywa jawne wpisy wskazujące na domyślne community SNMP (`public` / `private`), włączony HTTP/Telnet, wyłączenie STP, niespójność native VLAN z listą VLAN trunk, EdgePort na portach trunk/LACP oraz wybrane rozbieżności między deklaracjami VLAN i przypisaniami interfejsów. VLAN bez jawnego przypisania jest oznaczany jako kandydat do weryfikacji — nie jako pewny VLAN nieużywany. Audyt nie zmienia konfiguracji i nie proponuje automatycznego zastosowania poprawek. Jeśli odczyt switchport jest niedostępny, pozostałe wyniki pozostają dostępne, a analiza trunków jest oznaczana jako niekompletna. Wyniki zależą od formatu konfiguracji zwracanego przez firmware; brak wykrycia nie jest certyfikatem bezpieczeństwa. Nie wykonano jeszcze walidacji na fizycznym AT-GS948MX.
+
+### Mapa topologii i ryzyka połączeń
+
+Sekcja w audycie bezpieczeństwa pobiera lokalny running-config, show interface switchport, show lldp neighbors i show etherchannel detail. Pokazuje rozpoznane porty, jawne opisy i role (rola uplink jest przypisywana wyłącznie po słowach w opisie), VLAN-y, członków agregacji LACP i sąsiadów LLDP. Nieznane formaty pozostają niedostępne zamiast być zgadywane. Brak wpisu LLDP nie jest interpretowany jako brak fizycznego łącza. Widok jest wyłącznie diagnostyczny i nie zmienia konfiguracji.

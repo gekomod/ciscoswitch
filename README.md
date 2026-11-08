@@ -29,6 +29,14 @@ Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948
 - Centrum diagnostyki awarii: serwer zbiera automatycznie read-only próbki znormalizowanego stanu LACP, jawnie opisanych uplinków, sąsiadów LLDP i dostępności odczytów. Pierwsza próbka jest zbierana przy starcie, kolejne według `DIAGNOSTICS_INTERVAL` (domyślnie `60s`, minimum `10s`, `0` wyłącza sampler). Historia jest zapisywana atomowo w lokalnym pliku JSON z uprawnieniami katalogu 0700 i pliku 0600; domyślna retencja wynosi 12 000 próbek (około 8,3 dnia przy interwale 60 sekund). API `POST /api/diagnostics/collect` nadal pozwala ręcznie zebrać próbkę, a `GET /api/diagnostics/history?limit=100&windowMinutes=60` zwraca historię, alarmy i zmiany z całego zachowanego okna. Trzy lub więcej zmian tego samego stanu LACP w wybranym oknie generują alarm powtarzających się zmian (flapping). Dostępne okna: 5–1440 minut. LACP Ready=0 jest alarmem krytycznym, rozbieżność członków — ostrzeżeniem, a pojedynczy jawnie opisany uplink — informacją o ryzyku topologii, nie awarii. Brak danych nie jest traktowany jako powrót do normy. Krótkie zaniki krótsze niż interwał próbkowania mogą pozostać niewykryte. Ścieżkę pliku można zmienić przez `DIAGNOSTICS_HISTORY_PATH`.
 - Historia ruchu per port jest zapisywana lokalnie w `data/monitor-history.jsonl` i odtwarzana po ponownym otwarciu panelu; retencja jest ograniczona do 60 próbek na port w odpowiedzi API, a plik ma limit 2 MiB i uprawnienia 0600.
 
+## Usługi switcha
+
+Sekcja „Usługi” pokazuje stan serwera SSH, serwera WWW (HTTP), Telnetu, agenta SNMP, LLDP i serwera DHCP oraz pozwala je włączać i wyłączać. Stan pochodzi z running-config (jawne `service x` / `no service x`), a gdy wpisu brak, z odpowiedzi polecenia `show`; jeśli żadne źródło nie jest jednoznaczne, panel pokazuje „Stan nieustalony” zamiast zgadywać. Wyłączenie SSH jest zablokowane (panel z niego korzysta), a wyłączenie SNMP i serwera DHCP wymaga potwierdzenia ryzyka. Przed każdą zmianą panel zapisuje kopię konfiguracji; po zmianie proponuje zapis do startup-config.
+
+## Wczytywanie danych
+
+Każde kliknięcie, które pobiera dane lub wprowadza zmianę, pokazuje pasek postępu, blokuje przycisk na czas operacji i kończy się komunikatem z czasem trwania albo opisem błędu. Gdy switch odpowiada dłużej niż 4 s, panel informuje, że odczyt nadal trwa. Automatyczne odświeżanie w tle działa bez komunikatów.
+
 ## Wydajność
 
 - Stan portów jest odczytywany przez SNMP GETBULK (wiele wierszy tabeli w jednym zapytaniu) zamiast GETNEXT dla każdego wiersza osobno.

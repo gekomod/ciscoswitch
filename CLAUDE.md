@@ -12,6 +12,11 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 - `topology.go` — parsery topologii (config, LLDP, LACP) i analiza ryzyka zmian.
 - `security_audit.go`, `audit_history.go`, `diagnostics.go`, `monitor_history.go`.
 
+## Frontend (`web/`)
+- `loading.js` — przechwytuje `fetch` do `/api/` po kliknięciu: pasek postępu, przycisk zajęty, komunikaty. Ładowany przed `app.js`.
+- `services.js` + `internal/device/services.go` + `internal/server/services_routes.go` — moduł usług (SSH zablokowane, SNMP/DHCP wymagają potwierdzenia).
+- Domyślne stany usług AW+ nie są pewne; stan „nieustalony” jest celowy. Potwierdzić na switchu formaty `show http`, `show telnet`, `show lldp`.
+
 ## Komunikacja ze switchem
 - SNMP (v2c lub v3) — stan portów z IF-MIB, `internal/device/device.go` (`readStatus`).
 - SSH — polecenia `show` (lista dozwolonych: `allowed` w device.go) i zmiany konfiguracji (`runConfig`).

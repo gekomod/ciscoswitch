@@ -659,6 +659,31 @@ func TestTopologyLLDPAndLACPParsersIgnoreHeaders(t *testing.T) {
  groups:=parseTopologyLACP("Aggregator po1\nPartner LAG: SW-CORE\nIndividual: 2 - Ready: 1\nLink: port1.0.1 synchronized\n")
  if len(groups)!=1||groups[0].Partner!="SW-CORE"||groups[0].Ready!="Gotowy"||len(groups[0].Members)!=1{t.Fatalf("unexpected LACP groups: %+v",groups)}
 }
+
+func TestBuildTopologyImpactsMapsDegradedLACPToPortsVLANsAndNeighbors(t *testing.T) {
+ ports:=[]topologyPort{
+  {Port:"port1.0.1",VLANs:[]int{10,20},NativeVLAN:10,LAG:"Po1"},
+  {Port:"port1.0.2",VLANs:[]int{10,20},NativeVLAN:10,LAG:"Po1"},
+ }
+ links:=[]topologyLink{{LocalPort:"port1.0.1",Neighbor:"CORE-SWITCH Ethernet1/1"}}
+ lags:=[]topologyAggregation{{Name:"Po1",Members:[]string{"port1.0.1","port1.0.2"},Live:true,LiveMembers:[]string{"port1.0.1"},MemberMismatch:true,Ready:"Gotowy"}}
+ risks:=[]topologyRisk{{"warning","lag-member-mismatch","Niespójność członków LACP","Po1: configured members differ","Sprawdź partnera."}}
+ impacts:=buildTopologyImpacts(ports,links,lags,risks)
+ if len(impacts)!=1 { t.Fatalf("expected one impact, got %+v",impacts) }
+ got:=impacts[0]
+ if got.Subject!="Po1"||len(got.ConfiguredPorts)!=2||len(got.LivePorts)!=1||len(got.VLANs)!=2||got.VLANs[0]!=10||got.VLANs[1]!=20||len(got.Neighbors)!=1||!got.VLANEvidenceAvailable {
+  t.Fatalf("unexpected impact mapping: %+v",got)
+ }
+}
+func TestBuildTopologyImpactsDoesNotInventVLANsWhenUnavailable(t *testing.T) {
+ ports:=[]topologyPort{{Port:"port1.0.48",Role:"Uplink / switch"}}
+ risks:=[]topologyRisk{{"warning","single-explicit-uplink","Single uplink","port1.0.48 is sole explicit uplink","Check paths."}}
+ impacts:=buildTopologyImpacts(ports,nil,nil,risks)
+ if len(impacts)!=1||impacts[0].VLANEvidenceAvailable||len(impacts[0].VLANs)!=0 {
+  t.Fatalf("must not invent VLAN impact when no VLAN evidence exists: %+v",impacts)
+ }
+}
+
 func TestTopologyMapHandlerOnlyReadsAndRequiresConfig(t *testing.T) {
  calls:=[]string{}
  h:=topologyMapHandler(func(command string)(string,error){calls=append(calls,command);switch command{case "show running-config":return "vlan 10\ninterface port1.0.1\n switchport mode access\n switchport access vlan 10\n",nil;case "show interface switchport":return "Interface name: port1.0.1\nSwitchport mode: access\nDefault Vlan: 10\nConfigured Vlans: 10\n",nil;case "show lldp neighbors":return "Local Interface Neighbor\n",nil;case "show etherchannel detail":return "",fmt.Errorf("unsupported")};return "",fmt.Errorf("unexpected command")})

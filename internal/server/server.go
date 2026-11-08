@@ -845,14 +845,81 @@ func analyzeSecurityConfiguration(config string) []securityAuditFinding {
  }
  return findings
 }
+
+func parseAuditVLANSet(raw string) map[int]bool {
+ out:=map[int]bool{}
+ for _,part:=range strings.Split(strings.TrimSpace(raw),","){
+  part=strings.TrimSpace(part);if part==""{continue}
+  if loRaw,hiRaw,ok:=strings.Cut(part,"-");ok{
+   lo,e1:=strconv.Atoi(strings.TrimSpace(loRaw));hi,e2:=strconv.Atoi(strings.TrimSpace(hiRaw))
+   if e1==nil&&e2==nil&&lo>=1&&hi<=4094&&hi>=lo&&hi-lo<=4093{for n:=lo;n<=hi;n++{out[n]=true}}
+  }else if n,err:=strconv.Atoi(part);err==nil&&n>=1&&n<=4094{out[n]=true}
+ }
+ return out
+}
+func analyzeVLANAndPortSecurity(config,switchport string) []securityAuditFinding {
+ findings:=make([]securityAuditFinding,0)
+ declared:=map[int]bool{}
+ referenced:=map[int]bool{}
+ type ifaceConfig struct{name,mode,native,allowed,access string}
+ interfaces:=make([]ifaceConfig,0)
+ var current *ifaceConfig
+ for _,line:=range strings.Split(config,"\n"){
+  trimmed:=strings.TrimSpace(line);lower:=strings.ToLower(trimmed)
+  if strings.HasPrefix(lower,"interface "){
+   interfaces=append(interfaces,ifaceConfig{name:strings.TrimSpace(trimmed[len("interface "):])})
+   current=&interfaces[len(interfaces)-1];continue
+  }
+  if current!=nil {
+   fields:=strings.Fields(lower)
+   if len(fields)>=2&&fields[0]=="switchport"&&fields[1]=="mode"&&len(fields)>=3{current.mode=fields[2]}
+   if len(fields)>=4&&fields[0]=="switchport"&&fields[1]=="access"&&fields[2]=="vlan"{current.access=fields[3]}
+   if len(fields)>=5&&fields[0]=="switchport"&&fields[1]=="trunk"&&fields[2]=="native"&&fields[3]=="vlan"{current.native=fields[4]}
+   if len(fields)>=5&&fields[0]=="switchport"&&fields[1]=="trunk"&&fields[2]=="allowed"&&fields[3]=="vlan"{current.allowed=strings.Join(fields[4:],"")}
+  }
+  if strings.HasPrefix(lower,"vlan "){
+   fields:=strings.Fields(lower);if len(fields)==2{if n,e:=strconv.Atoi(fields[1]);e==nil&&n>=1&&n<=4094{declared[n]=true}}
+  }
+ }
+ for _,p:=range interfaces{
+  if n,e:=strconv.Atoi(p.access);e==nil&&n>=1&&n<=4094{referenced[n]=true}
+  for n:=range parseAuditVLANSet(p.allowed){referenced[n]=true}
+  if p.mode=="trunk"&&p.native!=""&&p.allowed!=""{
+   native,e:=strconv.Atoi(p.native);allowed:=parseAuditVLANSet(p.allowed)
+   if e==nil&&!allowed[native]{findings=append(findings,securityAuditFinding{"warning","trunk-native-not-allowed","Native VLAN nie znajduje się na jawnej liście allowed",p.name+": native VLAN "+p.native+"; allowed "+p.allowed,"Zweryfikuj zamierzony ruch tagowany i nietagowany. Dodaj native VLAN do allowed lub popraw native VLAN po sprawdzeniu konfiguracji sąsiada."})}
+  }
+ }
+ if len(declared)>0{
+  for vlan:=range declared{if !referenced[vlan]&&vlan!=1{findings=append(findings,securityAuditFinding{"info","vlan-no-explicit-port-reference","VLAN bez jawnego przypisania w running-config",fmt.Sprintf("VLAN %d istnieje, ale parser nie znalazł jawnego przypisania access ani allowed trunk.",vlan),"Sprawdź członkostwo VLAN i tablicę MAC. To kandydat do weryfikacji, a nie dowód, że VLAN jest nieużywany."})}}
+  for vlan:=range referenced{if !declared[vlan]&&vlan!=1{findings=append(findings,securityAuditFinding{"warning","port-references-undeclared-vlan","Port odwołuje się do VLAN nieznajdującego się w deklaracjach",fmt.Sprintf("VLAN %d jest użyty w konfiguracji interfejsu, ale nie znaleziono deklaracji vlan %d.",vlan,vlan),"Sprawdź pełny running-config i stan bazy VLAN. Nie twórz ani nie usuwaj VLAN automatycznie."})}}
+ }
+ blocks:=regexp.MustCompile(`(?im)^\s*Interface name\s*:\s*(\S+)\s*$`).FindAllStringSubmatchIndex(switchport,-1)
+ for i,loc:=range blocks{
+  name:=strings.TrimSpace(switchport[loc[2]:loc[3]]);end:=len(switchport);if i+1<len(blocks){end=blocks[i+1][0]}
+  block:=switchport[loc[0]:end]
+  val:=func(label string)string{re:=regexp.MustCompile(`(?im)^\s*`+regexp.QuoteMeta(label)+`\s*:\s*(.*?)\s*$`);m:=re.FindStringSubmatch(block);if len(m)>1{return strings.TrimSpace(m[1])};return ""}
+  mode:=strings.ToLower(val("Switchport mode"));nativeRaw:=val("Default Vlan")
+  configured:=val("Configured Vlans")
+  if mode=="trunk"&&nativeRaw!=""&&configured!=""{
+   native,e:=strconv.Atoi(nativeRaw);allowed:=map[int]bool{}
+   for _,token:=range strings.Fields(configured){if n,e:=strconv.Atoi(strings.Trim(token,","));e==nil&&n>=1&&n<=4094{allowed[n]=true}}
+   if e==nil&&!allowed[native]{findings=append(findings,securityAuditFinding{"warning","trunk-native-not-in-configured-vlans","Native VLAN nie występuje w odczycie VLAN skonfigurowanych na trunku",name+": native VLAN "+nativeRaw+"; configured VLANs "+configured,"Zweryfikuj listę VLAN na obu końcach łącza przed zmianą. Odczyt switchport i running-config mogą mieć różne formaty lub zakresy."})}
+  }
+ }
+ return findings
+}
 func securityAuditHandler(read func(string)(string,error)) http.Handler {
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodGet{http.Error(w,"method not allowed",http.StatusMethodNotAllowed);return}
   config,err:=read("show running-config")
   if err!=nil{http.Error(w,"nie udało się odczytać running-config; audyt bezpieczeństwa nie został wykonany",http.StatusBadGateway);return}
   findings:=analyzeSecurityConfiguration(config)
+  checks:=map[string]bool{"runningConfig":true}
+  switchport,switchportErr:=read("show interface switchport")
+  if switchportErr==nil&&strings.Contains(switchport,"Interface name"){findings=append(findings,analyzeVLANAndPortSecurity(config,switchport)...);checks["switchport"]=true}else{checks["switchport"]=false}
+  if switchportErr!=nil{findings=append(findings,securityAuditFinding{"info","switchport-data-unavailable","Brak odczytu szczegółów switchport","Nie udało się pobrać lub rozpoznać show interface switchport.","Ponów audyt; analiza spójności trunków jest niekompletna."})}
   w.Header().Set("Content-Type","application/json; charset=utf-8")
   w.Header().Set("Cache-Control","no-store")
-  _=json.NewEncoder(w).Encode(map[string]any{"available":true,"readOnly":true,"findings":findings,"checks":map[string]any{"snmpDefaultCommunity":true,"httpManagement":true,"telnetManagement":true,"spanningTree":true},"note":"Audyt wykrywa wyłącznie jawne wpisy rozpoznane w running-config. Brak wykrycia nie jest dowodem bezpieczeństwa; nieznane formaty i ustawienia nie są zgadywane."})
+  _=json.NewEncoder(w).Encode(map[string]any{"available":true,"readOnly":true,"findings":findings,"checks":checks,"note":"VLAN bez jawnego przypisania są kandydatami do weryfikacji, nie dowodem nieużywania. Wnioski trunk wymagają rozpoznanych pól switchport. Brak wykrycia nie jest dowodem bezpieczeństwa."})
  })
 }

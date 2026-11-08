@@ -221,7 +221,9 @@ func StartMonitorCollector(ctx context.Context, svc *device.Service, path string
       if (old.Oper=="up"||old.Oper=="down")&&(p.Oper=="up"||p.Oper=="down")&&old.Oper!=p.Oper {
        rec:=monitorRecord{Kind:"port",Timestamp:now,Port:p.Name,State:p.Oper}
        if err:=store.append(rec);err!=nil{log.Printf("monitor history write failed: %v",err)}else{sharedMonitorEventHub.publish(rec)}
-       event:=monitorRecord{Kind:"event",Timestamp:now,Message:fmt.Sprintf("%s: link %s → %s",p.Name,strings.ToUpper(old.Oper),strings.ToUpper(p.Oper)),Type:map[bool]string{true:"success",false:"danger"}[p.Oper=="up"]}
+       severity:="warning"
+       if p.Oper=="up"{severity="success"}else if p.Admin=="up"{severity="danger"}
+       event:=monitorRecord{Kind:"event",Timestamp:now,Message:fmt.Sprintf("%s: link %s → %s",p.Name,strings.ToUpper(old.Oper),strings.ToUpper(p.Oper)),Type:severity}
        if err:=store.append(event);err!=nil{log.Printf("monitor history write failed: %v",err)}else{sharedMonitorEventHub.publish(event)}
       }
       inErr:=counterDelta(p.InErrors,old.InErrors);outErr:=counterDelta(p.OutErrors,old.OutErrors)
@@ -229,6 +231,13 @@ func StartMonitorCollector(ctx context.Context, svc *device.Service, path string
       if inErr+outErr+inDrop+outDrop>0 {
        rec:=monitorRecord{Kind:"counter",Timestamp:now,Port:p.Name,ErrorRXDelta:float64(inErr),ErrorTXDelta:float64(outErr),DiscardRXDelta:float64(inDrop),DiscardTXDelta:float64(outDrop),ErrorRXTotal:float64(p.InErrors),ErrorTXTotal:float64(p.OutErrors),DiscardRXTotal:float64(p.InDiscards),DiscardTXTotal:float64(p.OutDiscards)}
        if err:=store.append(rec);err!=nil{log.Printf("monitor history write failed: %v",err)}else{sharedMonitorEventHub.publish(rec)}
+       parts:=[]string{}
+       if inErr>0{parts=append(parts,fmt.Sprintf("RX +%d błędów",inErr))}
+       if outErr>0{parts=append(parts,fmt.Sprintf("TX +%d błędów",outErr))}
+       if inDrop>0{parts=append(parts,fmt.Sprintf("RX +%d discard",inDrop))}
+       if outDrop>0{parts=append(parts,fmt.Sprintf("TX +%d discard",outDrop))}
+       event:=monitorRecord{Kind:"event",Timestamp:now,Message:fmt.Sprintf("%s: %s",p.Name,strings.Join(parts,", ")),Type:"warning"}
+       if err:=store.append(event);err!=nil{log.Printf("monitor history write failed: %v",err)}else{sharedMonitorEventHub.publish(event)}
       }
      }
     }

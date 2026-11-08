@@ -41,6 +41,7 @@ func Register(m *http.ServeMux,svc *device.Service){
  diagnosticsStore:=sharedDiagnosticsStore(diagnosticsPath,12000)
  m.Handle("/api/diagnostics/collect",diagnosticsCollectHandler(svc.RunReadOnly,diagnosticsStore))
  m.Handle("/api/diagnostics/history",diagnosticsHistoryHandler(diagnosticsStore))
+ m.Handle("/api/events",diagnosticsEventsHandler(diagnosticsStore))
  m.Handle("/api/diagnostics/availability",diagnosticsAvailabilityHandler(diagnosticsStore))
  m.Handle("/api/diagnostics/availability.csv",diagnosticsAvailabilityCSVHandler(diagnosticsStore))
  m.Handle("/api/diagnostics/acknowledge",diagnosticsAcknowledgeHandler(diagnosticsStore,diagnosticsPath+".acks.json"))
@@ -1281,7 +1282,16 @@ func diagnosticsTransitions(samples []diagnosticsSample)[]diagnosticsTransition{
   if prev.Checks["lldp"]&&cur.Checks["lldp"]{
    old:=map[string]string{};now:=map[string]string{}
    for _,n:=range prev.Neighbors{old[strings.ToLower(n.LocalPort)]=n.Neighbor};for _,n:=range cur.Neighbors{now[strings.ToLower(n.LocalPort)]=n.Neighbor}
-   for port,neighbor:=range old{if next,ok:=now[port];ok&&next!=neighbor{out=append(out,diagnosticsTransition{"lldp-neighbor-change",port,neighbor,next,cur.CapturedAt,"info"})}}
+   for port,neighbor:=range old{
+    next,ok:=now[port]
+    if !ok{out=append(out,diagnosticsTransition{"lldp-neighbor-removed",port,neighbor,"brak sąsiada w odczycie",cur.CapturedAt,"warning"})}else if next!=neighbor{out=append(out,diagnosticsTransition{"lldp-neighbor-change",port,neighbor,next,cur.CapturedAt,"info"})}
+   }
+   for port,neighbor:=range now{if _,ok:=old[port];!ok{out=append(out,diagnosticsTransition{"lldp-neighbor-added",port,"brak sąsiada w odczycie",neighbor,cur.CapturedAt,"info"})}}
+  }
+  // Wynik kontroli CLI opisuje dostępność odczytu zarządzającego, nie status ruchu.
+  for _,check:=range []string{"runningConfig","switchport","lldp","lacp"}{
+   if prev.Checks[check]&&!cur.Checks[check]{out=append(out,diagnosticsTransition{"control-read-failed",check,"odczyt poprawny","odczyt nieudany",cur.CapturedAt,"warning"})}
+   if !prev.Checks[check]&&cur.Checks[check]{out=append(out,diagnosticsTransition{"control-read-restored",check,"odczyt nieudany","odczyt poprawny",cur.CapturedAt,"info"})}
   }
  }
  return out
@@ -1364,6 +1374,69 @@ func diagnosticsAcknowledgeHandler(store *diagnosticsStore,path string)http.Hand
   w.Header().Set("Content-Type","application/json");w.Header().Set("Cache-Control","no-store");_=json.NewEncoder(w).Encode(map[string]any{"saved":true,"acknowledgement":row})
  })
 }
+type diagnosticsEvent struct {
+ ID string `json:"id"`
+ Type string `json:"type"`
+ Severity string `json:"severity"`
+ Title string `json:"title"`
+ Subject string `json:"subject"`
+ Description string `json:"description"`
+ At time.Time `json:"at"`
+ Acknowledged bool `json:"acknowledged"`
+ Acknowledgement *diagnosticsAcknowledgement `json:"acknowledgement,omitempty"`
+}
+func diagnosticsEventID(kind,subject string,at time.Time)string{
+ sum:=sha256.Sum256([]byte(kind+"\x00"+subject+"\x00"+at.UTC().Format(time.RFC3339Nano)))
+ return hex.EncodeToString(sum[:])
+}
+func diagnosticsEventsHandler(store *diagnosticsStore)http.Handler{
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  if r.Method!=http.MethodGet{http.Error(w,"method not allowed",405);return}
+  window:=strings.TrimSpace(r.URL.Query().Get("window"));if window==""{window="24h"}
+  durations:=map[string]time.Duration{"24h":24*time.Hour,"7d":7*24*time.Hour,"30d":30*24*time.Hour}
+  span,ok:=durations[window];if !ok{http.Error(w,"window musi mieć wartość 24h, 7d lub 30d",400);return}
+  kind:=strings.TrimSpace(r.URL.Query().Get("type"));if kind==""{kind="all"}
+  allowed:=map[string]bool{"all":true,"alarm":true,"lacp":true,"lldp":true,"availability":true}
+  if !allowed[kind]{http.Error(w,"nieobsługiwana kategoria zdarzeń",400);return}
+  limit:=100;if raw:=r.URL.Query().Get("limit");raw!=""{n,err:=strconv.Atoi(raw);if err!=nil||n<1||n>500{http.Error(w,"limit musi mieścić się w zakresie 1–500",400);return};limit=n}
+  samples,err:=store.list();if err!=nil{http.Error(w,"nie udało się odczytać historii diagnostycznej",500);return}
+  cutoff:=time.Now().UTC().Add(-span)
+  ackRows,err:=sharedDiagnosticsAckStore(store.path+".acks.json").list();if err!=nil{http.Error(w,"nie udało się odczytać potwierdzeń alarmów",500);return}
+  ackByID:=map[string]diagnosticsAcknowledgement{};for i:=range ackRows{ackByID[ackRows[i].ID]=ackRows[i]}
+  events:=make([]diagnosticsEvent,0)
+  add:=func(eventType,severity,title,subject,description string,at time.Time){
+   if at.IsZero()||at.Before(cutoff)||(kind!="all"&&kind!=eventType){return}
+   id:=diagnosticsEventID(eventType,subject,at)
+   events=append(events,diagnosticsEvent{ID:id,Type:eventType,Severity:severity,Title:title,Subject:subject,Description:description,At:at})
+  }
+  for _,tr:=range diagnosticsTransitions(samples){
+   switch tr.Type{
+   case "lacp-ready":add("lacp",tr.Severity,"Zmiana gotowości LACP",tr.Subject,tr.From+" → "+tr.To,tr.At)
+   case "lacp-member-lost":add("lacp","critical","Utrata aktywnego członka LACP",tr.Subject,tr.From+" → "+tr.To,tr.At)
+   case "lacp-member-restored":add("lacp","info","Powrót członka LACP",tr.Subject,tr.From+" → "+tr.To,tr.At)
+   case "lldp-neighbor-added":add("lldp","info","Wykryto sąsiada LLDP",tr.Subject,tr.To,tr.At)
+   case "lldp-neighbor-removed":add("lldp","warning","Zniknął sąsiad LLDP",tr.Subject,tr.From,tr.At)
+   case "lldp-neighbor-change":add("lldp","info","Zmiana sąsiada LLDP",tr.Subject,tr.From+" → "+tr.To,tr.At)
+   case "control-read-failed":add("availability","warning","Nieudany odczyt zarządzający",tr.Subject,"Kontrola CLI nie powiodła się. To brak potwierdzenia odczytu, a nie dowód, że switch lub ruch użytkowników jest offline.",tr.At)
+   case "control-read-restored":add("availability","info","Odczyt zarządzający przywrócony",tr.Subject,"Kontrola CLI ponownie zakończyła się poprawnie.",tr.At)
+   }
+  }
+  if len(samples)>0&&(kind=="all"||kind=="alarm"){
+   for _,alert:=range diagnosticsCurrentAlerts(samples[len(samples)-1]){
+    id:=diagnosticsAlertID(alert.Code,alert.Evidence,alert.At)
+    if alert.At.Before(cutoff){continue}
+    event:=diagnosticsEvent{ID:id,Type:"alarm",Severity:alert.Severity,Title:alert.Title,Subject:alert.Code,Description:alert.Evidence,At:alert.At}
+    if ack,exists:=ackByID[id];exists{event.Acknowledged=true;event.Acknowledgement=&ack}
+    events=append(events,event)
+   }
+  }
+  sort.Slice(events,func(i,j int)bool{if events[i].At.Equal(events[j].At){return events[i].ID<events[j].ID};return events[i].At.After(events[j].At)})
+  total:=len(events);if len(events)>limit{events=events[:limit]}
+  w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
+  _=json.NewEncoder(w).Encode(map[string]any{"events":events,"total":total,"window":window,"type":kind,"limit":limit,"note":"Brak odczytu oznacza nieudaną kontrolę zarządzającą, a nie potwierdzoną awarię switcha lub ruchu."})
+ })
+}
+
 func diagnosticsHistoryHandler(store *diagnosticsStore)http.Handler{
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodGet{http.Error(w,"method not allowed",405);return}

@@ -1316,13 +1316,13 @@ func diagnosticsSamplingSettings()(string,string){
  return "scheduled",interval.String()
 }
 type diagnosticsAcknowledgement struct {
- ID string \`json:"id"\`
- Code string \`json:"code"\`
- Evidence string \`json:"evidence"\`
- At time.Time \`json:"at"\`
- AcknowledgedAt time.Time \`json:"acknowledgedAt"\`
- Username string \`json:"username"\`
- Comment string \`json:"comment"\`
+ ID string `json:"id"`
+ Code string `json:"code"`
+ Evidence string `json:"evidence"`
+ At time.Time `json:"at"`
+ AcknowledgedAt time.Time `json:"acknowledgedAt"`
+ Username string `json:"username"`
+ Comment string `json:"comment"`
 }
 type diagnosticsAckStore struct { mu sync.Mutex; path string }
 var diagnosticsAckRegistryMu sync.Mutex
@@ -1361,14 +1361,14 @@ func diagnosticsAcknowledgeHandler(store *diagnosticsStore,path string)http.Hand
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
   r.Body=http.MaxBytesReader(w,r.Body,2048)
-  var q struct{ID string \`json:"id"\`;Comment string \`json:"comment"\`}
+  var q struct{ID string `json:"id"`;Comment string `json:"comment"`}
   if json.NewDecoder(r.Body).Decode(&q)!=nil||len(q.ID)!=64||len(q.Comment)>500{http.Error(w,"nieprawidłowe dane potwierdzenia alarmu",400);return}
   samples,err:=store.list();if err!=nil{http.Error(w,"nie można odczytać historii diagnostycznej",500);return}
   if len(samples)==0{http.Error(w,"brak aktywnych alarmów",409);return}
   found:=false;var row diagnosticsAcknowledgement
   for _,alert:=range diagnosticsCurrentAlerts(samples[len(samples)-1]){if diagnosticsAlertID(alert.Code,alert.Evidence,alert.At)==q.ID{found=true;row=diagnosticsAcknowledgement{ID:q.ID,Code:alert.Code,Evidence:alert.Evidence,At:alert.At};break}}
   if !found{http.Error(w,"alarm nie jest już aktywny lub jego stan się zmienił; odśwież listę",409);return}
-  username:="unknown";if identity,ok:=r.Context().Value(identityContextKey{}).(panelIdentity);ok&&identity.Username!=""{username=identity.Username}
+  username:="unknown";if authenticated,ok:=r.BasicAuth();ok&&strings.TrimSpace(authenticated)!=""{username=authenticated}
   row.AcknowledgedAt=time.Now().UTC();row.Username=username;row.Comment=strings.TrimSpace(q.Comment)
   if err=acks.save(row);err!=nil{http.Error(w,"nie udało się zapisać potwierdzenia alarmu",500);return}
   w.Header().Set("Content-Type","application/json");w.Header().Set("Cache-Control","no-store");_=json.NewEncoder(w).Encode(map[string]any{"saved":true,"acknowledgement":row})

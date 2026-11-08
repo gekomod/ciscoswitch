@@ -88,6 +88,12 @@ func (s *panelUserStore) identity(r *http.Request)(panelIdentity,bool) {
 func (s *panelUserStore) middleware(next http.Handler) http.Handler {
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   switch r.URL.Path {
+  case "/login":
+   // Keep the login page reachable even if the outer router sends it through
+   // the authenticated catch-all handler. Otherwise an unauthenticated
+   // request can redirect /login back to /login indefinitely.
+   panelLoginPageHandler(w,r)
+   return
   case "/api/login":s.login(w,r);return
   case "/api/logout":
    if r.Method!="POST"{http.Error(w,"method not allowed",405);return};if c,e:=r.Cookie("panel_session");e==nil{s.mu.Lock();delete(s.sessions,c.Value);s.mu.Unlock()};http.SetCookie(w,&http.Cookie{Name:"panel_session",Value:"",Path:"/",HttpOnly:true,SameSite:http.SameSiteStrictMode,MaxAge:-1});w.WriteHeader(204);return

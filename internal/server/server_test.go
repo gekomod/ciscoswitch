@@ -947,3 +947,18 @@ func TestDiagnosticsAvailabilityReportBuildsFixedTimeline(t *testing.T) {
  if err!=nil{t.Fatal(err)}
  if len(report.Timeline)!=7{t.Fatalf("timeline buckets=%d want 7",len(report.Timeline))}
 }
+
+
+func TestDiagnosticsAvailabilityClosesOutageAtLastKnownSampleBeforeGap(t *testing.T) {
+ now:=time.Now().UTC().Truncate(time.Second)
+ samples:=[]diagnosticsSample{
+  {CapturedAt:now.Add(-5*time.Minute),Checks:map[string]bool{"runningConfig":true}},
+  {CapturedAt:now.Add(-4*time.Minute),Checks:map[string]bool{"runningConfig":false}},
+  {CapturedAt:now.Add(-3*time.Minute),Checks:map[string]bool{"runningConfig":false}},
+  {CapturedAt:now,Checks:map[string]bool{"runningConfig":true}},
+ }
+ metric:=diagnosticsAvailabilityMetric("CLI",samples,now.Add(-6*time.Minute),now,2*time.Minute,func(s diagnosticsSample)(bool,bool){return s.Checks!=nil,s.Checks["runningConfig"]})
+ if metric.OutageCount!=1{t.Fatalf("outages=%+v want one outage",metric.Outages)}
+ if metric.Outages[0].Open{t.Fatalf("outage must be closed at unknown-data boundary: %+v",metric.Outages[0])}
+ if !metric.Outages[0].End.Equal(samples[2].CapturedAt){t.Fatalf("outage end=%s want last known sample %s",metric.Outages[0].End,samples[2].CapturedAt)}
+}

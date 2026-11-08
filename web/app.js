@@ -1368,6 +1368,22 @@ function renderDiagnosticsCenter(data){
  transitions.innerHTML=(data.transitions||[]).length?(data.transitions||[]).slice().reverse().map(t=>'<article class="diagnostic-transition"><span class="severity-dot severity-'+esc(t.severity)+'"></span><div><b>'+esc(t.subject)+'</b><small>'+esc(t.from)+' → '+esc(t.to)+'</small></div><time>'+esc(new Date(t.at).toLocaleString())+'</time></article>').join(''):'<div class="empty">'+esc(data.note||'Brak zmian między porównywalnymi próbkami.')+'</div>';
  samples.innerHTML=list.length?list.slice().reverse().slice(0,8).map(s=>'<article class="diagnostic-sample"><b>'+esc(new Date(s.capturedAt).toLocaleString())+'</b><small>Kontrole: '+Object.entries(s.checks||{}).filter(([,v])=>v).map(([k])=>({runningConfig:'konfiguracja',switchport:'switchport',lldp:'LLDP',lacp:'LACP'}[k]||k)).join(' · ')+' </small><small>LACP: '+(s.aggregations||[]).length+' · uplinki: '+(s.uplinks||[]).length+' · sąsiedzi: '+(s.neighbors||[]).length+'</small></article>').join(''):'<div class="empty">Brak zapisanych próbek.</div>';
 }
+
+function renderAvailabilityMetric(metric){
+ const percent=metric.availabilityPercent===null||metric.availabilityPercent===undefined?'—':Number(metric.availabilityPercent).toFixed(2)+'%';
+ const observed=Number(metric.observedSeconds||0),unknown=Number(metric.unknownSeconds||0),outages=Number(metric.outageCount||0);
+ const duration=s=>{s=Math.max(0,Number(s)||0);if(s<60)return Math.round(s)+' s';if(s<3600)return Math.round(s/60)+' min';if(s<86400)return (s/3600).toFixed(1)+' h';return (s/86400).toFixed(1)+' d';};
+ return '<article class="availability-card"><span>'+esc(metric.name)+'</span><strong>'+percent+'</strong><small>Pomiar: '+duration(observed)+' · Brak danych: '+duration(unknown)+'</small><small>Przerwy: '+outages+' · Łącznie: '+duration(metric.outageSeconds)+'</small></article>';
+}
+async function refreshAvailability(){
+ const cards=$('availability-cards'),groups=$('availability-aggregations'),note=$('availability-note');if(!cards||!groups)return;
+ try{
+  const window=$('availability-window')?.value||'24h';const data=await api('/api/diagnostics/availability?window='+window);
+  cards.innerHTML=renderAvailabilityMetric(data.device);
+  groups.innerHTML=(data.aggregations||[]).length?'<h5>Dostępność agregacji LACP</h5><div class="availability-cards">'+data.aggregations.map(renderAvailabilityMetric).join('')+'</div>':'<div class="empty">Brak rozpoznanych agregacji LACP w historii.</div>';
+  if(note)note.textContent=data.method+' Maksymalna luka między próbkami: '+data.maxSampleGapSeconds+' s.';
+ }catch(e){cards.innerHTML='<div class="empty">Nie udało się pobrać dostępności: '+esc(e.message)+'</div>';}
+}
 async function refreshDiagnosticsCenter(){
  const meta=$('diagnostics-meta');if(meta)meta.textContent='Odczyt historii diagnostycznej…';
  try{const windowMinutes=Number($('diagnostics-window')?.value||60);const data=await api('/api/diagnostics/history?limit=100&windowMinutes='+windowMinutes);renderDiagnosticsCenter(data);}
@@ -1380,7 +1396,7 @@ async function collectDiagnosticsCenter(){
  catch(e){if($('diagnostics-meta'))$('diagnostics-meta').textContent='Nie udało się zebrać próbki: '+e.message;}
  finally{button.disabled=false;button.textContent='Zbierz próbkę';}
 }
-if($('collect-diagnostics')){$('collect-diagnostics').addEventListener('click',collectDiagnosticsCenter);$('refresh-diagnostics')?.addEventListener('click',refreshDiagnosticsCenter);$('diagnostics-window')?.addEventListener('change',refreshDiagnosticsCenter);refreshDiagnosticsCenter();setInterval(()=>{if(!document.hidden)refreshDiagnosticsCenter();},30000);}
+if($('collect-diagnostics')){$('collect-diagnostics').addEventListener('click',collectDiagnosticsCenter);$('refresh-diagnostics')?.addEventListener('click',refreshDiagnosticsCenter);$('diagnostics-window')?.addEventListener('change',refreshDiagnosticsCenter);refreshDiagnosticsCenter();setInterval(()=>{if(!document.hidden){refreshDiagnosticsCenter();refreshAvailability();}},30000);$('availability-window')?.addEventListener('change',refreshAvailability);refreshAvailability();}
 
 async function acknowledgeDiagnosticsAlert(id,button){
  const input=$('diagnostics-alerts')?.querySelector('[data-ack-comment="'+id+'"]');

@@ -160,3 +160,8 @@ Sekcja w audycie bezpieczeństwa pobiera lokalny running-config, show interface 
 ### Dostępność i ciągłość pomiarów
 
 Centrum diagnostyki udostępnia podsumowanie 24-godzinne i 7-dniowe. Wskaźnik urządzenia opisuje wyłącznie osiągalność uwierzytelnionego CLI (udany odczyt `show running-config`), a nie dostępność ruchu użytkowników, SNMP ani portów. Dla agregacji LACP wskaźnik opiera się na rozpoznanym stanie operacyjnym agregacji. Czas jest liczony tylko między kolejnymi próbkami, których odstęp nie przekracza dwukrotności skonfigurowanego interwału. Przedziały z brakującymi lub zbyt odległymi próbkami są raportowane jako „brak danych” i nie są uznawane za awarię ani dostępność. Wynik jest orientacyjną metryką obserwacji, nie gwarantowanym SLA. Endpoint: `GET /api/diagnostics/availability?window=24h` lub `window=7d`.
+
+
+### Raporty dostępności i eksport
+
+Panel dostępności pokazuje wykres godzinowy dla 24 godzin oraz dzienny dla 7 dni. Słupki bez wystarczających danych są oznaczane jako brak pomiaru, a nie jako 0% dostępności. Eksport CSV jest dostępny pod `GET /api/diagnostics/availability.csv?window=24h` lub `window=7d`. Plik zawiera podsumowanie urządzenia i każdej agregacji LACP, pokrycie pomiarami, czas nieznany oraz osobne wiersze dla wykrytych przerw. CSV jest kodowany UTF-8 z BOM i używa separatora średnikowego, aby poprawnie otwierać się w polskim Excelu.

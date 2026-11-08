@@ -55,12 +55,14 @@ func Register(m *http.ServeMux,svc *device.Service){
  current,err:=device.ParseSwitchportDetails(raw,q.Port)
  if err!=nil{http.Error(w,"nie udało się jednoznacznie rozpoznać bieżącej konfiguracji portu; podgląd i zapis zostały zablokowane",http.StatusConflict);return}
  warnings:=[]string{"Bieżąca konfiguracja została odczytana bez wprowadzania zmian."}
+ risks:=topologyChangeRisks(svc.RunReadOnly,q.Port)
+ for _,risk:=range risks{warnings=append(warnings,risk.Title+": "+risk.Evidence+" Zalecenie: "+risk.Recommendation)}
  if strings.ToLower(current.Mode)!=q.Mode{warnings=append(warnings,"Zmiana trybu portu z "+current.Mode+" na "+q.Mode+" może przerwać łączność urządzeń.")}
  if q.Mode=="trunk"{warnings=append(warnings,"Zmiana listy allowed VLAN może przerwać ruch urządzeń korzystających z tego portu.")}
  w.Header().Set("Content-Type","application/json")
  w.Header().Set("Cache-Control","no-store")
  _=json.NewEncoder(w).Encode(map[string]any{
-  "commands":cmds,"warnings":warnings,"applies":false,
+  "commands":cmds,"warnings":warnings,"risks":risks,"applies":false,
   "current":map[string]any{"port":current.Port,"mode":current.Mode,"defaultVlan":current.DefaultVLAN,"configuredVlans":current.ConfiguredVLANs},
  })
 })
@@ -130,8 +132,10 @@ m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method
   if isProtectedPort(q.Port){http.Error(w,"port "+q.Port+" jest chroniony przez PROTECTED_PORTS",400);return}
   commands,current,err:=validatePortRepair(svc.RunReadOnly,q)
   if err!=nil{http.Error(w,err.Error(),400);return}
+  risks:=topologyChangeRisks(svc.RunReadOnly,q.Port)
+  warnings:=make([]string,0,len(risks));for _,risk:=range risks{warnings=append(warnings,risk.Title+": "+risk.Evidence+" Zalecenie: "+risk.Recommendation)}
   w.Header().Set("Content-Type","application/json");w.Header().Set("Cache-Control","no-store")
-  _=json.NewEncoder(w).Encode(map[string]any{"port":q.Port,"current":current,"commands":commands,"applies":false})
+  _=json.NewEncoder(w).Encode(map[string]any{"port":q.Port,"current":current,"commands":commands,"risks":risks,"warnings":warnings,"applies":false})
  })
  m.HandleFunc("/api/ports/repair/apply",func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
@@ -1034,6 +1038,25 @@ func parseTopologyLACP(raw string)[]topologyAggregation{
  }
  return groups
 }
+func topologyChangeRisks(read func(string)(string,error), port string) []topologyRisk {
+ risks:=make([]topologyRisk,0)
+ config,err:=read("show running-config")
+ if err!=nil { return []topologyRisk{{"info","topology-check-unavailable","Niepełna analiza wpływu zmiany","Nie udało się odczytać running-config; rola portu i członkostwo LAG nie zostały potwierdzone.","Przed zmianą sprawdź topologię ręcznie. Podgląd nie może potwierdzić, że port jest bezpieczny."}} }
+ sw,_:=read("show interface switchport")
+ ports,lags,_:=parseTopologyConfig(config,sw)
+ lldpRaw,lldpErr:=read("show lldp neighbors")
+ links:=parseTopologyLLDP(lldpRaw)
+ target:=topologyPort{};found:=false
+ for _,item:=range ports { if strings.EqualFold(item.Port,port){target=item;found=true;break} }
+ if !found { risks=append(risks,topologyRisk{"info","port-role-unknown","Nie udało się ustalić roli portu",port+" nie został jednoznacznie rozpoznany w running-config.","Zweryfikuj przeznaczenie portu i połączenia przed zatwierdzeniem zmiany."}) }
+ if target.Role=="Uplink / switch" { risks=append(risks,topologyRisk{"warning","change-uplink-risk","Zmiana dotyczy portu uplink/switch",port+" ma jawny opis wskazujący na uplink lub połączenie switch-switch.","Zmiana VLAN lub trybu może odciąć dalszą część sieci. Zapewnij alternatywny dostęp i sprawdź konfigurację urządzenia po drugiej stronie."}) }
+ for _,link:=range links { if strings.EqualFold(link.LocalPort,port) { risks=append(risks,topologyRisk{"warning","change-lldp-neighbor","Port ma rozpoznanego sąsiada LLDP",port+" prowadzi do: "+link.Neighbor+".","Przed zmianą oceń wpływ na urządzenie po drugiej stronie i dostęp do zarządzania."});break } }
+ if target.LAG!="" { members:=[]string{};for _,lag:=range lags{if strings.EqualFold(lag.Name,target.LAG){members=lag.Members;break}};risks=append(risks,topologyRisk{"warning","change-lacp-member","Zmiana dotyczy członka agregacji LACP",port+" należy do "+target.LAG+"; członkowie skonfigurowani: "+strings.Join(members,", ")+".","Zmiana VLAN lub trybu może naruszyć spójność agregacji albo przerwać ruch. Sprawdź konfigurację wszystkich członków i partnera."}) }
+ if isProtectedPort(port) { risks=append(risks,topologyRisk{"critical","change-protected-port","Port jest objęty ochroną",port+" znajduje się na liście PROTECTED_PORTS.","Operacja powinna zostać zablokowana; użyj alternatywnego portu zarządzającego."}) }
+ if lldpErr!=nil || strings.TrimSpace(lldpRaw)=="" { risks=append(risks,topologyRisk{"info","change-lldp-unavailable","Sąsiedztwo LLDP niedostępne","Nie udało się uzyskać wiarygodnego odczytu LLDP.","Nie traktuj braku LLDP jako dowodu, że port nie prowadzi do innego urządzenia."}) }
+ return risks
+}
+
 func topologyMapHandler(read func(string)(string,error))http.Handler{
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodGet{http.Error(w,"method not allowed",405);return}

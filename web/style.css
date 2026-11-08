@@ -525,3 +525,11 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .repair-actions .btn{font-size:10px;padding:7px 9px}
 .repair-patch-btn:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:720px){.repair-actions{min-width:0;flex-direction:column}}
+
+.security-audit-panel{margin:18px 0;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2)}
+.security-audit-panel .role-audit-heading{align-items:center;gap:14px}
+.security-audit-panel .role-audit-heading>div{min-width:0}
+.security-audit-panel .role-audit-heading p{margin:5px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+.security-audit-panel .table-wrap{margin-top:12px}
+.security-audit-panel td{vertical-align:top;white-space:normal;min-width:130px}
+@media(max-width:720px){.security-audit-panel .role-audit-heading{align-items:stretch;flex-direction:column}.security-audit-panel .role-audit-heading .btn{width:100%}}

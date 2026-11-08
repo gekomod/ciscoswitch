@@ -1362,7 +1362,7 @@ function renderDiagnosticsCenter(data){
  if(!alerts||!transitions||!samples||!meta)return;
  const list=Array.isArray(data.samples)?data.samples:[];
  const latest=list[list.length-1];
- meta.textContent='Próbek w historii: '+(data.sampleCount??list.length)+' · Ostatni odczyt: '+(latest?new Date(latest.capturedAt).toLocaleString():'brak')+' · '+(data.hasEnoughHistory?'porównanie aktywne':'za mało historii do wykrywania zmian');
+ meta.textContent='Próbek w historii: '+(data.sampleCount??list.length)+' · Ostatni odczyt: '+(latest?new Date(latest.capturedAt).toLocaleString():'brak')+' · '+(data.hasEnoughHistory?'porównanie aktywne':'za mało historii do wykrywania zmian')+' · próbkowanie serwera: '+(data.collectionMode==='scheduled'?'automatyczne':'nieustalone');
  const severityLabel={critical:'KRYTYCZNY',warning:'OSTRZEŻENIE',info:'INFORMACJA'};
  alerts.innerHTML=(data.alerts||[]).length?(data.alerts||[]).map(a=>'<article class="diagnostic-alert severity-'+esc(a.severity)+'"><span>'+esc(severityLabel[a.severity]||a.severity)+'</span><div><b>'+esc(a.title)+'</b><small>'+esc(a.evidence)+'</small></div></article>').join(''):'<div class="empty">Brak rozpoznanych bieżących alarmów. To nie jest certyfikat poprawności całej sieci.</div>';
  transitions.innerHTML=(data.transitions||[]).length?(data.transitions||[]).slice().reverse().map(t=>'<article class="diagnostic-transition"><span class="severity-dot severity-'+esc(t.severity)+'"></span><div><b>'+esc(t.subject)+'</b><small>'+esc(t.from)+' → '+esc(t.to)+'</small></div><time>'+esc(new Date(t.at).toLocaleString())+'</time></article>').join(''):'<div class="empty">'+esc(data.note||'Brak zmian między porównywalnymi próbkami.')+'</div>';
@@ -1370,7 +1370,7 @@ function renderDiagnosticsCenter(data){
 }
 async function refreshDiagnosticsCenter(){
  const meta=$('diagnostics-meta');if(meta)meta.textContent='Odczyt historii diagnostycznej…';
- try{const data=await api('/api/diagnostics/history?limit=100');renderDiagnosticsCenter(data);}
+ try{const windowMinutes=Number($('diagnostics-window')?.value||60);const data=await api('/api/diagnostics/history?limit=100&windowMinutes='+windowMinutes);renderDiagnosticsCenter(data);}
  catch(e){if(meta)meta.textContent='Nie udało się odczytać historii: '+e.message;}
 }
 async function collectDiagnosticsCenter(){
@@ -1380,4 +1380,4 @@ async function collectDiagnosticsCenter(){
  catch(e){if($('diagnostics-meta'))$('diagnostics-meta').textContent='Nie udało się zebrać próbki: '+e.message;}
  finally{button.disabled=false;button.textContent='Zbierz próbkę';}
 }
-if($('collect-diagnostics')){$('collect-diagnostics').addEventListener('click',collectDiagnosticsCenter);refreshDiagnosticsCenter();}
+if($('collect-diagnostics')){$('collect-diagnostics').addEventListener('click',collectDiagnosticsCenter);$('refresh-diagnostics')?.addEventListener('click',refreshDiagnosticsCenter);$('diagnostics-window')?.addEventListener('change',refreshDiagnosticsCenter);refreshDiagnosticsCenter();setInterval(()=>{if(!document.hidden)refreshDiagnosticsCenter();},30000);}

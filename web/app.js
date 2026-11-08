@@ -402,14 +402,14 @@ async function loadPortNetworkContext(){
 }
 function renderPortDetail(){
  const name=$('detail-port')?.value,p=latestPorts.find(x=>x.name===name);
- if(!p){if($('detail-summary'))$('detail-summary').textContent='Wybierz port do diagnostyki.';return;}
+ if(!p){if($('detail-summary'))$('detail-summary').textContent='Wybierz port do diagnostyki.';for(const id of ['detail-admin-state','detail-oper-state','detail-speed-state','detail-mtu-state'])$(id).textContent='—';return;}
  for(const [id,val] of Object.entries({'detail-rx':p.inOctets,'detail-tx':p.outOctets,'detail-rxe':p.inErrors,'detail-txe':p.outErrors,'detail-rxd':p.inDiscards,'detail-txd':p.outDiscards,'detail-rxp':p.inUcastPkts,'detail-txp':p.outUcastPkts}))$(id).textContent=fmtCount(val);
  const r=portRates.get(name),cap=portCapacity(p),pct=r&&cap?Math.min(100,100*(r.rx+r.tx)/cap):null;
  $('detail-summary').textContent=name+' · '+(p.oper==='up'?'Połączony':p.oper==='down'?'Brak połączenia':'Stan nieznany')+' · '+(p.speed||'prędkość nieznana');
  $('detail-admin-state').textContent=p.admin==='up'?'Włączony':p.admin==='down'?'Wyłączony':'Niedostępny';
  $('detail-oper-state').textContent=p.oper==='up'?'Połączony':p.oper==='down'?'Brak linku':'Niedostępny';
  $('detail-speed-state').textContent=p.speed&&p.speed!=='unknown'?p.speed:'Niedostępna';
- $('detail-mtu-state').textContent=Number(p.mtu)>0?fmtCount(p.mtu)+' B':'Niedostępne';
+ $('detail-mtu-state').textContent=Number(p.mtu)>0?String(p.mtu)+' B':'Niedostępne';
  $('detail-live-rx').textContent=r?formatRate(r.rx):'Oczekiwanie na próbki';
  $('detail-live-tx').textContent=r?formatRate(r.tx):'Oczekiwanie na próbki';
  $('detail-utilization').textContent=pct===null?'—':pct.toFixed(1)+'% wykorzystania łącza';

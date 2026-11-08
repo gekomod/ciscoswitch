@@ -40,6 +40,7 @@ func Register(m *http.ServeMux,svc *device.Service){
  diagnosticsStore:=sharedDiagnosticsStore(diagnosticsPath,500)
  m.Handle("/api/diagnostics/collect",diagnosticsCollectHandler(svc.RunReadOnly,diagnosticsStore))
  m.Handle("/api/diagnostics/history",diagnosticsHistoryHandler(diagnosticsStore))
+ m.Handle("/api/diagnostics/availability",diagnosticsAvailabilityHandler(diagnosticsStore))
  m.Handle("/api/diagnostics/acknowledge",diagnosticsAcknowledgeHandler(diagnosticsStore,diagnosticsPath+".acks.json"))
  m.Handle("/api/monitor/history", monitorHistoryHandler(filepath.Join("data", "monitor-history.jsonl")))
  m.Handle("/api/monitor/stream", monitorStreamHandler())
@@ -1186,7 +1187,6 @@ func StartDiagnosticsCollector(ctx context.Context, read func(string)(string,err
  go func(){
   collect:=func(){
    sample:=collectDiagnosticsSample(read)
-   if !sample.Checks["runningConfig"]&&!sample.Checks["lacp"]&&!sample.Checks["lldp"]{return}
    if err:=store.append(sample);err!=nil{log.Printf("diagnostics history write failed: %v",err)}
   }
   collect()
@@ -1289,8 +1289,8 @@ func diagnosticsCollectHandler(read func(string)(string,error),store *diagnostic
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
   sample:=collectDiagnosticsSample(read)
-  if !sample.Checks["runningConfig"]&&!sample.Checks["lacp"]&&!sample.Checks["lldp"]{http.Error(w,"nie udało się zebrać żadnych danych diagnostycznych",http.StatusBadGateway);return}
   if err:=store.append(sample);err!=nil{http.Error(w,"nie udało się zapisać historii diagnostycznej",http.StatusInternalServerError);return}
+  if !sample.Checks["runningConfig"]&&!sample.Checks["lacp"]&&!sample.Checks["lldp"]{http.Error(w,"próbka zapisana, ale wszystkie kontrole zakończyły się niepowodzeniem",http.StatusBadGateway);return}
   w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
   _=json.NewEncoder(w).Encode(map[string]any{"sample":sample,"alerts":diagnosticsCurrentAlerts(sample),"saved":true,"retention":500})
  })
@@ -1380,5 +1380,77 @@ func diagnosticsHistoryHandler(store *diagnosticsStore)http.Handler{
   items:=all;if len(items)>limit{items=items[len(items)-limit:]}
   w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
   _=json.NewEncoder(w).Encode(map[string]any{"samples":items,"alerts":alertRows,"transitions":windowTransitions,"sampleCount":len(all),"hasEnoughHistory":len(all)>=2,"windowMinutes":windowMinutes,"flappingThreshold":3,"collectionMode":func()string{mode,_:=diagnosticsSamplingSettings();return mode}(),"collectionInterval":func()string{_,cadence:=diagnosticsSamplingSettings();return cadence}(),"note":func()string{if len(all)<2{return "Zebrano mniej niż dwie próbki. Nie można jeszcze ocenić zmian ani flappingu."};return "Zmiany są porównywane między kolejnymi próbkami z dostępnym odczytem. Brak danych nie jest traktowany jako powrót do normy. Flapping wymaga co najmniej trzech zmian w wybranym oknie."}()})
+ })
+}
+
+
+type availabilityOutage struct {
+ Start time.Time `json:"start"`
+ End time.Time `json:"end,omitempty"`
+ DurationSeconds int64 `json:"durationSeconds"`
+ Open bool `json:"open"`
+}
+type availabilityMetric struct {
+ Name string `json:"name"`
+ AvailabilityPercent *float64 `json:"availabilityPercent"`
+ ObservedSeconds int64 `json:"observedSeconds"`
+ UnknownSeconds int64 `json:"unknownSeconds"`
+ OutageCount int `json:"outageCount"`
+ OutageSeconds int64 `json:"outageSeconds"`
+ Outages []availabilityOutage `json:"outages"`
+}
+func diagnosticsAvailabilityMetric(name string, samples []diagnosticsSample, start,end time.Time, maxGap time.Duration, state func(diagnosticsSample)(bool,bool)) availabilityMetric {
+ m:=availabilityMetric{Name:name,Outages:[]availabilityOutage{}}
+ observed:=int64(0);up:=int64(0);outageOpen:=-1
+ for i:=1;i<len(samples);i++ {
+  prev,cur:=samples[i-1],samples[i]
+  if cur.CapturedAt.Before(start)||!prev.CapturedAt.Before(end)||!cur.CapturedAt.After(prev.CapturedAt){continue}
+  span:=cur.CapturedAt.Sub(prev.CapturedAt);if span>maxGap{continue}
+  known,online:=state(prev);if !known{continue}
+  left:=prev.CapturedAt;if left.Before(start){left=start};right:=cur.CapturedAt;if right.After(end){right=end}
+  seconds:=int64(right.Sub(left).Seconds());if seconds<=0{continue}
+  observed+=seconds;if online{up+=seconds}
+  if i>0 {
+   prevKnown,prevOnline:=state(prev);curKnown,curOnline:=state(cur)
+   if prevKnown&&curKnown {
+    if prevOnline&&!curOnline { outageOpen=len(m.Outages);m.Outages=append(m.Outages,availabilityOutage{Start:cur.CapturedAt,Open:true}) }
+    if !prevOnline&&curOnline&&outageOpen>=0 { row:=&m.Outages[outageOpen];row.End=cur.CapturedAt;row.DurationSeconds=int64(cur.CapturedAt.Sub(row.Start).Seconds());row.Open=false;outageOpen=-1 }
+   }
+  }
+ }
+ total:=int64(end.Sub(start).Seconds());if total<0{total=0}
+ m.ObservedSeconds=observed;m.UnknownSeconds=total-observed;if m.UnknownSeconds<0{m.UnknownSeconds=0}
+ if observed>0 {v:=float64(up)*100/float64(observed);m.AvailabilityPercent=&v}
+ for i:=range m.Outages { if m.Outages[i].Open {m.Outages[i].DurationSeconds=int64(end.Sub(m.Outages[i].Start).Seconds())} }
+ m.OutageCount=len(m.Outages)
+ for _,o:=range m.Outages {m.OutageSeconds+=o.DurationSeconds}
+ return m
+}
+func diagnosticsAvailabilityHandler(store *diagnosticsStore)http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request) {
+  if r.Method!=http.MethodGet {http.Error(w,"method not allowed",405);return}
+  window:=r.URL.Query().Get("window");if window==""{window="24h"}
+  var duration time.Duration
+  switch window {case "24h":duration=24*time.Hour;case "7d":duration=7*24*time.Hour;default:http.Error(w,"window musi mieć wartość 24h lub 7d",400);return}
+  all,err:=store.list();if err!=nil{http.Error(w,"nie udało się odczytać historii diagnostycznej",500);return}
+  sort.Slice(all,func(i,j int)bool{return all[i].CapturedAt.Before(all[j].CapturedAt)})
+  end:=time.Now().UTC();start:=end.Add(-duration)
+  _,cadence:=diagnosticsSamplingSettings();interval,err:=time.ParseDuration(cadence);if err!=nil||interval<=0{interval=time.Minute}
+  maxGap:=2*interval;if maxGap<2*time.Minute{maxGap=2*time.Minute}
+  deviceMetric:=diagnosticsAvailabilityMetric("Dostępność CLI",all,start,end,maxGap,func(s diagnosticsSample)(bool,bool){return s.Checks!=nil,s.Checks["runningConfig"]})
+  names:=map[string]bool{}
+  for _,sample:=range all {if sample.Checks["lacp"] {for _,g:=range sample.Aggregations{names[g.Name]=true}}}
+  groupMetrics:=[]availabilityMetric{}
+  sortedNames:=make([]string,0,len(names));for name:=range names{sortedNames=append(sortedNames,name)};sort.Strings(sortedNames)
+  for _,name:=range sortedNames {
+   metric:=diagnosticsAvailabilityMetric(name,all,start,end,maxGap,func(s diagnosticsSample)(bool,bool){
+    if !s.Checks["lacp"] {return false,false}
+    for _,g:=range s.Aggregations {if strings.EqualFold(g.Name,name){return true,g.Live&&g.Ready!="Niegotowy"}}
+    return true,false
+   })
+   groupMetrics=append(groupMetrics,metric)
+  }
+  w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
+  _=json.NewEncoder(w).Encode(map[string]any{"window":window,"from":start,"to":end,"maxSampleGapSeconds":int64(maxGap.Seconds()),"device":deviceMetric,"aggregations":groupMetrics,"method":"Uptime jest liczony jako udany odczyt CLI (show running-config), a agregacje jako rozpoznany stan LACP. Procent odnosi się wyłącznie do przedziałów objętych poprawnymi, dostatecznie częstymi próbkami. Luki pomiarowe są wyłączone z mianownika i pokazane jako brak danych; to nie jest gwarantowane SLA ani pomiar dostępności ruchu użytkowników."})
  })
 }

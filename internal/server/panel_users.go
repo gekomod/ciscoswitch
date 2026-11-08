@@ -3,6 +3,7 @@ package server
 import (
  "context"
  "crypto/rand"
+ "crypto/subtle"
  "encoding/hex"
  "encoding/json"
  "net/http"
@@ -43,11 +44,17 @@ func (s *panelUserStore) load() error {
  s.mu.Lock(); defer s.mu.Unlock()
  raw,err:=os.ReadFile(s.path)
  if os.IsNotExist(err) {
-  username,password:=strings.TrimSpace(os.Getenv("PANEL_ADMIN_USER")),os.Getenv("PANEL_ADMIN_PASSWORD")
-  if username!=""&&len(password)>=12 {
+  // Backward-compatible bootstrap: keep the credentials used by earlier
+  // releases (PANEL_USER/PANEL_PASSWORD). PANEL_ADMIN_* remains supported.
+  username:=strings.TrimSpace(os.Getenv("PANEL_USER"))
+  password:=os.Getenv("PANEL_PASSWORD")
+  if v:=strings.TrimSpace(os.Getenv("PANEL_ADMIN_USER"));v!="" { username=v }
+  if v:=os.Getenv("PANEL_ADMIN_PASSWORD");v!="" { password=v }
+  if username!=""&&len(password)>=8 {
    hash,e:=bcrypt.GenerateFromPassword([]byte(password),bcrypt.DefaultCost);if e!=nil{return e}
+   role:=strings.TrimSpace(os.Getenv("PANEL_ROLE"));if !validPanelRole(role){role="admin"}
    now:=time.Now().UTC();id:=randomPanelToken()
-   s.users[id]=panelUser{ID:id,Username:username,PasswordHash:string(hash),Role:"admin",Active:true,CreatedAt:now,UpdatedAt:now}
+   s.users[id]=panelUser{ID:id,Username:username,PasswordHash:string(hash),Role:role,Active:true,CreatedAt:now,UpdatedAt:now}
    return s.writeLocked()
   }
   return nil
@@ -73,7 +80,27 @@ func (s *panelUserStore) login(w http.ResponseWriter,r *http.Request) {
  r.Body=http.MaxBytesReader(w,r.Body,2048)
  var q struct{Username string `json:"username"`;Password string `json:"password"`}
  if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return}
- s.mu.Lock();var found panelUser;for _,u:=range s.users{if strings.EqualFold(u.Username,strings.TrimSpace(q.Username)){found=u;break}};s.mu.Unlock()
+ s.mu.Lock();var found panelUser;for _,u:=range s.users{if strings.EqualFold(u.Username,strings.TrimSpace(q.Username)){found=u;break}}
+ // Last-resort compatibility for installations whose old environment-based
+ // login was active before the user registry was introduced. Persist it as
+ // a bcrypt-backed admin/operator account so subsequent logins use the store.
+ if found.ID=="" {
+  configuredUser:=strings.TrimSpace(os.Getenv("PANEL_USER"))
+  configuredPass:=os.Getenv("PANEL_PASSWORD")
+  userOK:=configuredUser!=""&&subtle.ConstantTimeCompare([]byte(strings.TrimSpace(q.Username)),[]byte(configuredUser))==1
+  passOK:=configuredPass!=""&&subtle.ConstantTimeCompare([]byte(q.Password),[]byte(configuredPass))==1
+  if userOK&&passOK {
+   role:=strings.TrimSpace(os.Getenv("PANEL_ROLE"));if !validPanelRole(role){role="admin"}
+   hash,err:=bcrypt.GenerateFromPassword([]byte(configuredPass),bcrypt.DefaultCost)
+   if err==nil {
+    now:=time.Now().UTC();id:=randomPanelToken()
+    found=panelUser{ID:id,Username:configuredUser,PasswordHash:string(hash),Role:role,Active:true,CreatedAt:now,UpdatedAt:now}
+    s.users[id]=found
+    if err=s.writeLocked();err!=nil{delete(s.users,id);found=panelUser{}}
+   }
+  }
+ }
+ s.mu.Unlock()
  if found.ID==""||!found.Active||bcrypt.CompareHashAndPassword([]byte(found.PasswordHash),[]byte(q.Password))!=nil{http.Error(w,"Nieprawidłowy login lub hasło",401);return}
  token:=randomPanelToken();if token==""{http.Error(w,"session creation failed",500);return}
  s.mu.Lock();s.sessions[token]=panelSession{Identity:panelIdentity{UserID:found.ID,Username:found.Username,Role:found.Role},ExpiresAt:time.Now().Add(8*time.Hour)};s.mu.Unlock()

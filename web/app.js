@@ -258,6 +258,8 @@ $('run-port-audit').onclick=async()=>{
  }catch(e){
   $('port-audit-summary').innerHTML='<div class="metric"><span>Porty sprawdzone</span><b>—</b></div><div class="metric"><span>Wymagają uwagi</span><b>—</b></div><div class="metric"><span>Informacyjne</span><b>—</b></div>';
   $('port-audit-rows').innerHTML='<tr><td colspan="5" class="empty">Brak aktualnych danych — audyt nie został wykonany.</td></tr>';
+  $('port-role-count').textContent='Brak aktualnego odczytu';
+  $('port-role-rows').innerHTML='<tr><td colspan="4" class="empty">Nie można rozpoznać ról bez aktualnych danych portów.</td></tr>';
   $('port-audit-status').textContent='Audyt przerwany: '+e.message;
  }finally{button.disabled=false;button.textContent='Uruchom audyt';}
 };

@@ -933,7 +933,7 @@ func securityAuditHandler(read func(string)(string,error)) http.Handler {
  })
 }
 
-type topologyPort struct { Port string `json:"port"`; Mode string `json:"mode,omitempty"`; VLANs []int `json:"vlans,omitempty"`; NativeVLAN int `json:"nativeVlan,omitempty"`; LAG string `json:"lag,omitempty"`; EdgePort bool `json:"edgePort,omitempty"` }
+type topologyPort struct { Port string `json:"port"`; Mode string `json:"mode,omitempty"`; VLANs []int `json:"vlans,omitempty"`; NativeVLAN int `json:"nativeVlan,omitempty"`; LAG string `json:"lag,omitempty"`; EdgePort bool `json:"edgePort,omitempty"`; Description string `json:"description,omitempty"`; Role string `json:"role,omitempty"` }
 type topologyLink struct { LocalPort string `json:"localPort"`; Neighbor string `json:"neighbor"`; Evidence string `json:"evidence"` }
 type topologyAggregation struct { Name string `json:"name"`; Members []string `json:"members"`; Partner string `json:"partner,omitempty"`; Ready string `json:"ready,omitempty"` }
 func parseTopologyConfig(config,switchport string)([]topologyPort,[]topologyAggregation,[]int){
@@ -951,6 +951,7 @@ func parseTopologyConfig(config,switchport string)([]topologyPort,[]topologyAggr
   if len(f)>=4&&f[0]=="switchport"&&f[1]=="access"&&f[2]=="vlan"{if n,e:=strconv.Atoi(f[3]);e==nil&&n>=1&&n<=4094{current.VLANs=append(current.VLANs,n)}}
   if len(f)>=5&&f[0]=="switchport"&&f[1]=="trunk"&&f[2]=="native"&&f[3]=="vlan"{current.NativeVLAN,_=strconv.Atoi(f[4])}
   if len(f)>=2&&f[0]=="spanning-tree"&&f[1]=="edgeport"{current.EdgePort=true}
+  if len(f)>=2&&f[0]=="description"{current.Description=strings.TrimSpace(line[len(f[0]):])}
   if len(f)>=3&&(f[0]=="channel-group"||f[0]=="static-channel-group"){
    name:="Po"+f[1];current.LAG=name;key:=strings.ToLower(name);if lags[key]==nil{lags[key]=&topologyAggregation{Name:name,Members:[]string{}}};lags[key].Members=append(lags[key].Members,current.Port)
   }
@@ -965,7 +966,11 @@ func parseTopologyConfig(config,switchport string)([]topologyPort,[]topologyAggr
   if n,e:=strconv.Atoi(read("Default Vlan"));e==nil&&n>0{p.NativeVLAN=n}
   if raw:=read("Configured Vlans");raw!=""{set:=parseAuditVLANSet(strings.ReplaceAll(raw," ",","));vals:=make([]int,0,len(set));for n:=range set{vals=append(vals,n)};sort.Ints(vals);if len(vals)>0{p.VLANs=vals}}
  }
- out:=make([]topologyPort,0,len(ports));for _,p:=range ports{sort.Ints(p.VLANs);out=append(out,*p)}
+ out:=make([]topologyPort,0,len(ports));for _,p:=range ports{
+  desc:=strings.ToLower(p.Description)
+  switch{case strings.Contains(desc,"uplink")||strings.Contains(desc,"switch"):p.Role="Uplink / switch";case strings.Contains(desc,"access point")||strings.Contains(desc," ap"):p.Role="Access Point";case strings.Contains(desc,"cctv")||strings.Contains(desc,"kamera"):p.Role="CCTV";case strings.Contains(desc,"voip")||strings.Contains(desc,"telefon"):p.Role="VoIP";case strings.Contains(desc,"server")||strings.Contains(desc,"storage"):p.Role="Server"}
+  sort.Ints(p.VLANs);out=append(out,*p)
+ }
  sort.Slice(out,func(i,j int)bool{return out[i].Port<out[j].Port})
  agg:=make([]topologyAggregation,0,len(lags));for _,l:=range lags{sort.Strings(l.Members);agg=append(agg,*l)}
  sort.Slice(agg,func(i,j int)bool{return agg[i].Name<agg[j].Name})

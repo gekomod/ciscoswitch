@@ -933,9 +933,43 @@ func securityAuditHandler(read func(string)(string,error)) http.Handler {
  })
 }
 
-type topologyPort struct { Port string `json:"port"`; Mode string `json:"mode,omitempty"`; VLANs []int `json:"vlans,omitempty"`; NativeVLAN int `json:"nativeVlan,omitempty"`; LAG string `json:"lag,omitempty"`; EdgePort bool `json:"edgePort,omitempty"`; Description string `json:"description,omitempty"`; Role string `json:"role,omitempty"` }
+type topologyPort struct { Port string `json:"port"`; Mode string `json:"mode,omitempty"`; VLANs []int `json:"vlans,omitempty"`; NativeVLAN int `json:"nativeVlan,omitempty"`; LAG string `json:"lag,omitempty"`; EdgePort bool `json:"edgePort,omitempty"`; Description string `json:"description,omitempty"`; Role string `json:"role,omitempty"`; Protected bool `json:"protected"` }
 type topologyLink struct { LocalPort string `json:"localPort"`; Neighbor string `json:"neighbor"`; Evidence string `json:"evidence"` }
-type topologyAggregation struct { Name string `json:"name"`; Members []string `json:"members"`; Partner string `json:"partner,omitempty"`; Ready string `json:"ready,omitempty"` }
+type topologyAggregation struct { Name string `json:"name"`; Members []string `json:"members"`; LiveMembers []string `json:"liveMembers,omitempty"`; Live bool `json:"live"`; MemberMismatch bool `json:"memberMismatch"`; Partner string `json:"partner,omitempty"`; Ready string `json:"ready,omitempty"` }
+type topologyRisk struct { Severity string `json:"severity"`; Code string `json:"code"`; Title string `json:"title"`; Evidence string `json:"evidence"`; Recommendation string `json:"recommendation"` }
+
+func analyzeTopologyRisks(ports []topologyPort, links []topologyLink, aggregations []topologyAggregation, lldpAvailable bool) []topologyRisk {
+ risks:=make([]topologyRisk,0)
+ explicitUplinks:=make([]topologyPort,0)
+ neighbors:=map[string]bool{}
+ for _,link:=range links { neighbors[strings.ToLower(link.LocalPort)]=true }
+ for _,port:=range ports {
+  if port.Role=="Uplink / switch" { explicitUplinks=append(explicitUplinks,port) }
+  if port.Protected { risks=append(risks,topologyRisk{"info","protected-port","Port objęty ochroną zmian",port.Port+" znajduje się na liście PROTECTED_PORTS.","Nie zmieniaj tego portu bez zapewnienia alternatywnego dostępu i świadomej procedury serwisowej."}) }
+  if port.Role=="Uplink / switch" && lldpAvailable && !neighbors[strings.ToLower(port.Port)] {
+   risks=append(risks,topologyRisk{"info","uplink-no-lldp","Brak potwierdzenia LLDP dla uplinku",port.Port+" jest opisany jako uplink/switch, ale nie ma rozpoznanego wpisu LLDP.","Zweryfikuj sąsiedztwo inną metodą. Brak LLDP nie oznacza braku fizycznego łącza."})
+  }
+ }
+ if len(explicitUplinks)==1 {
+  p:=explicitUplinks[0]
+  risks=append(risks,topologyRisk{"warning","single-explicit-uplink","Jeden jawnie opisany uplink — kandydat na pojedynczy punkt awarii",p.Port+" jest jedynym portem rozpoznanym po opisie jako uplink/switch.","Sprawdź topologię po drugiej stronie i ścieżki zapasowe. Sam opis portu nie potwierdza całej redundancji sieci."})
+ }
+ for _,lag:=range aggregations {
+  if len(lag.Members)==1 {
+   risks=append(risks,topologyRisk{"warning","lag-single-member","Agregacja ma jednego skonfigurowanego członka",lag.Name+" zawiera tylko "+lag.Members[0]+".","Zweryfikuj, czy drugi tor powinien należeć do agregacji. Jeden członek nie zapewnia redundancji łącza."})
+  }
+  if lag.Live && lag.MemberMismatch {
+   risks=append(risks,topologyRisk{"warning","lag-member-mismatch","Niespójność członków LACP",lag.Name+": konfiguracja ["+strings.Join(lag.Members,", ")+"] różni się od rozpoznanych aktywnych członków ["+strings.Join(lag.LiveMembers,", ")+ "].","Sprawdź stan LACP i konfigurację obu końców agregacji przed zmianami."})
+  }
+  if lag.Live && lag.Ready=="Niegotowy" {
+   risks=append(risks,topologyRisk{"warning","lag-not-ready","Agregacja LACP nie jest gotowa",lag.Name+" zgłasza stan Ready=0.","Sprawdź zgodność trybu LACP, partnera, członków i fizyczne linki."})
+  }
+ }
+ if len(explicitUplinks)==0 {
+  risks=append(risks,topologyRisk{"info","uplink-role-unknown","Nie rozpoznano jawnie opisanych uplinków","Żaden port nie zawiera w opisie jednoznacznej etykiety uplink/switch.","Uzupełnij opisy portów lub zweryfikuj topologię ręcznie. Nie oznacza to, że switch nie ma uplinków."})
+ }
+ return risks
+}
 func parseTopologyConfig(config,switchport string)([]topologyPort,[]topologyAggregation,[]int){
  ports:=map[string]*topologyPort{};lags:=map[string]*topologyAggregation{};vlans:=map[int]bool{}
  var current *topologyPort
@@ -1007,9 +1041,22 @@ func topologyMapHandler(read func(string)(string,error))http.Handler{
   sw,swErr:=read("show interface switchport");ports,lags,vlans:=parseTopologyConfig(config,sw)
   lldp,lldpErr:=read("show lldp neighbors");links:=parseTopologyLLDP(lldp)
   lacpRaw,lacpErr:=read("show etherchannel detail");liveLags:=parseTopologyLACP(lacpRaw)
-  for i:=range lags{for _,live:=range liveLags{if strings.EqualFold(lags[i].Name,live.Name){lags[i].Partner=live.Partner;lags[i].Ready=live.Ready}}}
+  for i:=range lags {
+   for _,live:=range liveLags {
+    if !strings.EqualFold(lags[i].Name,live.Name) { continue }
+    lags[i].Live=true;lags[i].Partner=live.Partner;lags[i].Ready=live.Ready
+    lags[i].LiveMembers=append([]string(nil),live.Members...)
+    configured:=map[string]bool{};for _,member:=range lags[i].Members{configured[strings.ToLower(member)]=true}
+    active:=map[string]bool{};for _,member:=range live.Members{active[strings.ToLower(member)]=true}
+    if len(active)>0 {
+     if len(configured)!=len(active){lags[i].MemberMismatch=true}else{for member:=range configured{if !active[member]{lags[i].MemberMismatch=true;break}}}
+    }
+   }
+  }
+  for i:=range ports { ports[i].Protected=isProtectedPort(ports[i].Port) }
   checks:=map[string]bool{"runningConfig":true,"switchport":swErr==nil&&strings.Contains(sw,"Interface name"),"lldp":lldpErr==nil&&len(links)>0,"lacp":lacpErr==nil&&len(liveLags)>0}
+  risks:=analyzeTopologyRisks(ports,links,lags,checks["lldp"])
   w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
-  _=json.NewEncoder(w).Encode(map[string]any{"available":true,"readOnly":true,"ports":ports,"links":links,"aggregations":lags,"vlans":vlans,"checks":checks,"note":"Połączenia są rysowane tylko na podstawie rozpoznanych rekordów LLDP. Brak sąsiada LLDP nie oznacza braku fizycznego łącza. LACP i VLAN-y zależą od rozpoznanego formatu odpowiedzi urządzenia."})
+  _=json.NewEncoder(w).Encode(map[string]any{"available":true,"readOnly":true,"ports":ports,"links":links,"aggregations":lags,"vlans":vlans,"risks":risks,"checks":checks,"note":"Ryzyka są wskazówkami opartymi wyłącznie na rozpoznanych opisach i danych CLI. Pojedynczy opisany uplink jest kandydatem na SPOF, nie dowodem braku redundancji. Brak LLDP nie oznacza braku fizycznego łącza. LACP i VLAN-y zależą od rozpoznanego formatu odpowiedzi urządzenia."})
  })
 }

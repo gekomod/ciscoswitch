@@ -603,12 +603,38 @@ function updateOverviewHealth(){
 }
 function renderEvents(){
  const el=$('monitor-events');if(!el)return;
+ const rows=[];
+ for(const x of recentEvents)rows.push({...x,source:'system',port:''});
+ for(const x of portHistory){
+  const at=Date.parse(x.timestamp)||Date.now(),message=(x.port||'Port')+' — '+(x.state==='up'?'łącze przywrócone':'utrata łącza');
+  const duplicate=rows.some(r=>r.source==='system'&&r.message.includes(x.port||'')&&/link|łącze/i.test(r.message)&&Math.abs((Date.parse(r.timestamp)||0)-at)<2000);
+  if(!duplicate)rows.push({message,type:x.state==='up'?'success':'danger',timestamp:x.timestamp,at:new Date(at).toLocaleString(),source:'port',port:x.port||''});
+ }
+ for(const x of counterHistory){
+  const at=Date.parse(x.timestamp)||Date.now(),parts=[];
+  if(Number(x.errorRxDelta)>0)parts.push('RX błędy +'+fmtCount(x.errorRxDelta));
+  if(Number(x.errorTxDelta)>0)parts.push('TX błędy +'+fmtCount(x.errorTxDelta));
+  if(Number(x.discardRxDelta)>0)parts.push('RX discard +'+fmtCount(x.discardRxDelta));
+  if(Number(x.discardTxDelta)>0)parts.push('TX discard +'+fmtCount(x.discardTxDelta));
+  if(!parts.length)continue;
+  const duplicate=rows.some(r=>r.source==='system'&&r.message.includes(x.port||'')&&/błęd|discard/i.test(r.message)&&Math.abs((Date.parse(r.timestamp)||0)-at)<2000);
+  if(!duplicate)rows.push({message:(x.port||'Port')+' — '+parts.join(', '),type:'warning',timestamp:x.timestamp,at:new Date(at).toLocaleString(),source:'counter',port:x.port||''});
+ }
+ rows.sort((a,b)=>(Date.parse(b.timestamp)||0)-(Date.parse(a.timestamp)||0));
  const counts={danger:0,warning:0,info:0,success:0};
- for(const event of recentEvents){if(Object.prototype.hasOwnProperty.call(counts,event.type))counts[event.type]++;}
- for(const [id,value] of [['alert-danger-count',counts.danger],['alert-warning-count',counts.warning],['alert-info-count',counts.info],['alert-total-count',recentEvents.length]]){const node=$(id);if(node)node.textContent=String(value);}
- const filter=$('alert-filter')?.value||'all';
- const visible=recentEvents.filter(x=>filter==='all'||x.type===filter).slice(0,100);
- el.innerHTML=visible.length?visible.map(x=>'<div class="event-row is-'+esc(x.type)+'"><i></i><span>'+esc(x.message)+'</span><small>'+esc(x.at)+'</small></div>').join(''):'<div class="empty">Brak zdarzeń dla wybranego poziomu.</div>';
+ rows.forEach(x=>{if(Object.prototype.hasOwnProperty.call(counts,x.type))counts[x.type]++;});
+ for(const [id,value] of [['alert-danger-count',counts.danger],['alert-warning-count',counts.warning],['alert-info-count',counts.info],['alert-total-count',rows.length]]){const node=$(id);if(node)node.textContent=String(value);}
+ const portSelect=$('alert-port-filter');
+ if(portSelect){
+  const selected=portSelect.value||'all',names=[...new Set([...latestPorts.map(p=>p.name),...portHistory.map(x=>x.port),...counterHistory.map(x=>x.port)].filter(Boolean))].sort(natural);
+  const options='<option value="all">Wszystkie porty</option>'+names.map(name=>'<option value="'+esc(name)+'">'+esc(name)+'</option>').join('');
+  if(portSelect.dataset.options!==options){portSelect.innerHTML=options;portSelect.dataset.options=options;portSelect.value=names.includes(selected)?selected:'all';}
+ }
+ const severity=$('alert-filter')?.value||'all',source=$('alert-source-filter')?.value||'all',port=$('alert-port-filter')?.value||'all',query=($('alert-search')?.value||'').trim().toLocaleLowerCase('pl');
+ const visible=rows.filter(x=>(severity==='all'||x.type===severity)&&(source==='all'||x.source===source)&&(port==='all'||x.port===port)&&(!query||(x.message+' '+x.port).toLocaleLowerCase('pl').includes(query))).slice(0,200);
+ const sourceLabel={system:'SYSTEM',port:'PORT',counter:'LICZNIKI'},severityLabel={danger:'KRYTYCZNE',warning:'OSTRZEŻENIE',success:'PRZYWRÓCONE',info:'INFO'};
+ el.innerHTML=visible.length?visible.map(x=>'<div class="event-row is-'+esc(x.type)+'"><i></i><span class="event-copy"><b>'+esc(x.message)+'</b><small>'+esc(sourceLabel[x.source]||'MONITORING')+' · '+esc(severityLabel[x.type]||'INFO')+'</small></span><time>'+esc(x.at||'')+'</time></div>').join(''):'<div class="empty">Brak zdarzeń pasujących do wybranych filtrów.</div>';
+ const summary=$('alert-repeat-summary');if(summary)summary.textContent=visible.length+' z '+rows.length+' zdarzeń · najnowsze pierwsze';
 }
 function receiveMonitorRecord(record){
  if(!record||typeof record!=='object')return;
@@ -1009,7 +1035,7 @@ async function refreshSystem(){const button=$('refresh-system');button.disabled=
  }catch(e){for(const id of ['sys-version','sys-cpu','sys-memory','sys-temperature','sys-fans','sys-power','sys-boot'])$(id).textContent='Błąd odczytu';$('system-health').dataset.loaded='false';}
  finally{button.disabled=false;button.textContent='Odśwież parametry';}}
 $('refresh-system').onclick=refreshSystem;
-$('alert-filter')?.addEventListener('change',renderEvents);
+$('alert-filter')?.addEventListener('change',renderEvents);\n$('alert-source-filter')?.addEventListener('change',renderEvents);\n$('alert-port-filter')?.addEventListener('change',renderEvents);\n$('alert-search')?.addEventListener('input',renderEvents);
 $('alert-refresh')?.addEventListener('click',async()=>{const b=$('alert-refresh');b.disabled=true;try{await restoreMonitorHistory();}finally{b.disabled=false;}});
 
 const vlanSelectedPorts=new Set();

@@ -350,8 +350,40 @@ function renderComplianceRecommendations(profile,repairs){
  }
  host.innerHTML='<div class="repair-intro"><b>Proponowane działania</b><span>Każda pozycja jedynie wypełnia formularz. Zmiana nie jest wysyłana automatycznie.</span></div><div class="table-wrap"><table><thead><tr><th>PORT</th><th>WYKRYTE RÓŻNICE</th><th>OCENA</th><th>AKCJA</th></tr></thead><tbody>'+repairs.map(item=>{
   const status=item.blocked?'<span class="state down">Zablokowana</span>':item.risk?'<span class="state unknown">Wymaga uwagi</span>':'<span class="state up">Do przygotowania</span>';
-  return '<tr><td><b>'+esc(item.port)+'</b></td><td>'+esc(item.changes.join(' · '))+'</td><td>'+status+(item.reason?'<small class="repair-reason">'+esc(item.reason)+'</small>':'')+'</td><td><button type="button" class="btn '+(item.blocked?'ghost':'primary')+' repair-profile-btn" data-repair-port="'+esc(item.port)+'" '+(item.blocked?'disabled':'')+'>Przygotuj w formularzu</button></td></tr>';
+  return '<tr><td><b>'+esc(item.port)+'</b></td><td>'+esc(item.changes.join(' · '))+'</td><td>'+status+(item.reason?'<small class="repair-reason">'+esc(item.reason)+'</small>':'')+'</td><td><div class="repair-actions"><button type="button" class="btn primary repair-patch-btn" data-repair-port="'+esc(item.port)+'" '+(item.patchBlocked?'disabled':'')+'>Napraw tylko różnice</button><button type="button" class="btn ghost repair-profile-btn" data-repair-port="'+esc(item.port)+'" '+(item.blocked?'disabled':'')+'>Pełny profil</button></div></td></tr>';
  }).join('')+'</tbody></table></div><p class="note">Formularz profilu masowego jest pełnym profilem: może również ustawić speed/duplex zgodnie z zapisanym profilem. Te wartości nie są wiarygodnie odczytywane w audycie. Sprawdź je przed zatwierdzeniem. Podgląd i backend nadal blokują porty z PROTECTED_PORTS; przed zapisem wykonywana jest kopia konfiguracji.</p>';
+ host.querySelectorAll('.repair-patch-btn:not(:disabled)').forEach(button=>button.addEventListener('click',async()=>{
+  const repair=repairs.find(item=>item.port===button.dataset.repairPort);
+  if(!repair||!repair.patch)return;
+  const payload=repair.patch;
+  button.disabled=true;button.textContent='Sprawdzam…';
+  try{
+   const preview=await api('/api/ports/repair/preview',payload);
+   const summary='Naprawa częściowa portu '+repair.port+'\n\nWykryte różnice: '+repair.changes.join(', ')+'\n\nZostaną zmienione wyłącznie wskazane parametry. Tryb portu, speed i duplex pozostaną bez zmian.\n\nBieżący tryb: '+(preview.current?.mode||'—')+' · VLAN: '+(preview.current?.defaultVlan||'—')+'\n\nPrzed zmianą zostanie wykonana kopia running-config. Kontynuować?';
+   if(!confirm(summary))return;
+   button.textContent='Zapisuję…';
+   await api('/api/ports/repair/apply',payload);
+   let actual=await api('/api/port/switchport?port='+encodeURIComponent(repair.port));
+   const checks=[];
+   if(payload.updateAccessVLAN)checks.push(Number.parseInt(actual.defaultVlan,10)===payload.accessVlan);
+   if(payload.updateTrunk){
+    const expected=parseVlanSelection(payload.allowed)||[];
+    const got=Array.isArray(actual.configuredVlans)?actual.configuredVlans.map(Number).sort((a,b)=>a-b):[];
+    checks.push(Number.parseInt(actual.defaultVlan,10)===payload.native&&expected.length===got.length&&expected.every((v,i)=>v===got[i]));
+   }
+   if(payload.updateDescription){
+    const fresh=await api('/api/status');const port=(fresh.ports||[]).find(p=>p.name===repair.port);
+    checks.push(!!port&&String(port.description||'')===payload.description);
+   }
+   const verified=checks.length>0&&checks.every(Boolean);
+   showFriendlyResult('bulk-output',(verified?'Potwierdzono naprawę częściową portu ':'Zmiana wysłana, ale odczyt zwrotny nie potwierdził wszystkich parametrów: ')+repair.port+'. '+(verified?'Wszystkie wybrane parametry zgadzają się z profilem.':'Sprawdź stan portu przed kolejnymi zmianami.'),'Naprawa częściowa portu');
+   addEvent((verified?'Potwierdzono':'Niepotwierdzona naprawa częściowa')+' portu '+repair.port,verified?'success':'warning');
+   await load();
+   if(!verified)alert('Zmiana została wysłana, ale odczyt zwrotny nie potwierdził wszystkich parametrów. Sprawdź port.');
+   else alert('Naprawa częściowa zakończona i potwierdzona odczytem zwrotnym.');
+  }catch(error){showFriendlyResult('bulk-output',error.message,'Naprawa częściowa portu');alert(error.message);}
+  finally{button.disabled=false;button.textContent='Napraw tylko różnice';}
+ }));
  host.querySelectorAll('.repair-profile-btn:not(:disabled)').forEach(button=>button.addEventListener('click',()=>{
   const repair=repairs.find(item=>item.port===button.dataset.repairPort);
   if(!repair)return;
@@ -400,7 +432,10 @@ function renderComplianceResults(profile,items,statusByPort){
    const blocked=(role.uplink&&profileAccess)||descriptionUnknown;
    const portMatch=item.port.match(/^port1\.0\.(\d+)$/i);
    const unsupported=!portMatch||Number(portMatch[1])<1||Number(portMatch[1])>52;
-   repairs.push({port:item.port,changes:portRows,description:String(profile.portDescription||'').trim()!==''?profile.portDescription:String(role.status.description||''),blocked:blocked||unsupported,risk:!blocked&&!unsupported,reason:role.uplink&&profileAccess?'Opis portu wskazuje uplink, switch, LACP lub zarządzanie — rekomendacja profilu Access jest zablokowana.':descriptionUnknown?'Nie odczytano opisu portu, a profil ma go zmienić — blokada, aby nie nadpisać nieznanej wartości.':unsupported?'Nazwa portu nie pasuje do zakresu formularza operacji masowej (1–52).':role.uplink?'Port wygląda na uplink — wymagane ręczne sprawdzenie.':'Pełny profil ustawia także speed/duplex; ich bieżąca konfiguracja nie jest odczytywana.'});
+   const modeMismatch=!String(item.mode||'').toLowerCase()||String(item.mode).toLowerCase()!==mode;
+   const patch={port:item.port,mode:String(item.mode||'').toLowerCase(),accessVlan:Number(profile.accessVlan),allowed:profile.allowed||'',native:Number(profile.native),description:String(profile.portDescription||''),updateAccessVLAN:mode==='access'&&portRows.includes('Access VLAN'),updateTrunk:mode==='trunk'&&(portRows.includes('Native VLAN')||portRows.includes('Dozwolone VLAN')),updateDescription:portRows.includes('Opis portu')};
+   const patchBlocked=blocked||unsupported||modeMismatch||(!patch.updateAccessVLAN&&!patch.updateTrunk&&!patch.updateDescription);
+   repairs.push({port:item.port,changes:portRows,patch,patchBlocked,description:String(profile.portDescription||'').trim()!==''?profile.portDescription:String(role.status.description||''),blocked:blocked||unsupported,risk:!blocked&&!unsupported,reason:role.uplink&&profileAccess?'Opis portu wskazuje uplink, switch, LACP lub zarządzanie — rekomendacja profilu Access jest zablokowana.':descriptionUnknown?'Nie odczytano opisu portu, a profil ma go zmienić — blokada, aby nie nadpisać nieznanej wartości.':unsupported?'Nazwa portu nie pasuje do zakresu formularza operacji masowej (1–52).':modeMismatch?'Różnica trybu wymaga pełnej, osobno potwierdzonej zmiany profilu.':'Pełny profil może zmienić speed/duplex; naprawa częściowa pozostawia je bez zmian.'});
   }
  }
  const badge=state=>state==='ok'?'<span class="state up">Zgodne</span>':state==='diff'?'<span class="state down">Różnica</span>':'<span class="state unknown">Brak danych</span>';

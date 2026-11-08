@@ -595,3 +595,10 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .diagnostics-center .section-head .inline-tools{align-items:flex-end;flex-wrap:wrap}
 .diagnostics-center .section-head .inline-tools label{min-width:112px}
 .diagnostics-center .section-head .inline-tools select{min-width:112px}
+
+.diagnostic-alert-body{min-width:0;flex:1}
+.diagnostic-ack-form{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px}
+.diagnostic-ack-form input{min-width:180px;flex:1;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--text);font:inherit;font-size:10px}
+.diagnostic-acknowledged{margin-top:8px;padding:7px 9px;border-radius:7px;background:var(--surface);font-size:10px;color:var(--muted)}
+.diagnostic-acknowledged small{margin-top:4px}
+.diagnostic-ack-form .btn{font-size:10px;padding:7px 10px}

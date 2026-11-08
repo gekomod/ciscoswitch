@@ -393,7 +393,7 @@ async function loadPortNetworkContext(){
    'PORT: '+switchport.port,
    'TRYB: '+(switchport.mode||'nieznany'),
    'DEFAULT / NATIVE VLAN: '+(switchport.defaultVlan||'brak danych'),
-   'DOZWOLONE VLAN: '+((switchport.configuredVlans||[]).join(', ')||'brak danych')
+   'DOZWOLONE VLAN: '+((switchport.configuredVlans||[]).join(', ')||'brak danych'),
    'INGRESS FILTER: '+(switchport.ingressFilter||'Niedostępny'),
    'TYP RAMEK: '+(switchport.acceptableFrameTypes||'Niedostępny')
   ];

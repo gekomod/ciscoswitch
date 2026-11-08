@@ -20,12 +20,13 @@ type identityContextKey struct{}
 type panelUser struct {
  ID string `json:"id"`
  Username string `json:"username"`
- PasswordHash string `json:"-"`
+ PasswordHash string `json:"passwordHash"`
  Role string `json:"role"`
  Active bool `json:"active"`
  CreatedAt time.Time `json:"createdAt"`
  UpdatedAt time.Time `json:"updatedAt"`
 }
+type panelUserView struct { ID string `json:"id"`; Username string `json:"username"`; Role string `json:"role"`; Active bool `json:"active"`; CreatedAt time.Time `json:"createdAt"`; UpdatedAt time.Time `json:"updatedAt"` }
 type panelUserStore struct {
  mu sync.Mutex
  path string
@@ -102,7 +103,7 @@ func (s *panelUserStore) usersHandler() http.Handler {
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   w.Header().Set("Content-Type","application/json");w.Header().Set("Cache-Control","no-store")
   if r.URL.Path=="/api/users" {
-   if r.Method=="GET"{s.mu.Lock();rows:=make([]panelUser,0,len(s.users));for _,u:=range s.users{rows=append(rows,u)};s.mu.Unlock();_=json.NewEncoder(w).Encode(map[string]any{"users":rows});return}
+   if r.Method=="GET"{s.mu.Lock();rows:=make([]panelUserView,0,len(s.users));for _,u:=range s.users{rows=append(rows,panelUserView{ID:u.ID,Username:u.Username,Role:u.Role,Active:u.Active,CreatedAt:u.CreatedAt,UpdatedAt:u.UpdatedAt})};s.mu.Unlock();_=json.NewEncoder(w).Encode(map[string]any{"users":rows});return}
    if r.Method!="POST"{http.Error(w,"method not allowed",405);return}
    r.Body=http.MaxBytesReader(w,r.Body,4096);var q struct{Username string `json:"username"`;Password string `json:"password"`;Role string `json:"role"`}
    if json.NewDecoder(r.Body).Decode(&q)!=nil||len(q.Username)<3||len(q.Username)>32||len(q.Password)<12||!validPanelRole(q.Role){http.Error(w,"login 3–32 znaki, hasło min. 12 znaków i poprawna rola są wymagane",400);return}

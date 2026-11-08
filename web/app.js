@@ -462,6 +462,7 @@ $('run-compliance').onclick=async()=>{
    api('/api/ports/switchport/bulk',{ports:selected})
   ]);
   if(!statusData.reachable)throw new Error('Switch jest nieosiągalny — wynik nie może być uznany za aktualny.');
+  latestPorts=sorted(Array.isArray(statusData.ports)?statusData.ports:[]);
   const statusByPort=new Map((Array.isArray(statusData.ports)?statusData.ports:[]).map(p=>[p.name,p]));
   const items=Array.isArray(configData.ports)?configData.ports:[];
   if(items.length!==selected.length)throw new Error('Odczyt konfiguracji nie zawiera wszystkich wybranych portów.');

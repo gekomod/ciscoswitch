@@ -253,9 +253,11 @@ $('run-security-audit').onclick=async()=>{
   const result=await api('/api/security-audit');
   if(!result.available||!Array.isArray(result.findings))throw new Error('Odpowiedź audytu jest niekompletna.');
   const findings=result.findings;
-  const critical=findings.filter(x=>x.severity==='critical').length,warning=findings.filter(x=>x.severity==='warning').length;
-  $('security-audit-summary').textContent='Audyt zakończony · '+findings.length+' wykryć · '+critical+' krytycznych · '+warning+' ostrzeżeń. '+(findings.length?'Wymagana ręczna weryfikacja przed zmianami.':'Nie wykryto jawnych wpisów z kontrolowanej listy. To nie oznacza pełnego bezpieczeństwa.');
-  $('security-audit-rows').innerHTML=findings.length?findings.map(x=>'<tr><td><span class="state '+(x.severity==='critical'?'down':'unknown')+'">'+(x.severity==='critical'?'Krytyczne':'Ostrzeżenie')+'</span></td><td><b>'+esc(x.title)+'</b></td><td>'+esc(x.evidence)+'</td><td>'+esc(x.recommendation)+'</td></tr>').join(''):'<tr><td colspan="4" class="empty">Brak jawnych wpisów wskazujących na kontrolowane ryzyka. Nie jest to pełny audyt bezpieczeństwa.</td></tr>';
+  const critical=findings.filter(x=>x.severity==='critical').length,warning=findings.filter(x=>x.severity==='warning').length,info=findings.filter(x=>x.severity==='info').length;
+  $('security-audit-summary').textContent='Audyt zakończony · '+findings.length+' wykryć · '+critical+' krytycznych · '+warning+' ostrzeżeń · '+info+' do weryfikacji. '+(findings.length?'Wymagana ręczna weryfikacja przed zmianami.':'Nie wykryto jawnych wpisów z kontrolowanej listy. To nie oznacza pełnego bezpieczeństwa.');
+  const severityLabel=x=>x.severity==='critical'?'Krytyczne':x.severity==='warning'?'Ostrzeżenie':'Do weryfikacji';
+  const severityClass=x=>x.severity==='critical'?'down':x.severity==='warning'?'unknown':'';
+  $('security-audit-rows').innerHTML=findings.length?findings.map(x=>'<tr><td><span class="state '+severityClass(x)+'">'+severityLabel(x)+'</span></td><td><b>'+esc(x.title)+'</b></td><td>'+esc(x.evidence)+'</td><td>'+esc(x.recommendation)+'</td></tr>').join(''):'<tr><td colspan="4" class="empty">Brak jawnych wpisów wskazujących na kontrolowane ryzyka. Nie jest to pełny audyt bezpieczeństwa.</td></tr>';
  }catch(error){
   $('security-audit-summary').textContent='Audyt przerwany: '+error.message;
   $('security-audit-rows').innerHTML='<tr><td colspan="4" class="empty">Brak wiarygodnych danych — nie wyciągnięto wniosków.</td></tr>';

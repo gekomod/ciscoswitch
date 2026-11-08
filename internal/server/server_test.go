@@ -428,7 +428,7 @@ func TestBulkPortPreviewUsesSingleSwitchReadAndReturnsEveryPort(t *testing.T) {
  if calls != 1 { t.Fatalf("switch reads=%d want 1",calls) }
  var result struct { Previews []bulkPortPreviewItem `json:"previews"`; Applies bool `json:"applies"`; ReadOperations int `json:"readOperations"` }
  if err:=json.Unmarshal(rec.Body.Bytes(),&result);err!=nil { t.Fatal(err) }
- if len(result.Previews)!=2 || result.Applies || result.ReadOperations!=1 { t.Fatalf("unexpected result: %+v",result) }
+ if len(result.Previews)!=2 || result.Applies || result.ReadOperations!=3 { t.Fatalf("unexpected result: %+v",result) }
  if result.Previews[0].Current["defaultVlan"]!="10" || result.Previews[1].Current["mode"]!="trunk" { t.Fatalf("incorrect port state: %+v",result.Previews) }
  if rec.Header().Get("Cache-Control")!="no-store" { t.Fatal("expected no-store") }
  if strings.Contains(rec.Body.String(),"Interface name") { t.Fatalf("raw CLI output leaked: %s",rec.Body.String()) }

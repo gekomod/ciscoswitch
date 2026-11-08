@@ -3,7 +3,6 @@ package server
 import (
  "encoding/json"
  "crypto/rand"
- "encoding/hex"
  "sync"
  "bufio"
  "crypto/sha256"
@@ -749,6 +748,7 @@ func portProfilesHandler(path string) http.Handler {
    if q.ID!=""&&!validPortProfileID(q.ID){http.Error(w,"nieprawidłowy identyfikator profilu",400);return}
    found:=false
    if q.ID!=""{for i:=range profiles{if profiles[i].ID==q.ID{found=true;break}};if !found{http.Error(w,"profil nie istnieje",404);return}}
+   for _,existing:=range profiles{if strings.EqualFold(existing.Name,q.Name)&&existing.ID!=q.ID{http.Error(w,"profil o takiej nazwie już istnieje",http.StatusConflict);return}}
    if q.ID==""{if len(profiles)>=100{http.Error(w,"osiągnięto limit 100 profili",409);return};var id [6]byte;if _,err:=rand.Read(id[:]);err!=nil{http.Error(w,"nie udało się utworzyć identyfikatora",500);return};q.ID="profile-"+hex.EncodeToString(id[:])}
    q.UpdatedAt=time.Now().UTC()
    if found{for i:=range profiles{if profiles[i].ID==q.ID{profiles[i]=q;break}}}else{profiles=append(profiles,q)}

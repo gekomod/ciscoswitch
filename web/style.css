@@ -484,3 +484,14 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .saved-profile-manager>.note{margin-top:12px}
 :root[data-theme="light"] .saved-profile-manager{background:#f5f8fb;border-color:#dce4ed}
 @media(max-width:760px){.saved-profile-controls{grid-template-columns:1fr}.saved-profile-controls .form-actions>*{flex:1}.saved-profile-heading{align-items:flex-start}}
+
+
+/* Port role recognition */
+.port-role-audit{margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+.role-audit-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.role-audit-heading h3{margin:0 0 5px;font-size:14px}
+.role-audit-heading p{margin:0;color:var(--muted);font-size:12px}
+.port-role-audit .table-wrap{max-height:460px;overflow:auto}
+.port-role-audit tbody tr:hover{background:var(--surface-2)}
+:root[data-theme="light"] .port-role-audit tbody tr:hover{background:#f2f6fa}
+@media(max-width:760px){.role-audit-heading{align-items:flex-start;flex-direction:column}}

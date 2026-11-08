@@ -1054,8 +1054,12 @@ func topologyMapHandler(read func(string)(string,error))http.Handler{
    }
   }
   for i:=range ports { ports[i].Protected=isProtectedPort(ports[i].Port) }
-  checks:=map[string]bool{"runningConfig":true,"switchport":swErr==nil&&strings.Contains(sw,"Interface name"),"lldp":lldpErr==nil&&len(links)>0,"lacp":lacpErr==nil&&len(liveLags)>0}
-  risks:=analyzeTopologyRisks(ports,links,lags,checks["lldp"])
+  lldpLower:=strings.ToLower(lldp)
+  lldpSupported:=lldpErr==nil&&!strings.Contains(lldpLower,"invalid command")&&!strings.Contains(lldpLower,"unknown command")&&!strings.Contains(lldpLower,"unrecognized")&&!strings.Contains(lldpLower,"not supported")
+  checks:=map[string]bool{"runningConfig":true,"switchport":swErr==nil&&strings.Contains(sw,"Interface name"),"lldp":lldpSupported&&len(links)>0,"lacp":lacpErr==nil&&len(liveLags)>0}
+  risks:=analyzeTopologyRisks(ports,links,lags,lldpSupported)
+  configuredGroups:=map[string]bool{};for _,lag:=range lags{configuredGroups[strings.ToLower(lag.Name)]=true}
+  for _,live:=range liveLags{if !configuredGroups[strings.ToLower(live.Name)]{risks=append(risks,topologyRisk{"info","lacp-live-unconfigured","Agregacja LACP bez rozpoznanej deklaracji konfiguracji",live.Name+" jest widoczna w odczycie operacyjnym, ale nie została rozpoznana w running-config.","Zweryfikuj format konfiguracji i stan agregacji. Parser może nie rozpoznawać wszystkich wariantów składni firmware."})}}
   w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
   _=json.NewEncoder(w).Encode(map[string]any{"available":true,"readOnly":true,"ports":ports,"links":links,"aggregations":lags,"vlans":vlans,"risks":risks,"checks":checks,"note":"Ryzyka są wskazówkami opartymi wyłącznie na rozpoznanych opisach i danych CLI. Pojedynczy opisany uplink jest kandydatem na SPOF, nie dowodem braku redundancji. Brak LLDP nie oznacza braku fizycznego łącza. LACP i VLAN-y zależą od rozpoznanego formatu odpowiedzi urządzenia."})
  })

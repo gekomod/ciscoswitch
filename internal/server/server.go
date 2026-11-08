@@ -715,6 +715,7 @@ type portProfile struct {
  ID string `json:"id"`
  Name string `json:"name"`
  Description string `json:"description"`
+ PortDescription string `json:"portDescription"`
  Mode string `json:"mode"`
  AccessVLAN int `json:"accessVlan"`
  Allowed string `json:"allowed"`
@@ -742,7 +743,7 @@ func portProfilesHandler(path string) http.Handler {
    if q.Name==""||len([]rune(q.Name))>40||len([]rune(q.Description))>120{http.Error(w,"nazwa jest wymagana (maks. 40 znaków), opis maks. 120 znaków",400);return}
    if q.Speed==""{q.Speed="auto"};if q.Duplex==""{q.Duplex="auto"}
    access:=q.AccessVLAN;if access==0{access=1}
-   if _,err:=device.BuildPortSettingsCommands("port1.0.1",q.Mode,access,q.Allowed,q.Native,q.Speed,q.Duplex,"");err!=nil{http.Error(w,err.Error(),400);return}
+   if _,err:=device.BuildPortSettingsCommands("port1.0.1",q.Mode,access,q.Allowed,q.Native,q.Speed,q.Duplex,q.PortDescription);err!=nil{http.Error(w,err.Error(),400);return}
    store.mu.Lock();defer store.mu.Unlock()
    profiles,err:=store.load();if err!=nil{http.Error(w,"nie udało się odczytać rejestru profili",500);return}
    if q.ID!=""&&!validPortProfileID(q.ID){http.Error(w,"nieprawidłowy identyfikator profilu",400);return}

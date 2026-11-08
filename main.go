@@ -37,12 +37,10 @@ func main() {
  addr := env("LISTEN_ADDR","127.0.0.1:8090")
  mux := http.NewServeMux()
  server.Register(mux,svc)
- panelUser, panelPassword := os.Getenv("PANEL_USER"), os.Getenv("PANEL_PASSWORD")
- panelRole := env("PANEL_ROLE", "admin")
- users, err := openPanelUserStore(env("PANEL_USERS_PATH", filepath.Join("data", "users.json")), panelUser, panelPassword, panelRole)
- if err != nil { log.Fatalf("Nie można uruchomić rejestru użytkowników: %v", err) }
- registerPanelUserRoutes(mux, users)
- handler := securityHeaders(sessionAuthWithUsers(auditLog(mux, env("AUDIT_LOG_PATH", filepath.Join("data", "audit.jsonl"))), users))
+ // Panel authentication and user management are mounted once by server.Register.
+ // Do not wrap this mux in the legacy main-package sessionAuth middleware:
+ // that creates a second session store and redirects /login back to itself.
+ handler := securityHeaders(auditLog(mux, env("AUDIT_LOG_PATH", filepath.Join("data", "audit.jsonl"))))
  log.Printf("CiscoSwitch Manager listening on http://%s (switch=%s, snmp-version=%s, community=%s)",addr,cfg.Host,snmpMode(cfg),masked(cfg.SNMPCommunity))
  httpServer := &http.Server{
   Addr: addr,

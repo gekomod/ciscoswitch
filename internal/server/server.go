@@ -50,7 +50,8 @@ func Register(m *http.ServeMux,svc *device.Service){
  apiMux.Handle("/api/diagnostics/availability",diagnosticsAvailabilityHandler(diagnosticsStore))
  apiMux.Handle("/api/diagnostics/availability.csv",diagnosticsAvailabilityCSVHandler(diagnosticsStore))
  apiMux.Handle("/api/diagnostics/acknowledge",diagnosticsAcknowledgeHandler(diagnosticsStore,diagnosticsPath+".acks.json"))
- apiMux.Handle("/api/monitor/history", monitorHistoryHandler(filepath.Join("data", "monitor-history.jsonl")))
+ monitorPath:=os.Getenv("MONITOR_HISTORY_PATH");if monitorPath==""{monitorPath=filepath.Join("data","monitor-history.jsonl")}
+ apiMux.Handle("/api/monitor/history", monitorHistoryHandler(monitorPath))
  apiMux.Handle("/api/monitor/stream", monitorStreamHandler())
  apiMux.HandleFunc("/api/device/identity",func(w http.ResponseWriter,r *http.Request){
 	if r.Method!=http.MethodGet{http.Error(w,"method not allowed",405);return}

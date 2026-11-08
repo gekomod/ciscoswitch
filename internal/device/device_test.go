@@ -253,3 +253,27 @@ func TestParseSwitchportDetailsDoesNotGuessMissingFields(t *testing.T) {
  if got.Mode != "access" || got.DefaultVLAN != "" || len(got.ConfiguredVLANs) != 0 { t.Fatalf("missing fields must stay empty: %+v", got) }
  if _, err := ParseSwitchportDetails("Interface name : port1.0.50\nSwitchport mode : trunk", "port1.0.5"); err == nil { t.Fatal("must not match a prefix port name") }
 }
+
+func TestBuildPortRepairCommandsOnlyChangesSelectedFields(t *testing.T) {
+ cmds,err:=BuildPortRepairCommands(PortRepairRequest{Port:"port1.0.7",Mode:"access",AccessVLAN:30,UpdateAccessVLAN:true})
+ if err!=nil{t.Fatal(err)}
+ got:=strings.Join(cmds,"\n")
+ if !strings.Contains(got,"switchport access vlan 30"){t.Fatalf("missing VLAN patch: %v",cmds)}
+ for _,forbidden:=range []string{"speed ","duplex ","switchport mode ","description","switchport trunk"} {if strings.Contains(got,forbidden){t.Fatalf("partial repair unexpectedly changes %q: %v",forbidden,cmds)}}
+}
+func TestBuildPortRepairCommandsTrunkAndDescription(t *testing.T) {
+ cmds,err:=BuildPortRepairCommands(PortRepairRequest{Port:"port1.0.8",Mode:"trunk",Allowed:"10,20,30",Native:10,UpdateTrunk:true,Description:"AP BIURO",UpdateDescription:true})
+ if err!=nil{t.Fatal(err)}
+ got:=strings.Join(cmds,"\n")
+ for _,want:=range []string{"description AP BIURO","switchport trunk allowed vlan none","switchport trunk allowed vlan add 10,20,30","switchport trunk native vlan 10"}{if !strings.Contains(got,want){t.Fatalf("missing %q: %v",want,cmds)}}
+ for _,forbidden:=range []string{"speed ","duplex ","switchport mode "}{if strings.Contains(got,forbidden){t.Fatalf("partial repair unexpectedly changes %q: %v",forbidden,cmds)}}
+}
+func TestBuildPortRepairCommandsRejectsModeMismatchAndEmptyPatch(t *testing.T) {
+ cases:=[]PortRepairRequest{
+  {Port:"port1.0.1",Mode:"trunk",AccessVLAN:10,UpdateAccessVLAN:true},
+  {Port:"port1.0.1",Mode:"access",Allowed:"10,20",Native:10,UpdateTrunk:true},
+  {Port:"port1.0.1",Mode:"access"},
+  {Port:"bad",Mode:"access",AccessVLAN:10,UpdateAccessVLAN:true},
+ }
+ for _,q:=range cases{if _,err:=BuildPortRepairCommands(q);err==nil{t.Errorf("expected invalid repair request to fail: %+v",q)}}
+}

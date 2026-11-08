@@ -1403,7 +1403,7 @@ type diagnosticsCorrelation struct {
 func buildDiagnosticsCorrelations(events []diagnosticsEvent,window time.Duration)[]diagnosticsCorrelation{
  if len(events)<2{return []diagnosticsCorrelation{}}
  ordered:=append([]diagnosticsEvent(nil),events...)
- sort.Slice(ordered,func(i,j int)bool{return ordered[i].At.Before(ordered[j].At)})
+ sort.Slice(ordered,func(i,j int)bool{if ordered[i].At.Equal(ordered[j].At){return ordered[i].ID<ordered[j].ID};return ordered[i].At.Before(ordered[j].At)})
  out:=make([]diagnosticsCorrelation,0)
  for i:=0;i<len(ordered);{
   start:=ordered[i].At
@@ -1422,7 +1422,7 @@ func buildDiagnosticsCorrelations(events []diagnosticsEvent,window time.Duration
    title:="Zdarzenia z różnych warstw wystąpiły w zbliżonym czasie"
    if categories["lacp"]&&categories["lldp"]{title="Zmiany LACP i sąsiedztwa LLDP"}
    if categories["availability"]&&(categories["lacp"]||categories["lldp"]){title="Problem odczytu CLI zbiegł się ze zmianą topologii"}
-   summary:="Wykryto "+strconv.Itoa(len(group))+" zdarzenia z kategorii: "+strings.Join(categoryList+", ")+". To korelacja czasowa, nie dowód wspólnej przyczyny. Sprawdź kolejność zdarzeń, porty i urządzenie po drugiej stronie łącza."
+   summary:="Wykryto "+strconv.Itoa(len(group))+" zdarzenia z kategorii: "+strings.Join(categoryList,", ")+". To korelacja czasowa, nie dowód wspólnej przyczyny. Sprawdź kolejność zdarzeń, porty i urządzenie po drugiej stronie łącza."
    out=append(out,diagnosticsCorrelation{ID:id,Severity:severity,Title:title,Summary:summary,Start:start,End:end,EventCount:len(group),Categories:categoryList,EventIDs:ids})
   }
   i=j

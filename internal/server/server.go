@@ -875,7 +875,10 @@ func analyzeVLANAndPortSecurity(config,switchport string) []securityAuditFinding
    if len(fields)>=2&&fields[0]=="switchport"&&fields[1]=="mode"&&len(fields)>=3{current.mode=fields[2]}
    if len(fields)>=4&&fields[0]=="switchport"&&fields[1]=="access"&&fields[2]=="vlan"{current.access=fields[3]}
    if len(fields)>=5&&fields[0]=="switchport"&&fields[1]=="trunk"&&fields[2]=="native"&&fields[3]=="vlan"{current.native=fields[4]}
-   if len(fields)>=5&&fields[0]=="switchport"&&fields[1]=="trunk"&&fields[2]=="allowed"&&fields[3]=="vlan"{current.allowed=strings.Join(fields[4:],"")}
+   if len(fields)>=5&&fields[0]=="switchport"&&fields[1]=="trunk"&&fields[2]=="allowed"&&fields[3]=="vlan"{
+    value:=strings.Join(fields[4:],"")
+    if value=="none"{current.allowed=""}else if strings.HasPrefix(value,"add"){current.allowed+=strings.TrimPrefix(value,"add")}else if strings.HasPrefix(value,"remove"){remove:=parseAuditVLANSet(strings.TrimPrefix(value,"remove"));keep:=make([]string,0);for _,v:=range strings.Split(current.allowed,","){n,e:=strconv.Atoi(v);if e!=nil||!remove[n]{keep=append(keep,v)}};current.allowed=strings.Join(keep,",")}else{current.allowed=value}
+   }
   }
   if strings.HasPrefix(lower,"vlan "){
    fields:=strings.Fields(lower);if len(fields)==2{if n,e:=strconv.Atoi(fields[1]);e==nil&&n>=1&&n<=4094{declared[n]=true}}

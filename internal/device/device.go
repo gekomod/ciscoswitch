@@ -24,6 +24,8 @@ type Config struct {
 	Timeout               time.Duration
 	// StatusCacheTTL i ReadCacheTTL: 0 = wartość domyślna (5 s), wartość ujemna wyłącza cache.
 	StatusCacheTTL, ReadCacheTTL time.Duration
+	// CommandTimeout: maksymalny czas jednego polecenia show (0 = 30 s).
+	CommandTimeout time.Duration
 }
 type Service struct {
 	cfg      Config
@@ -595,7 +597,7 @@ func (s *Service) RunReadOnlyFresh(cmd string) (string, error) {
 
 func (s *Service) readFromSwitch(cmd string) (string, error) {
 	started := time.Now()
-	out, err := s.ssh.output(s.dialSSH, cmd)
+	out, err := s.ssh.output(s.dialSSH, cmd, s.commandTimeout())
 	logTiming("ssh", cmd, started, err)
 	return out, err
 }

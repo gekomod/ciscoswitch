@@ -37,6 +37,7 @@ func main() {
 		Timeout:               4 * time.Second,
 		StatusCacheTTL:        cacheTTL("STATUS_CACHE_TTL"),
 		ReadCacheTTL:          cacheTTL("READ_CACHE_TTL"),
+		CommandTimeout:        commandTimeout(),
 	}
 	svc := device.New(cfg)
 	defer svc.Close()
@@ -489,6 +490,20 @@ func cacheTTL(name string) time.Duration {
 	d, err := time.ParseDuration(raw)
 	if err != nil || d < 0 || d > 5*time.Minute {
 		log.Printf("Nieprawidłowe %s=%q; używam wartości domyślnej 5s", name, raw)
+		return 0
+	}
+	return d
+}
+
+// commandTimeout czyta SSH_COMMAND_TIMEOUT (np. 30s); puste lub błędne = domyślne 30 s.
+func commandTimeout() time.Duration {
+	raw := strings.TrimSpace(os.Getenv("SSH_COMMAND_TIMEOUT"))
+	if raw == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d < 5*time.Second || d > 5*time.Minute {
+		log.Printf("Nieprawidłowe SSH_COMMAND_TIMEOUT=%q (zakres 5s–5m); używam 30s", raw)
 		return 0
 	}
 	return d

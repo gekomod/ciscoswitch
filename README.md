@@ -35,6 +35,7 @@ Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948
 - Odczyty `show` korzystają z jednego współdzielonego połączenia SSH (ponowne łączenie po zerwaniu lub 45 s bezczynności) zamiast nowego logowania przy każdym poleceniu.
 - Wyniki SNMP i `show` są buforowane przez `STATUS_CACHE_TTL` / `READ_CACHE_TTL` (domyślnie 5 s), a równoległe zapytania o to samo są łączone w jedno. Każda zmiana konfiguracji z panelu czyści cache, więc odczyt zwrotny jest zawsze świeży. Konsola diagnostyczna CLI zawsze pyta switch bezpośrednio.
 - Zmiany konfiguracji wyłączają stronicowanie (`terminal length 0`) i kończą sesję poleceniem `exit`, zamiast czekać na timeout. Komunikaty błędów AlliedWare Plus (linie zaczynające się od `% `, poza `% Warning`) są zgłaszane jako błąd operacji.
+- Każde polecenie `show` ma limit czasu (`SSH_COMMAND_TIMEOUT`, domyślnie 30 s); zawieszony switch nie blokuje panelu, a połączenie jest odnawiane.
 - `PERF_LOG=1` loguje czas każdego zapytania do switcha (`[perf] ...`); domyślnie logowane są tylko zapytania dłuższe niż 1,5 s.
 
 ## Instalacja — Debian 13

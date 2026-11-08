@@ -142,6 +142,9 @@ func (f *fakeSwitch) serve(nc net.Conn, cfg *ssh.ServerConfig) {
 					atomic.AddInt32(&f.execs, 1)
 					cmd := string(req.Payload[4:])
 					req.Reply(true, nil)
+					if cmd == "show hang" {
+						select {} // switch zawieszony: nigdy nie odpowiada
+					}
 					ch.Write([]byte("output of " + cmd + "\n"))
 					ch.SendRequest("exit-status", false, ssh.Marshal(struct{ C uint32 }{0}))
 					return
@@ -255,5 +258,24 @@ func TestPoolReconnectsAfterConnectionLoss(t *testing.T) {
 	}
 	if f.conns != 2 {
 		t.Fatalf("expected reconnect, conns=%d", f.conns)
+	}
+}
+
+func TestHungCommandDoesNotBlockPanel(t *testing.T) {
+	f := startFakeSwitch(t)
+	s := fakeService(f)
+	s.cfg.CommandTimeout = 300 * time.Millisecond
+	defer s.Close()
+	started := time.Now()
+	if _, err := s.readFromSwitch("show hang"); err == nil || !strings.Contains(err.Error(), "nie odpowiedział") {
+		t.Fatalf("expected timeout error, got %v", err)
+	}
+	if d := time.Since(started); d > 2*time.Second {
+		t.Fatalf("timeout took %s", d)
+	}
+	// Panel musi dalej działać: kolejne polecenie przez nowe połączenie.
+	out, err := s.RunReadOnlyFresh("show version")
+	if err != nil || !strings.Contains(out, "show version") {
+		t.Fatalf("panel blocked after hung command: %q %v", out, err)
 	}
 }

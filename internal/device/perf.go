@@ -1,6 +1,7 @@
 package device
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -22,6 +23,10 @@ const (
 	sshIdleLimit = 45 * time.Second
 	// Zapytania wolniejsze niż ten próg są zawsze logowane.
 	slowThreshold = 1500 * time.Millisecond
+	// Maksymalny czas jednego polecenia show na współdzielonym połączeniu.
+	// Po jego przekroczeniu połączenie jest zrywane, żeby zawieszony switch
+	// nie zablokował całego panelu.
+	defaultCommandTimeout = 30 * time.Second
 )
 
 // perfLogEnabled włącza logowanie czasu każdego zapytania (PERF_LOG=1).
@@ -152,7 +157,7 @@ func (p *sshPool) closeLocked() {
 
 // output wykonuje polecenie na współdzielonym połączeniu. Jeśli połączenie
 // okaże się martwe (switch je zamknął), łączy się ponownie raz i powtarza.
-func (p *sshPool) output(dial func() (*ssh.Client, error), cmd string) (string, error) {
+func (p *sshPool) output(dial func() (*ssh.Client, error), cmd string, timeout time.Duration) (string, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.client != nil && time.Since(p.lastUsed) > sshIdleLimit {
@@ -173,9 +178,14 @@ func (p *sshPool) output(dial func() (*ssh.Client, error), cmd string) (string, 
 			p.closeLocked()
 			continue
 		}
-		b, err := session.Output(cmd)
+		b, err, timedOut := runWithTimeout(session, cmd, timeout)
 		_ = session.Close()
 		p.lastUsed = time.Now()
+		if timedOut {
+			// Zerwanie połączenia odblokowuje sesję; kolejne polecenie połączy się od nowa.
+			p.closeLocked()
+			return string(b), fmt.Errorf("switch nie odpowiedział na %q w ciągu %s", cmd, timeout)
+		}
 		if err != nil {
 			var exitErr *ssh.ExitError
 			if asExitError(err, &exitErr) {
@@ -192,6 +202,28 @@ func (p *sshPool) output(dial func() (*ssh.Client, error), cmd string) (string, 
 		return string(b), nil
 	}
 	return "", lastErr
+}
+
+type outputResult struct {
+	b   []byte
+	err error
+}
+
+// runWithTimeout wykonuje polecenie i przerywa czekanie po upływie timeout.
+func runWithTimeout(session *ssh.Session, cmd string, timeout time.Duration) ([]byte, error, bool) {
+	done := make(chan outputResult, 1)
+	go func() {
+		b, err := session.Output(cmd)
+		done <- outputResult{b, err}
+	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case r := <-done:
+		return r.b, r.err, false
+	case <-timer.C:
+		return nil, nil, true
+	}
 }
 
 func asExitError(err error, target **ssh.ExitError) bool {
@@ -226,6 +258,13 @@ func (s *Service) statusTTL() time.Duration {
 		return defaultStatusCacheTTL
 	}
 	return s.cfg.StatusCacheTTL
+}
+
+func (s *Service) commandTimeout() time.Duration {
+	if s.cfg.CommandTimeout > 0 {
+		return s.cfg.CommandTimeout
+	}
+	return defaultCommandTimeout
 }
 
 func (s *Service) readTTL() time.Duration {

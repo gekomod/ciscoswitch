@@ -495,3 +495,14 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .port-role-audit tbody tr:hover{background:var(--surface-2)}
 :root[data-theme="light"] .port-role-audit tbody tr:hover{background:#f2f6fa}
 @media(max-width:760px){.role-audit-heading{align-items:flex-start;flex-direction:column}}
+
+
+/* Saved profile compliance audit */
+.profile-compliance{margin-top:22px;padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2)}
+.profile-compliance .form-grid{align-items:end;margin:14px 0}
+.profile-compliance select[multiple]{min-height:150px;padding:8px}
+.profile-compliance .form-actions{align-self:end}
+#compliance-summary{margin:12px 0}
+#compliance-rows td{vertical-align:top}
+:root[data-theme="light"] .profile-compliance{background:#f5f8fb;border-color:#dce4ed}
+@media(max-width:760px){.profile-compliance{padding:12px}.profile-compliance .form-grid{grid-template-columns:1fr}.profile-compliance select[multiple]{min-height:180px}}

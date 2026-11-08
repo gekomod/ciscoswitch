@@ -9,6 +9,7 @@ Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948
 - VLAN: podgląd listy, tworzenie i usuwanie VLAN 2–4094.
 - Porty: access/trunk, VLAN access, lista VLAN dozwolonych na trunk, native VLAN.
 - Porty: opis, speed auto/10/100/1000, duplex auto/full/half.
+- Biblioteka profili portów Access/Trunk: własne profile z nazwą, opisem, opisem interfejsu, VLAN, native VLAN, allowed VLAN, speed i duplex. Profile są przechowywane lokalnie w `data/port-profiles.json`; można je zapisywać, aktualizować, usuwać i wczytywać do operacji masowej. Zastosowanie nadal wymaga zbiorczego podglądu, potwierdzenia, kopii konfiguracji i odczytu zwrotnego.
 - LACP: tworzenie i usuwanie channel-group, tryb active/passive oraz diagnostyka tylko do odczytu z próbą `show etherchannel detail`, `show etherchannel summary` i `show etherchannel` (agregatory, partner LAG, liczniki łączy i synchronizacja portów, jeśli format jest rozpoznany). Parser jest zależny od formatu CLI; panel pokazuje rozpoznane agregatory i stan portów, a nieprzetworzone odpowiedzi pozostają poza standardowym widokiem użytkownika.
 - STP: ustawienie trybu STP/RSTP/MSTP, priorytet bridge, edgeport na porcie.
 - DHCP client dla interfejsu zarządzającego VLAN 1.
@@ -56,6 +57,7 @@ LISTEN_ADDR=127.0.0.1:8090
 PANEL_USER=admin
 PANEL_PASSWORD=USE_A_RANDOM_PASSWORD_AT_LEAST_16_CHARS
 AUDIT_LOG_PATH=data/audit.jsonl
+PORT_PROFILES_PATH=data/port-profiles.json
 ```
 
 ## Błąd SSH: niezgodny klucz hosta

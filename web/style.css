@@ -533,3 +533,23 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .security-audit-panel .table-wrap{margin-top:12px}
 .security-audit-panel td{vertical-align:top;white-space:normal;min-width:130px}
 @media(max-width:720px){.security-audit-panel .role-audit-heading{align-items:stretch;flex-direction:column}.security-audit-panel .role-audit-heading .btn{width:100%}}
+
+.topology-map-panel{margin-top:18px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2)}
+.topology-map-panel .role-audit-heading{align-items:center;gap:12px}
+.topology-map-panel .role-audit-heading>div{min-width:0}
+.topology-map-panel .role-audit-heading p{margin:5px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+.topology-map-content{display:grid;gap:14px;margin-top:12px}
+.topology-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.topology-summary-grid article,.topology-port,.topology-neighbor,.topology-lag{min-width:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.topology-summary-grid small,.topology-port small,.topology-neighbor small,.topology-lag small{display:block;color:var(--muted);font-size:10px;overflow-wrap:anywhere}
+.topology-summary-grid b{display:block;margin-top:5px;font-size:21px}
+.topology-section{display:grid;gap:9px}
+.topology-section h4{margin:0;font-size:13px}
+.topology-neighbor-grid,.topology-lag-grid,.topology-port-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+.topology-neighbor b{display:block;margin:5px 0;overflow-wrap:anywhere}
+.topology-neighbor span{font-size:11px;color:var(--muted)}
+.topology-lag>div,.topology-port>div{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:7px}
+.topology-port-grid{grid-template-columns:repeat(auto-fit,minmax(155px,1fr))}
+.topology-vlan-list{display:flex;flex-wrap:wrap;gap:6px}
+.topology-vlan{padding:5px 9px;border:1px solid var(--line);border-radius:7px;font-size:11px;background:var(--surface)}
+@media(max-width:720px){.topology-map-panel .role-audit-heading{align-items:stretch;flex-direction:column}.topology-map-panel .role-audit-heading .btn{width:100%}.topology-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

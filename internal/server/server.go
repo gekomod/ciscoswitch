@@ -119,6 +119,27 @@ m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method
   write(w,v,e)
  })
  m.HandleFunc("/api/port/settings",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,4096);var q struct{Port string `json:"port"`;Mode string `json:"mode"`;AccessVLAN int `json:"accessVlan"`;Allowed string `json:"allowed"`;Native int `json:"native"`;Speed string `json:"speed"`;Duplex string `json:"duplex"`;Description string `json:"description"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};if isProtectedPort(q.Port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",q.Port));return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigurePortSettings(q.Port,q.Mode,q.AccessVLAN,q.Allowed,q.Native,q.Speed,q.Duplex,q.Description)});write(w,v,e)})
+ m.HandleFunc("/api/ports/repair/preview",func(w http.ResponseWriter,r *http.Request){
+  if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
+  r.Body=http.MaxBytesReader(w,r.Body,4096)
+  var q device.PortRepairRequest
+  if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return}
+  if isProtectedPort(q.Port){http.Error(w,"port "+q.Port+" jest chroniony przez PROTECTED_PORTS",400);return}
+  commands,current,err:=validatePortRepair(svc.RunReadOnly,q)
+  if err!=nil{http.Error(w,err.Error(),400);return}
+  w.Header().Set("Content-Type","application/json");w.Header().Set("Cache-Control","no-store")
+  _=json.NewEncoder(w).Encode(map[string]any{"port":q.Port,"current":current,"commands":commands,"applies":false})
+ })
+ m.HandleFunc("/api/ports/repair/apply",func(w http.ResponseWriter,r *http.Request){
+  if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
+  r.Body=http.MaxBytesReader(w,r.Body,4096)
+  var q device.PortRepairRequest
+  if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return}
+  if isProtectedPort(q.Port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",q.Port));return}
+  if _,_,err:=validatePortRepair(svc.RunReadOnly,q);err!=nil{write(w,"",err);return}
+  output,err:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigurePortRepair(q)})
+  write(w,output,err)
+ })
  m.HandleFunc("/api/ports/settings/bulk",func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
   r.Body=http.MaxBytesReader(w,r.Body,8192)
@@ -649,6 +670,16 @@ func bulkSwitchportDetailsHandler(read func(string) (string,error)) http.Handler
   w.Header().Set("Cache-Control","no-store")
   _=json.NewEncoder(w).Encode(map[string]any{"ports":details,"readOperations":1})
  })
+}
+
+func validatePortRepair(read func(string)(string,error),q device.PortRepairRequest)([]string,device.SwitchportDetails,error){
+ q.Port=strings.TrimSpace(q.Port)
+ if isProtectedPort(q.Port){return nil,device.SwitchportDetails{},fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",q.Port)}
+ raw,err:=read("show interface switchport");if err!=nil{return nil,device.SwitchportDetails{},fmt.Errorf("nie udało się odczytać bieżącej konfiguracji switchport")}
+ current,err:=device.ParseSwitchportDetails(raw,q.Port);if err!=nil{return nil,device.SwitchportDetails{},fmt.Errorf("nie udało się jednoznacznie odczytać portu %s",q.Port)}
+ if !strings.EqualFold(strings.TrimSpace(current.Mode),q.Mode){return nil,device.SwitchportDetails{},fmt.Errorf("tryb portu zmienił się od audytu lub nie zgadza się z profilem; wymagany jest osobny audyt i pełna zmiana trybu")}
+ commands,err:=device.BuildPortRepairCommands(q);if err!=nil{return nil,device.SwitchportDetails{},err}
+ return commands,current,nil
 }
 
 func bulkPortPreviewHandler(read func(string) (string,error)) http.Handler {

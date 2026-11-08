@@ -1317,11 +1317,6 @@ func diagnosticsTransitions(samples []diagnosticsSample)[]diagnosticsTransition{
    }
    for port,neighbor:=range now{if _,ok:=old[port];!ok{out=append(out,diagnosticsTransition{"lldp-neighbor-added",port,"brak sąsiada w odczycie",neighbor,cur.CapturedAt,"info"})}}
   }
-  // Wynik kontroli CLI opisuje dostępność odczytu zarządzającego, nie status ruchu.
-  for _,check:=range []string{"runningConfig","switchport","lldp","lacp"}{
-   if prev.Checks[check]&&!cur.Checks[check]{out=append(out,diagnosticsTransition{"control-read-failed",check,"odczyt poprawny","odczyt nieudany",cur.CapturedAt,"warning"})}
-   if !prev.Checks[check]&&cur.Checks[check]{out=append(out,diagnosticsTransition{"control-read-restored",check,"odczyt nieudany","odczyt poprawny",cur.CapturedAt,"info"})}
-  }
  }
  return out
 }
@@ -1552,7 +1547,7 @@ func diagnosticsAvailabilityMetric(name string, samples []diagnosticsSample, sta
  for i:=1;i<len(samples);i++ {
   prev,cur:=samples[i-1],samples[i]
   if cur.CapturedAt.Before(start)||!prev.CapturedAt.Before(end)||!cur.CapturedAt.After(prev.CapturedAt){continue}
-  span:=cur.CapturedAt.Sub(prev.CapturedAt);if span>maxGap{if outageOpen>=0{row:=&m.Outages[outageOpen];row.End=prev.CapturedAt;row.DurationSeconds=int64(row.End.Sub(row.Start).Seconds());row.Open=false;outageOpen=-1};continue}
+  span:=cur.CapturedAt.Sub(prev.CapturedAt);if span>=maxGap{if outageOpen>=0{row:=&m.Outages[outageOpen];row.End=prev.CapturedAt;row.DurationSeconds=int64(row.End.Sub(row.Start).Seconds());row.Open=false;outageOpen=-1};continue}
   known,online:=state(prev);if !known{if outageOpen>=0{row:=&m.Outages[outageOpen];row.End=prev.CapturedAt;row.DurationSeconds=int64(row.End.Sub(row.Start).Seconds());row.Open=false;outageOpen=-1};continue}
   left:=prev.CapturedAt;if left.Before(start){left=start};right:=cur.CapturedAt;if right.After(end){right=end}
   seconds:=int64(right.Sub(left).Seconds());if seconds<=0{continue}

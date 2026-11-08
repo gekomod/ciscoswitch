@@ -1369,11 +1369,24 @@ function renderDiagnosticsCenter(data){
  samples.innerHTML=list.length?list.slice().reverse().slice(0,8).map(s=>'<article class="diagnostic-sample"><b>'+esc(new Date(s.capturedAt).toLocaleString())+'</b><small>Kontrole: '+Object.entries(s.checks||{}).filter(([,v])=>v).map(([k])=>({runningConfig:'konfiguracja',switchport:'switchport',lldp:'LLDP',lacp:'LACP'}[k]||k)).join(' · ')+' </small><small>LACP: '+(s.aggregations||[]).length+' · uplinki: '+(s.uplinks||[]).length+' · sąsiedzi: '+(s.neighbors||[]).length+'</small></article>').join(''):'<div class="empty">Brak zapisanych próbek.</div>';
 }
 
+
 function renderAvailabilityMetric(metric){
  const percent=metric.availabilityPercent===null||metric.availabilityPercent===undefined?'—':Number(metric.availabilityPercent).toFixed(2)+'%';
  const observed=Number(metric.observedSeconds||0),unknown=Number(metric.unknownSeconds||0),outages=Number(metric.outageCount||0);
  const duration=s=>{s=Math.max(0,Number(s)||0);if(s<60)return Math.round(s)+' s';if(s<3600)return Math.round(s/60)+' min';if(s<86400)return (s/3600).toFixed(1)+' h';return (s/86400).toFixed(1)+' d';};
  return '<article class="availability-card"><span>'+esc(metric.name)+'</span><strong>'+percent+'</strong><small>Pomiar: '+duration(observed)+' · Brak danych: '+duration(unknown)+'</small><small>Przerwy: '+outages+' · Łącznie: '+duration(metric.outageSeconds)+'</small></article>';
+}
+function renderAvailabilityChart(points,window){
+ const chart=$('availability-chart');if(!chart)return;
+ const labels=window==='7d'?['7 dni temu','6 dni temu','5 dni temu','4 dni temu','3 dni temu','2 dni temu','Wczoraj']:Array.from({length:24},(_,i)=>String(i).padStart(2,'0')+':00');
+ chart.innerHTML=(points||[]).map((p,i)=>{
+  const value=p.availabilityPercent===null||p.availabilityPercent===undefined?null:Number(p.availabilityPercent);
+  const height=value===null?0:Math.max(2,Math.min(100,value));
+  const title=value===null?'Brak wystarczających danych':value.toFixed(2)+'% dostępności';
+  const label=window==='7d'?labels[i]:(i%3===0?labels[i]:'');
+  return '<div class="availability-bar-column" title="'+esc(title)+'"><div class="availability-bar-track"><div class="availability-bar '+(value===null?'unknown':'')+'" style="height:'+height+'%"></div></div><small>'+esc(label)+'</small><span>'+(value===null?'—':value.toFixed(0)+'%')+'</span></div>';
+ }).join('');
+ const caption=$('availability-chart-caption');if(caption)caption.textContent=window==='7d'?'Ostatnie 7 dni · podział dzienny':'Ostatnie 24 godziny · podział godzinowy';
 }
 async function refreshAvailability(){
  const cards=$('availability-cards'),groups=$('availability-aggregations'),note=$('availability-note');if(!cards||!groups)return;
@@ -1381,9 +1394,11 @@ async function refreshAvailability(){
   const window=$('availability-window')?.value||'24h';const data=await api('/api/diagnostics/availability?window='+window);
   cards.innerHTML=renderAvailabilityMetric(data.device);
   groups.innerHTML=(data.aggregations||[]).length?'<h5>Dostępność agregacji LACP</h5><div class="availability-cards">'+data.aggregations.map(renderAvailabilityMetric).join('')+'</div>':'<div class="empty">Brak rozpoznanych agregacji LACP w historii.</div>';
+  renderAvailabilityChart(data.timeline||[],window);
   if(note)note.textContent=data.method+' Maksymalna luka między próbkami: '+data.maxSampleGapSeconds+' s.';
  }catch(e){cards.innerHTML='<div class="empty">Nie udało się pobrać dostępności: '+esc(e.message)+'</div>';}
 }
+
 async function refreshDiagnosticsCenter(){
  const meta=$('diagnostics-meta');if(meta)meta.textContent='Odczyt historii diagnostycznej…';
  try{const windowMinutes=Number($('diagnostics-window')?.value||60);const data=await api('/api/diagnostics/history?limit=100&windowMinutes='+windowMinutes);renderDiagnosticsCenter(data);}
@@ -1396,7 +1411,7 @@ async function collectDiagnosticsCenter(){
  catch(e){if($('diagnostics-meta'))$('diagnostics-meta').textContent='Odczyt próbki nie powiódł się: '+e.message+' (jeśli próbka została zapisana, historia odświeży się ponownie).';await refreshDiagnosticsCenter();await refreshAvailability();}
  finally{button.disabled=false;button.textContent='Zbierz próbkę';}
 }
-if($('collect-diagnostics')){$('collect-diagnostics').addEventListener('click',collectDiagnosticsCenter);$('refresh-diagnostics')?.addEventListener('click',refreshDiagnosticsCenter);$('diagnostics-window')?.addEventListener('change',refreshDiagnosticsCenter);refreshDiagnosticsCenter();setInterval(()=>{if(!document.hidden){refreshDiagnosticsCenter();refreshAvailability();}},30000);$('availability-window')?.addEventListener('change',refreshAvailability);refreshAvailability();}
+if($('collect-diagnostics')){$('collect-diagnostics').addEventListener('click',collectDiagnosticsCenter);$('refresh-diagnostics')?.addEventListener('click',refreshDiagnosticsCenter);$('diagnostics-window')?.addEventListener('change',refreshDiagnosticsCenter);refreshDiagnosticsCenter();setInterval(()=>{if(!document.hidden){refreshDiagnosticsCenter();refreshAvailability();}},30000);$('availability-window')?.addEventListener('change',refreshAvailability);refreshAvailability();$('export-availability')?.addEventListener('click',()=>{const window=$('availability-window')?.value||'24h';location.href='/api/diagnostics/availability.csv?window='+window;});}
 
 async function acknowledgeDiagnosticsAlert(id,button){
  const input=$('diagnostics-alerts')?.querySelector('[data-ack-comment="'+id+'"]');

@@ -245,6 +245,24 @@ function runPortAudit(){
  renderPortRoleAudit();
 }
 
+
+$('refresh-topology-map').onclick=async()=>{
+ const button=$('refresh-topology-map'),status=$('topology-map-status'),host=$('topology-map-content');
+ button.disabled=true;button.textContent='Odczytuję…';status.textContent='Pobieranie konfiguracji, switchport, LLDP i LACP…';host.innerHTML='<div class="empty">Analiza topologii…</div>';
+ try{
+  const data=await api('/api/topology/map');
+  if(!data.available||!Array.isArray(data.ports)||!Array.isArray(data.links)||!Array.isArray(data.aggregations))throw new Error('Niekompletna odpowiedź mapy topologii.');
+  const checks=data.checks||{},portCount=data.ports.length,linkCount=data.links.length,lagCount=data.aggregations.length;
+  status.textContent='Odczytano '+portCount+' portów · '+linkCount+' rozpoznanych sąsiadów LLDP · '+lagCount+' agregacji. Źródła: running-config '+(checks.runningConfig?'OK':'brak')+', switchport '+(checks.switchport?'OK':'niedostępny')+', LLDP '+(checks.lldp?'OK':'brak rozpoznanych wpisów')+', LACP '+(checks.lacp?'OK':'brak rozpoznanych wpisów')+'.';
+  const linkCards=data.links.map(x=>'<article class="topology-neighbor"><small>LLDP · '+esc(x.localPort)+'</small><b>'+esc(x.neighbor)+'</b><span>Rozpoznany sąsiad — fizyczna ciągłość i stan portu wymagają potwierdzenia.</span></article>').join('');
+  const lagCards=data.aggregations.map(x=>'<article class="topology-lag"><div><b>'+esc(x.name)+'</b><span class="state '+(x.ready==='Gotowy'?'up':'unknown')+'">'+esc(x.ready||'Status niedostępny')+'</span></div><small>'+esc(x.members.join(' · ')||'Brak rozpoznanych członków')+'</small>'+(x.partner?'<small>Partner: '+esc(x.partner)+'</small>':'')+'</article>').join('');
+  const portCards=data.ports.map(x=>'<article class="topology-port"><div><b>'+esc(x.port)+'</b><span class="state '+(x.mode==='trunk'?'unknown':x.mode==='access'?'up':'')+'">'+esc(x.mode||'Tryb nieznany')+'</span></div><small>VLAN: '+esc((x.vlans||[]).join(', ')||'Brak odczytu')+(x.nativeVlan?' · Native/PVID: '+esc(x.nativeVlan):'')+'</small>'+(x.lag?'<small>Agregacja: '+esc(x.lag)+'</small>':'')+(x.edgePort?'<small>EdgePort</small>':'')+'</article>').join('');
+  const vlanCards=(data.vlans||[]).map(x=>'<span class="topology-vlan">VLAN '+esc(x)+'</span>').join('');
+  host.innerHTML='<div class="topology-summary-grid"><article><small>PORTY</small><b>'+portCount+'</b></article><article><small>SĄSIEDZI LLDP</small><b>'+linkCount+'</b></article><article><small>AGREGACJE LACP</small><b>'+lagCount+'</b></article><article><small>VLAN W KONFIGURACJI</small><b>'+(data.vlans||[]).length+'</b></article></div><div class="topology-section"><h4>Połączenia wykryte przez LLDP</h4><div class="topology-neighbor-grid">'+(linkCards||'<div class="empty">Brak rozpoznanych sąsiadów. Nie oznacza to braku fizycznych połączeń.</div>')+'</div></div><div class="topology-section"><h4>Agregacje LACP</h4><div class="topology-lag-grid">'+(lagCards||'<div class="empty">Brak rozpoznanych agregacji z running-config.</div>')+'</div></div><div class="topology-section"><h4>Porty lokalnego przełącznika</h4><div class="topology-port-grid">'+(portCards||'<div class="empty">Brak rozpoznanych interfejsów portowych.</div>')+'</div></div><div class="topology-section"><h4>VLAN zadeklarowane</h4><div class="topology-vlan-list">'+(vlanCards||'<span class="note">Brak rozpoznanych VLAN.</span>')+'</div></div>';
+  if(!checks.lldp||!checks.switchport)status.textContent+=' Mapa jest częściowa — brakujące źródła nie są uzupełniane domysłami.';
+ }catch(error){status.textContent='Nie udało się zbudować mapy: '+error.message;host.innerHTML='<div class="empty">Brak wiarygodnych danych. Poprzednia mapa została wyczyszczona.</div>';}
+ finally{button.disabled=false;button.textContent='Odczytaj topologię';}
+};
 $('run-security-audit').onclick=async()=>{
  const button=$('run-security-audit');button.disabled=true;button.textContent='Analizuję…';
  $('security-audit-summary').textContent='Pobieranie running-config. Nie są wykonywane żadne zmiany.';

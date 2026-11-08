@@ -553,3 +553,11 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .topology-vlan-list{display:flex;flex-wrap:wrap;gap:6px}
 .topology-vlan{padding:5px 9px;border:1px solid var(--line);border-radius:7px;font-size:11px;background:var(--surface)}
 @media(max-width:720px){.topology-map-panel .role-audit-heading{align-items:stretch;flex-direction:column}.topology-map-panel .role-audit-heading .btn{width:100%}.topology-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.topology-risk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px}
+.topology-risk{min-width:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.topology-risk>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.topology-risk>div b{font-size:12px;line-height:1.4}
+.topology-risk p{margin:8px 0 5px;font-size:11px;line-height:1.5;color:var(--text)}
+.topology-risk small{display:block;color:var(--muted);font-size:10px;line-height:1.5}
+.topology-warning-text{color:var(--danger)!important;font-weight:700}

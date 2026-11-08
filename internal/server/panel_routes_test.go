@@ -13,6 +13,11 @@ func TestRegisterMountsLoginAndAuthenticatedPanelRoutes(t *testing.T) {
  login:=httptest.NewRecorder()
  mux.ServeHTTP(login,httptest.NewRequest(http.MethodGet,"/login",nil))
  if login.Code!=http.StatusOK { t.Fatalf("login page status=%d",login.Code) }
+ // The login page must also work when routed through the auth middleware
+ // catch-all, not only through the dedicated /login mux pattern.
+ wrappedLogin:=httptest.NewRecorder()
+ newPanelUserStore(t.TempDir()+"/users.json").middleware(http.NotFoundHandler()).ServeHTTP(wrappedLogin,httptest.NewRequest(http.MethodGet,"/login",nil))
+ if wrappedLogin.Code!=http.StatusOK { t.Fatalf("middleware login page status=%d",wrappedLogin.Code) }
  root:=httptest.NewRecorder()
  mux.ServeHTTP(root,httptest.NewRequest(http.MethodGet,"/",nil))
  if root.Code!=http.StatusSeeOther { t.Fatalf("unauthenticated root status=%d",root.Code) }

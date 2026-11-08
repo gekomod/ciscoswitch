@@ -60,7 +60,19 @@ func Register(m *http.ServeMux,svc *device.Service){
 	if err!=nil{w.WriteHeader(http.StatusBadGateway);_ = json.NewEncoder(w).Encode(map[string]string{"error":err.Error()});return}
 	_ = json.NewEncoder(w).Encode(identity)
 })
- apiMux.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
+ apiMux.HandleFunc("/api/device/capabilities",func(w http.ResponseWriter,r *http.Request){
+   if r.Method!=http.MethodGet{http.Error(w,"method not allowed",405);return}
+   identity,identityErr:=svc.DeviceIdentity()
+   status:=svc.Status()
+   speeds:=map[string]int{}
+   for _,p:=range status.Ports{if p.Speed!=""{speeds[p.Speed]++}}
+   payload:=map[string]any{"identity":identity,"identityAvailable":identityErr==nil,"interfacesObserved":len(status.Ports),"interfaceSpeeds":speeds,"snmpReachable":status.Reachable,"snmpVersion":status.SNMPVersion}
+   if identityErr!=nil{payload["identityError"]=identityErr.Error()}
+   if status.Warning!=""{payload["statusWarning"]=status.Warning}
+   w.Header().Set("Content-Type","application/json");w.Header().Set("Cache-Control","no-store")
+   _=json.NewEncoder(w).Encode(payload)
+  })
+  apiMux.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
  apiMux.Handle("/api/ports/protection", protectedPortsHandler())
  profilePath:=os.Getenv("PORT_PROFILES_PATH");if profilePath==""{profilePath=filepath.Join("data","port-profiles.json")}
  apiMux.Handle("/api/port-profiles",portProfilesHandler(profilePath))

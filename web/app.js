@@ -404,7 +404,7 @@ function renderComplianceRecommendations(profile,repairs){
   button.disabled=true;button.textContent='Sprawdzam…';
   try{
    const preview=await api('/api/ports/repair/preview',payload);
-   const summary='Naprawa częściowa portu '+repair.port+'\n\nWykryte różnice: '+repair.changes.join(', ')+'\n\nZostaną zmienione wyłącznie wskazane parametry. Tryb portu, speed i duplex pozostaną bez zmian.\n\nBieżący tryb: '+(preview.current?.mode||'—')+' · VLAN: '+(preview.current?.defaultVlan||'—')+'\n\nPrzed zmianą zostanie wykonana kopia running-config. Kontynuować?';
+   const summary='Naprawa częściowa portu '+repair.port+'\n\nWykryte różnice: '+repair.changes.join(', ')+'\n\nZostaną zmienione wyłącznie wskazane parametry. Tryb portu, speed i duplex pozostaną bez zmian.\n\nBieżący tryb: '+(preview.current?.mode||'—')+' · VLAN: '+(preview.current?.defaultVlan||'—')+(Array.isArray(preview.warnings)&&preview.warnings.length?'\n\nAnaliza wpływu na łączność:\n'+preview.warnings.map(x=>'• '+x).join('\n'):'')+'\n\nPrzed zmianą zostanie wykonana kopia running-config. Kontynuować?';
    if(!confirm(summary))return;
    button.textContent='Zapisuję…';
    await api('/api/ports/repair/apply',payload);

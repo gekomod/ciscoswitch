@@ -993,3 +993,28 @@ func TestDiagnosticsEventsValidateFiltersAndLimit(t *testing.T) {
  rec:=httptest.NewRecorder();handler.ServeHTTP(rec,httptest.NewRequest(http.MethodPost,"/api/events",nil))
  if rec.Code!=http.StatusMethodNotAllowed{t.Fatalf("POST status=%d want 405",rec.Code)}
 }
+
+
+func TestBuildDiagnosticsCorrelationsGroupsCrossLayerEvents(t *testing.T) {
+ now:=time.Now().UTC()
+ events:=[]diagnosticsEvent{
+  {ID:"cli-fail",Type:"availability",Severity:"warning",At:now},
+  {ID:"lacp-down",Type:"lacp",Severity:"critical",At:now.Add(2*time.Minute)},
+  {ID:"lldp-change",Type:"lldp",Severity:"info",At:now.Add(4*time.Minute)},
+ }
+ groups:=buildDiagnosticsCorrelations(events,5*time.Minute)
+ if len(groups)!=1{t.Fatalf("groups=%d want 1: %+v",len(groups),groups)}
+ got:=groups[0]
+ if got.EventCount!=3||got.Severity!="critical"||len(got.Categories)!=3{t.Fatalf("unexpected correlation: %+v",got)}
+ if len(got.EventIDs)!=3||got.Start!=now||!got.End.Equal(now.Add(4*time.Minute)){t.Fatalf("unexpected correlation range or event ids: %+v",got)}
+}
+func TestBuildDiagnosticsCorrelationsDoesNotJoinUnrelatedWindows(t *testing.T) {
+ now:=time.Now().UTC()
+ events:=[]diagnosticsEvent{
+  {ID:"a",Type:"lacp",Severity:"critical",At:now},
+  {ID:"b",Type:"lldp",Severity:"info",At:now.Add(6*time.Minute)},
+ }
+ if groups:=buildDiagnosticsCorrelations(events,5*time.Minute);len(groups)!=0{t.Fatalf("unexpected correlation: %+v",groups)}
+ events=[]diagnosticsEvent{{ID:"a",Type:"lacp",Severity:"info",At:now},{ID:"b",Type:"lldp",Severity:"info",At:now.Add(time.Minute)}}
+ if groups:=buildDiagnosticsCorrelations(events,5*time.Minute);len(groups)!=0{t.Fatalf("informational-only events should not be correlated as incidents: %+v",groups)}
+}

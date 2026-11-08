@@ -1261,27 +1261,29 @@ func diagnosticsCurrentAlerts(s diagnosticsSample)[]diagnosticsAlert{
  return out
 }
 func diagnosticsTransitions(samples []diagnosticsSample)[]diagnosticsTransition{
- if len(samples)<2{return []diagnosticsTransition{}}
- prev,cur:=samples[len(samples)-2],samples[len(samples)-1]
  out:=[]diagnosticsTransition{}
- if prev.Checks["lacp"]&&cur.Checks["lacp"]{
-  old:=map[string]topologyAggregation{};for _,g:=range prev.Aggregations{old[strings.ToLower(g.Name)]=g}
-  for _,g:=range cur.Aggregations{p,ok:=old[strings.ToLower(g.Name)];if !ok{continue}
-   if p.Ready!=g.Ready&&p.Ready!=""&&g.Ready!=""{sev:="warning";if g.Ready=="Niegotowy"{sev="critical"};out=append(out,diagnosticsTransition{"lacp-ready",g.Name,p.Ready,g.Ready,cur.CapturedAt,sev})}
-   if p.Live&&g.Live{
-    before:=map[string]bool{};after:=map[string]bool{};for _,v:=range p.LiveMembers{before[strings.ToLower(v)]=true};for _,v:=range g.LiveMembers{after[strings.ToLower(v)]=true}
-    for v:=range before{if !after[v]{out=append(out,diagnosticsTransition{"lacp-member-lost",g.Name+" / "+v,"aktywny","brak w odczycie",cur.CapturedAt,"critical"})}}
-    for v:=range after{if !before[v]{out=append(out,diagnosticsTransition{"lacp-member-restored",g.Name+" / "+v,"brak w odczycie","aktywny",cur.CapturedAt,"info"})}}
+ for i:=1;i<len(samples);i++{
+  prev,cur:=samples[i-1],samples[i]
+  if prev.Checks["lacp"]&&cur.Checks["lacp"]{
+   old:=map[string]topologyAggregation{};for _,g:=range prev.Aggregations{old[strings.ToLower(g.Name)]=g}
+   for _,g:=range cur.Aggregations{p,ok:=old[strings.ToLower(g.Name)];if !ok{continue}
+    if p.Ready!=g.Ready&&p.Ready!=""&&g.Ready!=""{sev:="warning";if g.Ready=="Niegotowy"{sev="critical"};out=append(out,diagnosticsTransition{"lacp-ready",g.Name,p.Ready,g.Ready,cur.CapturedAt,sev})}
+    if p.Live&&g.Live{
+     before:=map[string]bool{};after:=map[string]bool{};for _,v:=range p.LiveMembers{before[strings.ToLower(v)]=true};for _,v:=range g.LiveMembers{after[strings.ToLower(v)]=true}
+     for v:=range before{if !after[v]{out=append(out,diagnosticsTransition{"lacp-member-lost",g.Name+" / "+v,"aktywny","brak w odczycie",cur.CapturedAt,"critical"})}}
+     for v:=range after{if !before[v]{out=append(out,diagnosticsTransition{"lacp-member-restored",g.Name+" / "+v,"brak w odczycie","aktywny",cur.CapturedAt,"info"})}}
+    }
    }
   }
- }
- if prev.Checks["lldp"]&&cur.Checks["lldp"]{
-  old:=map[string]string{};now:=map[string]string{}
-  for _,n:=range prev.Neighbors{old[strings.ToLower(n.LocalPort)]=n.Neighbor};for _,n:=range cur.Neighbors{now[strings.ToLower(n.LocalPort)]=n.Neighbor}
-  for port,neighbor:=range old{if next,ok:=now[port];ok&&next!=neighbor{out=append(out,diagnosticsTransition{"lldp-neighbor-change",port,neighbor,next,cur.CapturedAt,"info"})}}
+  if prev.Checks["lldp"]&&cur.Checks["lldp"]{
+   old:=map[string]string{};now:=map[string]string{}
+   for _,n:=range prev.Neighbors{old[strings.ToLower(n.LocalPort)]=n.Neighbor};for _,n:=range cur.Neighbors{now[strings.ToLower(n.LocalPort)]=n.Neighbor}
+   for port,neighbor:=range old{if next,ok:=now[port];ok&&next!=neighbor{out=append(out,diagnosticsTransition{"lldp-neighbor-change",port,neighbor,next,cur.CapturedAt,"info"})}}
+  }
  }
  return out
 }
+
 func diagnosticsCollectHandler(read func(string)(string,error),store *diagnosticsStore)http.Handler{
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}

@@ -1405,8 +1405,8 @@ func diagnosticsAvailabilityMetric(name string, samples []diagnosticsSample, sta
  for i:=1;i<len(samples);i++ {
   prev,cur:=samples[i-1],samples[i]
   if cur.CapturedAt.Before(start)||!prev.CapturedAt.Before(end)||!cur.CapturedAt.After(prev.CapturedAt){continue}
-  span:=cur.CapturedAt.Sub(prev.CapturedAt);if span>maxGap{continue}
-  known,online:=state(prev);if !known{continue}
+  span:=cur.CapturedAt.Sub(prev.CapturedAt);if span>maxGap{outageOpen=-1;continue}
+  known,online:=state(prev);if !known{outageOpen=-1;continue}
   left:=prev.CapturedAt;if left.Before(start){left=start};right:=cur.CapturedAt;if right.After(end){right=end}
   seconds:=int64(right.Sub(left).Seconds());if seconds<=0{continue}
   observed+=seconds;if online{up+=seconds}

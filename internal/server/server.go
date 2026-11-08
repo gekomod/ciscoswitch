@@ -31,6 +31,7 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/api/config/backups/compare", configBackupCompareHandler(svc.RunReadOnly, backupDir))
  m.Handle("/api/config/backups/restore-preview", configBackupRestorePreviewHandler(backupDir))
  m.Handle("/api/audit", auditHistoryHandler(os.Getenv("AUDIT_LOG_PATH")))
+ m.Handle("/api/security-audit", securityAuditHandler(svc.RunReadOnly))
  m.Handle("/api/monitor/history", monitorHistoryHandler(filepath.Join("data", "monitor-history.jsonl")))
  m.Handle("/api/monitor/stream", monitorStreamHandler())
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
@@ -815,4 +816,43 @@ func (s *portProfileStore) save(profiles []portProfile)error{
  data,err:=json.MarshalIndent(profiles,"","  ");if err!=nil{return err}
  tmp:=s.path+".tmp";if err:=os.WriteFile(tmp,data,0600);err!=nil{return err}
  if err:=os.Rename(tmp,s.path);err!=nil{_ = os.Remove(tmp);return err};return nil
+}
+
+type securityAuditFinding struct {
+ Severity string `json:"severity"`
+ Code string `json:"code"`
+ Title string `json:"title"`
+ Evidence string `json:"evidence"`
+ Recommendation string `json:"recommendation"`
+}
+func analyzeSecurityConfiguration(config string) []securityAuditFinding {
+ findings:=make([]securityAuditFinding,0)
+ for _,line:=range strings.Split(config,"\n") {
+  normalized:=strings.ToLower(strings.TrimSpace(line))
+  fields:=strings.Fields(normalized)
+  if len(fields)>=3&&fields[0]=="snmp-server"&&fields[1]=="community"&&(fields[2]=="public"||fields[2]=="private") {
+   findings=append(findings,securityAuditFinding{"critical","snmp-default-community","Wykryto domyślną nazwę community SNMP","Konfiguracja zawiera community o nazwie "+fields[2]+".","Zastąp community unikalną wartością lub przejdź na SNMPv3; sprawdź urządzenia monitorujące przed zmianą."})
+  }
+  if normalized=="ip http server"||normalized=="http server enable" {
+   findings=append(findings,securityAuditFinding{"warning","http-management-enabled","W konfiguracji jawnie włączono serwer HTTP","Wykryto wpis: "+strings.TrimSpace(line),"Zweryfikuj, czy panel HTTP jest potrzebny. Jeśli nie, wyłącz go po zapewnieniu dostępu przez bezpieczny kanał zarządzania."})
+  }
+  if normalized=="ip telnet server"||normalized=="telnet server enable" {
+   findings=append(findings,securityAuditFinding{"critical","telnet-management-enabled","W konfiguracji jawnie włączono Telnet","Wykryto wpis: "+strings.TrimSpace(line),"Preferuj SSH. Wyłącz Telnet dopiero po potwierdzeniu działającego dostępu SSH."})
+  }
+  if normalized=="no spanning-tree"||normalized=="spanning-tree disable" {
+   findings=append(findings,securityAuditFinding{"critical","stp-disabled","Wykryto jawne wyłączenie Spanning Tree","W konfiguracji znaleziono: "+strings.TrimSpace(line),"Zweryfikuj topologię warstwy 2 i włącz właściwy tryb STP/RSTP po zaplanowaniu zmiany."})
+  }
+ }
+ return findings
+}
+func securityAuditHandler(read func(string)(string,error)) http.Handler {
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  if r.Method!=http.MethodGet{http.Error(w,"method not allowed",http.StatusMethodNotAllowed);return}
+  config,err:=read("show running-config")
+  if err!=nil{http.Error(w,"nie udało się odczytać running-config; audyt bezpieczeństwa nie został wykonany",http.StatusBadGateway);return}
+  findings:=analyzeSecurityConfiguration(config)
+  w.Header().Set("Content-Type","application/json; charset=utf-8")
+  w.Header().Set("Cache-Control","no-store")
+  _=json.NewEncoder(w).Encode(map[string]any{"available":true,"readOnly":true,"findings":findings,"checks":map[string]any{"snmpDefaultCommunity":true,"httpManagement":true,"telnetManagement":true,"spanningTree":true},"note":"Audyt wykrywa wyłącznie jawne wpisy rozpoznane w running-config. Brak wykrycia nie jest dowodem bezpieczeństwa; nieznane formaty i ustawienia nie są zgadywane."})
+ })
 }

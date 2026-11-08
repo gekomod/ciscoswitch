@@ -11,6 +11,8 @@ import (
  "strings"
  "sync"
  "time"
+ "log"
+ "gs948mx-manager/internal/device"
 )
 
 const monitorHistoryMaxBytes = 2 << 20
@@ -180,4 +182,59 @@ func (s *monitorHistoryStore) prune() error {
  if err=f.Chmod(0600);err!=nil{_ = f.Close();_ = os.Remove(tmp);return err}
  for i:=len(kept)-1;i>=0;i--{if _,err=f.WriteString(kept[i]+"\n");err!=nil{_ = f.Close();_ = os.Remove(tmp);return err}}
  if err=f.Close();err!=nil{_ = os.Remove(tmp);return err};return os.Rename(tmp,s.path)
+}
+
+
+// StartMonitorCollector records device availability, link transitions and counter
+// increases independently of browser sessions. Traffic-rate sampling remains in the
+// UI because it needs closely spaced counter snapshots and is already persisted there.
+func StartMonitorCollector(ctx context.Context, svc *device.Service, path string, interval time.Duration) {
+ if svc==nil || interval<=0 { return }
+ store:=&monitorHistoryStore{path:path}
+ go func(){
+  var previousReachable *bool
+  previousPorts:=map[string]device.Port{}
+  collect:=func(){
+   status:=svc.Status()
+   now:=time.Now().UTC()
+   if previousReachable!=nil && *previousReachable!=status.Reachable {
+    message:="Utracono połączenie SNMP";kind:="danger"
+    if status.Reachable { message="Połączenie SNMP zostało przywrócone";kind="success" }
+    rec:=monitorRecord{Kind:"event",Timestamp:now,Message:message,Type:kind}
+    if err:=store.append(rec);err!=nil{log.Printf("monitor history write failed: %v",err)}else{sharedMonitorEventHub.publish(rec)}
+   }
+   current:=make(map[string]device.Port,len(status.Ports))
+   if status.Reachable {
+    for _,p:=range status.Ports {
+     current[p.Name]=p
+     if old,ok:=previousPorts[p.Name];ok {
+      if (old.Oper=="up"||old.Oper=="down")&&(p.Oper=="up"||p.Oper=="down")&&old.Oper!=p.Oper {
+       rec:=monitorRecord{Kind:"port",Timestamp:now,Port:p.Name,State:p.Oper}
+       if err:=store.append(rec);err!=nil{log.Printf("monitor history write failed: %v",err)}else{sharedMonitorEventHub.publish(rec)}
+       event:=monitorRecord{Kind:"event",Timestamp:now,Message:fmt.Sprintf("%s: link %s → %s",p.Name,strings.ToUpper(old.Oper),strings.ToUpper(p.Oper)),Type:map[bool]string{true:"success",false:"danger"}[p.Oper=="up"]}
+       if err:=store.append(event);err!=nil{log.Printf("monitor history write failed: %v",err)}else{sharedMonitorEventHub.publish(event)}
+      }
+      inErr:=counterDelta(p.InErrors,old.InErrors);outErr:=counterDelta(p.OutErrors,old.OutErrors)
+      inDrop:=counterDelta(p.InDiscards,old.InDiscards);outDrop:=counterDelta(p.OutDiscards,old.OutDiscards)
+      if inErr+outErr+inDrop+outDrop>0 {
+       rec:=monitorRecord{Kind:"counter",Timestamp:now,Port:p.Name,ErrorRXDelta:float64(inErr),ErrorTXDelta:float64(outErr),DiscardRXDelta:float64(inDrop),DiscardTXDelta:float64(outDrop),ErrorRXTotal:float64(p.InErrors),ErrorTXTotal:float64(p.OutErrors),DiscardRXTotal:float64(p.InDiscards),DiscardTXTotal:float64(p.OutDiscards)}
+       if err:=store.append(rec);err!=nil{log.Printf("monitor history write failed: %v",err)}else{sharedMonitorEventHub.publish(rec)}
+      }
+     }
+    }
+    previousPorts=current
+   }
+   reachable:=status.Reachable
+   previousReachable=&reachable
+  }
+  collect()
+  ticker:=time.NewTicker(interval);defer ticker.Stop()
+  for { select { case <-ctx.Done():return; case <-ticker.C:collect() } }
+ }()
+}
+
+func counterDelta(current, previous uint64) uint64 {
+ if current>=previous { return current-previous }
+ // Counter wrap or device reboot: do not report a huge artificial increase.
+ return 0
 }

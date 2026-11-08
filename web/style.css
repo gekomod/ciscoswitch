@@ -458,3 +458,14 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .config-backup-card{grid-column:1/-1}
 @media(max-width:900px){.config-manager-grid{grid-template-columns:1fr}.config-backup-card{grid-column:auto}}
 @media(max-width:560px){.config-manager-card{padding:14px}.config-manager-card .form-actions>*{flex:1}.config-manager-card .backup-actions{justify-content:flex-start}.config-manager-card .backup-actions .btn{flex:1}}
+
+
+/* Structured per-interface state cards */
+.port-state-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px}
+.port-state-grid>div{min-width:0;padding:12px 14px;border:1px solid var(--line);border-radius:11px;background:var(--surface-2)}
+.port-state-grid small,.port-state-grid b{display:block;overflow-wrap:anywhere}
+.port-state-grid small{font-size:9px;letter-spacing:.07em;color:var(--muted);font-weight:700}
+.port-state-grid b{font-size:14px;margin-top:6px;color:var(--text)}
+:root[data-theme="light"] .port-state-grid>div{background:#f5f8fb;border-color:#dce4ed}
+:root[data-theme="light"] .port-state-grid b{color:#24364b}
+@media(max-width:760px){.port-state-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

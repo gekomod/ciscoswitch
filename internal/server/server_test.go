@@ -743,3 +743,16 @@ func TestTopologyChangeRisksFailInformativelyWhenTopologyCannotBeRead(t *testing
  risks:=topologyChangeRisks(func(string)(string,error){return "",fmt.Errorf("offline")},"port1.0.7")
  if len(risks)!=1||risks[0].Code!="topology-check-unavailable"{t.Fatalf("expected conservative unavailable warning, got %+v",risks)}
 }
+
+func TestRequireTopologyRiskAcknowledgementBlocksUnconfirmedAndAllowsConfirmed(t *testing.T) {
+ fixture:=func(command string)(string,error){
+  switch command {
+  case "show running-config": return "interface port1.0.48\n description UPLINK-CORE\n switchport mode trunk\n",nil
+  case "show interface switchport": return "Interface name: port1.0.48\nSwitchport mode: trunk\nDefault Vlan: 1\nConfigured Vlans: 1\n",nil
+  case "show lldp neighbors": return "Local Interface Neighbor System\nport1.0.48 CORE-SWITCH Ethernet1/1\n",nil
+  }
+  return "",fmt.Errorf("unexpected command %s",command)
+ }
+ if err:=requireTopologyRiskAcknowledgement(fixture,[]string{"port1.0.48"},false);err==nil{t.Fatal("unconfirmed uplink risk must block apply")}
+ if err:=requireTopologyRiskAcknowledgement(fixture,[]string{"port1.0.48"},true);err!=nil{t.Fatalf("explicit acknowledgement should allow reviewed change: %v",err)}
+}

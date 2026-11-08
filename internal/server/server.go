@@ -37,7 +37,7 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/api/security-audit", securityAuditHandler(svc.RunReadOnly))
  m.Handle("/api/topology/map", topologyMapHandler(svc.RunReadOnly))
  diagnosticsPath:=os.Getenv("DIAGNOSTICS_HISTORY_PATH");if diagnosticsPath==""{diagnosticsPath=filepath.Join("data","diagnostics-history.json")}
- diagnosticsStore:=sharedDiagnosticsStore(diagnosticsPath,500)
+ diagnosticsStore:=sharedDiagnosticsStore(diagnosticsPath,12000)
  m.Handle("/api/diagnostics/collect",diagnosticsCollectHandler(svc.RunReadOnly,diagnosticsStore))
  m.Handle("/api/diagnostics/history",diagnosticsHistoryHandler(diagnosticsStore))
  m.Handle("/api/diagnostics/availability",diagnosticsAvailabilityHandler(diagnosticsStore))
@@ -1183,7 +1183,7 @@ func sharedDiagnosticsStore(path string, retention int)*diagnosticsStore{
 }
 func StartDiagnosticsCollector(ctx context.Context, read func(string)(string,error), path string, interval time.Duration){
  if interval<=0{return}
- store:=sharedDiagnosticsStore(path,500)
+ store:=sharedDiagnosticsStore(path,12000)
  go func(){
   collect:=func(){
    sample:=collectDiagnosticsSample(read)
@@ -1194,7 +1194,7 @@ func StartDiagnosticsCollector(ctx context.Context, read func(string)(string,err
   for{select{case <-ctx.Done():return;case <-ticker.C:collect()}}
  }()
 }
-func newDiagnosticsStore(path string, retention int)*diagnosticsStore{if retention<2||retention>5000{retention=500};return &diagnosticsStore{path:path,retention:retention}}
+func newDiagnosticsStore(path string, retention int)*diagnosticsStore{if retention<2||retention>50000{retention=12000};return &diagnosticsStore{path:path,retention:retention}}
 func (s *diagnosticsStore) readLocked()([]diagnosticsSample,error){
  raw,err:=os.ReadFile(s.path);if os.IsNotExist(err){return []diagnosticsSample{},nil};if err!=nil{return nil,err}
  var items []diagnosticsSample;if len(raw)==0{return []diagnosticsSample{},nil}
@@ -1292,7 +1292,7 @@ func diagnosticsCollectHandler(read func(string)(string,error),store *diagnostic
   if err:=store.append(sample);err!=nil{http.Error(w,"nie udało się zapisać historii diagnostycznej",http.StatusInternalServerError);return}
   if !sample.Checks["runningConfig"]&&!sample.Checks["lacp"]&&!sample.Checks["lldp"]{http.Error(w,"próbka zapisana, ale wszystkie kontrole zakończyły się niepowodzeniem",http.StatusBadGateway);return}
   w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
-  _=json.NewEncoder(w).Encode(map[string]any{"sample":sample,"alerts":diagnosticsCurrentAlerts(sample),"saved":true,"retention":500})
+  _=json.NewEncoder(w).Encode(map[string]any{"sample":sample,"alerts":diagnosticsCurrentAlerts(sample),"saved":true,"retention":store.retention})
  })
 }
 func diagnosticsSamplingSettings()(string,string){

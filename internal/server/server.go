@@ -1389,6 +1389,47 @@ func diagnosticsEventID(kind,subject string,at time.Time)string{
  sum:=sha256.Sum256([]byte(kind+"\x00"+subject+"\x00"+at.UTC().Format(time.RFC3339Nano)))
  return hex.EncodeToString(sum[:])
 }
+type diagnosticsCorrelation struct {
+ ID string `json:"id"`
+ Severity string `json:"severity"`
+ Title string `json:"title"`
+ Summary string `json:"summary"`
+ Start time.Time `json:"start"`
+ End time.Time `json:"end"`
+ EventCount int `json:"eventCount"`
+ Categories []string `json:"categories"`
+ EventIDs []string `json:"eventIds"`
+}
+func buildDiagnosticsCorrelations(events []diagnosticsEvent,window time.Duration)[]diagnosticsCorrelation{
+ if len(events)<2{return []diagnosticsCorrelation{}}
+ ordered:=append([]diagnosticsEvent(nil),events...)
+ sort.Slice(ordered,func(i,j int)bool{return ordered[i].At.Before(ordered[j].At)})
+ out:=make([]diagnosticsCorrelation,0)
+ for i:=0;i<len(ordered);{
+  start:=ordered[i].At
+  j:=i+1
+  for j<len(ordered)&&ordered[j].At.Sub(start)<=window{j++}
+  group:=ordered[i:j]
+  categories:=map[string]bool{};ids:=make([]string,0,len(group));severity:="info";hasSignal:=false
+  for _,event:=range group{
+   categories[event.Type]=true;ids=append(ids,event.ID)
+   if event.Severity=="critical"{severity="critical";hasSignal=true}else if event.Severity=="warning"{if severity!="critical"{severity="warning"};hasSignal=true}
+  }
+  if len(categories)>=2&&hasSignal{
+   categoryList:=make([]string,0,len(categories));for category:=range categories{categoryList=append(categoryList,category)};sort.Strings(categoryList)
+   end:=group[len(group)-1].At
+   id:=diagnosticsEventID("correlation",strings.Join(ids,","),start)
+   title:="Zdarzenia z różnych warstw wystąpiły w zbliżonym czasie"
+   if categories["lacp"]&&categories["lldp"]{title="Zmiany LACP i sąsiedztwa LLDP"}
+   if categories["availability"]&&(categories["lacp"]||categories["lldp"]){title="Problem odczytu CLI zbiegł się ze zmianą topologii"}
+   summary:="Wykryto "+strconv.Itoa(len(group))+" zdarzenia z kategorii: "+strings.Join(categoryList+", ")+". To korelacja czasowa, nie dowód wspólnej przyczyny. Sprawdź kolejność zdarzeń, porty i urządzenie po drugiej stronie łącza."
+   out=append(out,diagnosticsCorrelation{ID:id,Severity:severity,Title:title,Summary:summary,Start:start,End:end,EventCount:len(group),Categories:categoryList,EventIDs:ids})
+  }
+  i=j
+ }
+ return out
+}
+
 func diagnosticsEventsHandler(store *diagnosticsStore)http.Handler{
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodGet{http.Error(w,"method not allowed",405);return}
@@ -1433,7 +1474,9 @@ func diagnosticsEventsHandler(store *diagnosticsStore)http.Handler{
   sort.Slice(events,func(i,j int)bool{if events[i].At.Equal(events[j].At){return events[i].ID<events[j].ID};return events[i].At.After(events[j].At)})
   total:=len(events);if len(events)>limit{events=events[:limit]}
   w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
-  _=json.NewEncoder(w).Encode(map[string]any{"events":events,"total":total,"window":window,"type":kind,"limit":limit,"note":"Brak odczytu oznacza nieudaną kontrolę zarządzającą, a nie potwierdzoną awarię switcha lub ruchu."})
+  correlations:=[]diagnosticsCorrelation{}
+  if kind=="all"{correlations=buildDiagnosticsCorrelations(events,5*time.Minute)}
+  _=json.NewEncoder(w).Encode(map[string]any{"events":events,"total":total,"window":window,"type":kind,"limit":limit,"correlations":correlations,"correlationWindow":"5m","note":"Brak odczytu oznacza nieudaną kontrolę zarządzającą, a nie potwierdzoną awarię switcha lub ruchu. Korelacja czasowa nie dowodzi wspólnej przyczyny."})
  })
 }
 

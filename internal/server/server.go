@@ -1183,14 +1183,14 @@ func StartDiagnosticsCollector(ctx context.Context, read func(string)(string,err
  if interval<=0{return}
  store:=sharedDiagnosticsStore(path,500)
  go func(){
-  ticker:=time.NewTicker(interval);defer ticker.Stop()
-  for{select{
-  case <-ctx.Done():return
-  case <-ticker.C:
+  collect:=func(){
    sample:=collectDiagnosticsSample(read)
-   if !sample.Checks["runningConfig"]&&!sample.Checks["lacp"]&&!sample.Checks["lldp"]{continue}
+   if !sample.Checks["runningConfig"]&&!sample.Checks["lacp"]&&!sample.Checks["lldp"]{return}
    if err:=store.append(sample);err!=nil{log.Printf("diagnostics history write failed: %v",err)}
-  }}
+  }
+  collect()
+  ticker:=time.NewTicker(interval);defer ticker.Stop()
+  for{select{case <-ctx.Done():return;case <-ticker.C:collect()}}
  }()
 }
 func newDiagnosticsStore(path string, retention int)*diagnosticsStore{if retention<2||retention>5000{retention=500};return &diagnosticsStore{path:path,retention:retention}}

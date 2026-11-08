@@ -337,7 +337,7 @@ let lastComplianceRepairs=[];
 function complianceRepairRole(port){
  const status=latestPorts.find(p=>p.name===port)||{};
  const description=String(status.description||'').toLocaleLowerCase('pl-PL');
- const uplink=/\b(uplink|up-link|switch|router|core|dist|agregacj|lacp|po[0-9]+|management|mgmt|zarz[aą]dz)\b/.test(description);
+ const uplink=/\b(uplink|up-link|switch|router|core|dist|agregacj|lacp|po[0-9]+|management|mgmt)\b|zarz[aą]d/.test(description);
  const role=detectPortRole(status);
  return {status,role,uplink};
 }
@@ -399,7 +399,7 @@ function renderComplianceResults(profile,items,statusByPort){
    const blocked=role.uplink&&profileAccess;
    const portMatch=item.port.match(/^port1\.0\.(\d+)$/i);
    const unsupported=!portMatch||Number(portMatch[1])<1||Number(portMatch[1])>52;
-   repairs.push({port:item.port,changes:portRows,blocked:blocked||unsupported,risk:!blocked&&!unsupported&&(mode==='trunk'||(profile.speed&&profile.speed!=='auto')||(profile.duplex&&profile.duplex!=='auto')),reason:blocked?'Opis portu wskazuje uplink, switch, LACP lub zarządzanie — rekomendacja profilu Access jest zablokowana.':unsupported?'Nazwa portu nie pasuje do zakresu formularza operacji masowej (1–52).':role.uplink?'Port wygląda na uplink — wymagane ręczne sprawdzenie.':''});
+   repairs.push({port:item.port,changes:portRows,blocked:blocked||unsupported,risk:!blocked&&!unsupported,reason:blocked?'Opis portu wskazuje uplink, switch, LACP lub zarządzanie — rekomendacja profilu Access jest zablokowana.':unsupported?'Nazwa portu nie pasuje do zakresu formularza operacji masowej (1–52).':role.uplink?'Port wygląda na uplink — wymagane ręczne sprawdzenie.':'Pełny profil ustawia także speed/duplex; ich bieżąca konfiguracja nie jest odczytywana.'});
   }
  }
  const badge=state=>state==='ok'?'<span class="state up">Zgodne</span>':state==='diff'?'<span class="state down">Różnica</span>':'<span class="state unknown">Brak danych</span>';
@@ -417,7 +417,7 @@ $('run-compliance').onclick=async()=>{
  const button=$('run-compliance');
  if(!selected.length){alert('Wybierz co najmniej jeden port.');return;}
  if(!profile){alert('Wybierz zapisany profil.');return;}
- button.disabled=true;
+ button.disabled=true;lastComplianceRepairs=[];$('compliance-recommendations').innerHTML='<div class="empty">Analiza trwa…</div>';
  $('compliance-summary').textContent='Odczytuję aktualny stan SNMP i konfigurację switchport…';
  $('compliance-rows').innerHTML='<tr><td colspan="5" class="empty">Trwa jeden zbiorczy odczyt konfiguracji…</td></tr>';
  try{

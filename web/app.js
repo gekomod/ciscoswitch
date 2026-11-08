@@ -467,7 +467,7 @@ let statusLoading=false;async function load(){if(statusLoading)return;statusLoad
 function parseVlanSelection(value){
  const result=new Set();
  for(const token of String(value||'').split(/[\s,]+/).filter(Boolean)){
-  const match=token.match(/^(\\d{1,4})(?:-(\\d{1,4}))?$/);
+  const match=token.match(/^(\d{1,4})(?:-(\d{1,4}))?$/);
   if(!match)return null;
   const start=Number(match[1]),end=Number(match[2]||match[1]);
   if(start<1||end>4094||end<start||end-start>4093)return null;

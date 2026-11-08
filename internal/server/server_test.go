@@ -568,3 +568,36 @@ func TestSecurityAuditHandlerReadOnlyAndFailsClosed(t *testing.T) {
  bad:=httptest.NewRecorder();fail.ServeHTTP(bad,httptest.NewRequest(http.MethodGet,"/api/security-audit",nil))
  if bad.Code!=http.StatusBadGateway||calls!=1{t.Fatalf("failed read must abort audit: status=%d calls=%d",bad.Code,calls)}
 }
+
+func TestAnalyzeVLANAndPortSecurity(t *testing.T) {
+ config:=`vlan 10
+vlan 20
+interface port1.0.1
+ switchport mode trunk
+ switchport trunk native vlan 10
+ switchport trunk allowed vlan 20
+interface port1.0.2
+ switchport mode access
+ switchport access vlan 30
+`
+ findings:=analyzeVLANAndPortSecurity(config,"")
+ codes:=map[string]bool{};for _,f:=range findings{codes[f.Code]=true}
+ for _,code:=range []string{"trunk-native-not-allowed","vlan-no-explicit-port-reference","port-references-undeclared-vlan"}{if !codes[code]{t.Errorf("missing %s in %+v",code,findings)}}
+}
+func TestAnalyzeVLANAndPortSecurityDoesNotCallUnassignedVLANUnused(t *testing.T) {
+ config:=`vlan 100
+interface port1.0.1
+ switchport mode access
+ switchport access vlan 1
+`
+ findings:=analyzeVLANAndPortSecurity(config,"")
+ if len(findings)!=1||findings[0].Code!="vlan-no-explicit-port-reference"{t.Fatalf("expected cautious candidate finding, got %+v",findings)}
+ if !strings.Contains(findings[0].Recommendation,"nie dowód"){t.Fatalf("recommendation must be cautious: %+v",findings[0])}
+}
+func TestSecurityAuditHandlerUsesFreshSwitchportAndKeepsPartialAvailability(t *testing.T) {
+ commands:=[]string{}
+ h:=securityAuditHandler(func(command string)(string,error){commands=append(commands,command);if command=="show running-config"{return "vlan 10\ninterface port1.0.1\n switchport mode trunk\n switchport trunk native vlan 10\n switchport trunk allowed vlan 20\n",nil};if command=="show interface switchport"{return "Interface name: port1.0.1\nSwitchport mode: trunk\nDefault Vlan: 10\nConfigured Vlans: 20\n",nil};return "",fmt.Errorf("unexpected")})
+ rec:=httptest.NewRecorder();h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/security-audit",nil))
+ if rec.Code!=200||len(commands)!=2{t.Fatalf("status=%d commands=%v body=%s",rec.Code,commands,rec.Body.String())}
+ if !strings.Contains(rec.Body.String(),"trunk-native-not-allowed"){t.Fatalf("missing trunk finding: %s",rec.Body.String())}
+}

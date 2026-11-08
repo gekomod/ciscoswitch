@@ -665,3 +665,14 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 :root[data-theme="light"] .role-permissions-note{background:#f5f8fb;border-color:#dce4ed;color:#64748b}:root[data-theme="light"] .role-permissions-note>b,:root[data-theme="light"] .role-permissions-note strong{color:#26364b}
 
 .event-row span{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.event-repeat{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:999px;padding:2px 7px;font-size:11px;font-style:normal;font-weight:700;color:var(--muted)}
+
+.overview-health{margin-top:14px;padding:12px;border:1px solid var(--line-soft);border-radius:10px;background:var(--surface-soft,rgba(255,255,255,.025))}
+.overview-health-head{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:9px;letter-spacing:.8px;color:var(--muted)}
+.overview-health-head b{font-size:9px;color:var(--green);letter-spacing:.4px}
+.overview-health p{font-size:10px;line-height:1.5;color:var(--muted);margin:8px 0}
+.overview-health-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:8px;border-top:1px solid var(--line-soft)}
+.overview-health-stats div{display:flex;flex-direction:column;gap:2px}.overview-health-stats b{font-size:14px;color:var(--text)}.overview-health-stats small{font-size:9px;color:var(--subtle)}
+.overview-health[data-state="warning"] .overview-health-head b{color:var(--amber)}
+.overview-health[data-state="critical"] .overview-health-head b{color:var(--red)}
+.overview-health[data-state="unknown"] .overview-health-head b{color:var(--muted)}
+:root[data-theme="light"] .overview-health{background:#f8fafc;border-color:#e7edf3}

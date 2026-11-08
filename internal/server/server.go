@@ -2,6 +2,7 @@ package server
 
 import (
  "encoding/json"
+ "encoding/csv"
  "context"
  "log"
  "crypto/rand"
@@ -41,6 +42,7 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/api/diagnostics/collect",diagnosticsCollectHandler(svc.RunReadOnly,diagnosticsStore))
  m.Handle("/api/diagnostics/history",diagnosticsHistoryHandler(diagnosticsStore))
  m.Handle("/api/diagnostics/availability",diagnosticsAvailabilityHandler(diagnosticsStore))
+ m.Handle("/api/diagnostics/availability.csv",diagnosticsAvailabilityCSVHandler(diagnosticsStore))
  m.Handle("/api/diagnostics/acknowledge",diagnosticsAcknowledgeHandler(diagnosticsStore,diagnosticsPath+".acks.json"))
  m.Handle("/api/monitor/history", monitorHistoryHandler(filepath.Join("data", "monitor-history.jsonl")))
  m.Handle("/api/monitor/stream", monitorStreamHandler())
@@ -1426,31 +1428,91 @@ func diagnosticsAvailabilityMetric(name string, samples []diagnosticsSample, sta
  for _,o:=range m.Outages {m.OutageSeconds+=o.DurationSeconds}
  return m
 }
-func diagnosticsAvailabilityHandler(store *diagnosticsStore)http.Handler {
- return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request) {
-  if r.Method!=http.MethodGet {http.Error(w,"method not allowed",405);return}
-  window:=r.URL.Query().Get("window");if window==""{window="24h"}
-  var duration time.Duration
-  switch window {case "24h":duration=24*time.Hour;case "7d":duration=7*24*time.Hour;default:http.Error(w,"window musi mieć wartość 24h lub 7d",400);return}
-  all,err:=store.list();if err!=nil{http.Error(w,"nie udało się odczytać historii diagnostycznej",500);return}
-  sort.Slice(all,func(i,j int)bool{return all[i].CapturedAt.Before(all[j].CapturedAt)})
-  end:=time.Now().UTC();start:=end.Add(-duration)
-  _,cadence:=diagnosticsSamplingSettings();interval,err:=time.ParseDuration(cadence);if err!=nil||interval<=0{interval=time.Minute}
-  maxGap:=2*interval;if maxGap<2*time.Minute{maxGap=2*time.Minute}
-  deviceMetric:=diagnosticsAvailabilityMetric("Dostępność CLI",all,start,end,maxGap,func(s diagnosticsSample)(bool,bool){return s.Checks!=nil,s.Checks["runningConfig"]})
-  names:=map[string]bool{}
-  for _,sample:=range all {if sample.Checks["lacp"] {for _,g:=range sample.Aggregations{names[g.Name]=true}}}
-  groupMetrics:=[]availabilityMetric{}
-  sortedNames:=make([]string,0,len(names));for name:=range names{sortedNames=append(sortedNames,name)};sort.Strings(sortedNames)
-  for _,name:=range sortedNames {
-   metric:=diagnosticsAvailabilityMetric(name,all,start,end,maxGap,func(s diagnosticsSample)(bool,bool){
-    if !s.Checks["lacp"] {return false,false}
-    for _,g:=range s.Aggregations {if strings.EqualFold(g.Name,name){return true,g.Live&&g.Ready!="Niegotowy"}}
-    return true,false
-   })
-   groupMetrics=append(groupMetrics,metric)
+
+type availabilityTimelinePoint struct {
+ At time.Time `json:"at"`
+ AvailabilityPercent *float64 `json:"availabilityPercent"`
+ ObservedSeconds int64 `json:"observedSeconds"`
+ UnknownSeconds int64 `json:"unknownSeconds"`
+}
+type diagnosticsAvailabilityReport struct {
+ Window string `json:"window"`
+ From time.Time `json:"from"`
+ To time.Time `json:"to"`
+ MaxSampleGapSeconds int64 `json:"maxSampleGapSeconds"`
+ Device availabilityMetric `json:"device"`
+ Aggregations []availabilityMetric `json:"aggregations"`
+ Timeline []availabilityTimelinePoint `json:"timeline"`
+ Method string `json:"method"`
+}
+func buildDiagnosticsAvailabilityReport(store *diagnosticsStore,window string)(diagnosticsAvailabilityReport,error){
+ var report diagnosticsAvailabilityReport
+ var duration time.Duration
+ switch window {case "24h":duration=24*time.Hour;case "7d":duration=7*24*time.Hour;default:return report,fmt.Errorf("window musi mieć wartość 24h lub 7d")}
+ all,err:=store.list();if err!=nil{return report,err}
+ sort.Slice(all,func(i,j int)bool{return all[i].CapturedAt.Before(all[j].CapturedAt)})
+ end:=time.Now().UTC();start:=end.Add(-duration)
+ _,cadence:=diagnosticsSamplingSettings();interval,err:=time.ParseDuration(cadence);if err!=nil||interval<=0{interval=time.Minute}
+ maxGap:=2*interval;if maxGap<2*time.Minute{maxGap=2*time.Minute}
+ deviceState:=func(s diagnosticsSample)(bool,bool){return s.Checks!=nil,s.Checks["runningConfig"]}
+ report=diagnosticsAvailabilityReport{Window:window,From:start,To:end,MaxSampleGapSeconds:int64(maxGap.Seconds()),Device:diagnosticsAvailabilityMetric("Dostępność CLI",all,start,end,maxGap,deviceState),Aggregations:[]availabilityMetric{},Timeline:[]availabilityTimelinePoint{},Method:"Uptime jest liczony jako udany odczyt CLI (show running-config), a agregacje jako rozpoznany stan LACP. Procent odnosi się wyłącznie do przedziałów objętych poprawnymi, dostatecznie częstymi próbkami. Luki pomiarowe są wyłączone z mianownika i pokazane jako brak danych; to nie jest gwarantowane SLA ani pomiar dostępności ruchu użytkowników."}
+ names:=map[string]bool{}
+ for _,sample:=range all {if sample.Checks["lacp"]{for _,g:=range sample.Aggregations{names[g.Name]=true}}}
+ sortedNames:=make([]string,0,len(names));for name:=range names{sortedNames=append(sortedNames,name)};sort.Strings(sortedNames)
+ for _,name:=range sortedNames {
+  state:=func(s diagnosticsSample)(bool,bool){
+   if !s.Checks["lacp"]{return false,false}
+   for _,g:=range s.Aggregations{if strings.EqualFold(g.Name,name){return true,g.Live&&g.Ready!="Niegotowy"}}
+   return true,false
   }
+  report.Aggregations=append(report.Aggregations,diagnosticsAvailabilityMetric(name,all,start,end,maxGap,state))
+ }
+ buckets:=24;step:=time.Hour;if window=="7d"{buckets=7;step=24*time.Hour}
+ for i:=0;i<buckets;i++{
+  bucketStart:=start.Add(time.Duration(i)*step);bucketEnd:=bucketStart.Add(step);if bucketEnd.After(end){bucketEnd=end}
+  if !bucketEnd.After(bucketStart){continue}
+  metric:=diagnosticsAvailabilityMetric("CLI",all,bucketStart,bucketEnd,maxGap,deviceState)
+  report.Timeline=append(report.Timeline,availabilityTimelinePoint{At:bucketStart,AvailabilityPercent:metric.AvailabilityPercent,ObservedSeconds:metric.ObservedSeconds,UnknownSeconds:metric.UnknownSeconds})
+ }
+ return report,nil
+}
+func diagnosticsAvailabilityHandler(store *diagnosticsStore)http.Handler{
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  if r.Method!=http.MethodGet{http.Error(w,"method not allowed",405);return}
+  window:=r.URL.Query().Get("window");if window==""{window="24h"}
+  report,err:=buildDiagnosticsAvailabilityReport(store,window)
+  if err!=nil{if strings.Contains(err.Error(),"window"){http.Error(w,err.Error(),400)}else{http.Error(w,"nie udało się odczytać historii diagnostycznej",500)};return}
   w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
-  _=json.NewEncoder(w).Encode(map[string]any{"window":window,"from":start,"to":end,"maxSampleGapSeconds":int64(maxGap.Seconds()),"device":deviceMetric,"aggregations":groupMetrics,"method":"Uptime jest liczony jako udany odczyt CLI (show running-config), a agregacje jako rozpoznany stan LACP. Procent odnosi się wyłącznie do przedziałów objętych poprawnymi, dostatecznie częstymi próbkami. Luki pomiarowe są wyłączone z mianownika i pokazane jako brak danych; to nie jest gwarantowane SLA ani pomiar dostępności ruchu użytkowników."})
+  _=json.NewEncoder(w).Encode(report)
  })
 }
+func diagnosticsAvailabilityCSVHandler(store *diagnosticsStore)http.Handler{
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  if r.Method!=http.MethodGet{http.Error(w,"method not allowed",405);return}
+  window:=r.URL.Query().Get("window");if window==""{window="24h"}
+  report,err:=buildDiagnosticsAvailabilityReport(store,window)
+  if err!=nil{if strings.Contains(err.Error(),"window"){http.Error(w,err.Error(),400)}else{http.Error(w,"nie udało się odczytać historii diagnostycznej",500)};return}
+  w.Header().Set("Content-Type","text/csv; charset=utf-8")
+  w.Header().Set("Content-Disposition",`attachment; filename="switch-availability-`+window+`.csv"`)
+  w.Header().Set("Cache-Control","no-store")
+  _,_=w.Write([]byte{0xEF,0xBB,0xBF})
+  writer:=csv.NewWriter(w);writer.Comma=';'
+  _=writer.Write([]string{"Typ","Nazwa","Dostępność (%)","Czas pomiaru (s)","Brak danych (s)","Liczba przerw","Czas przerw (s)","Początek przerwy","Koniec przerwy","Przerwa trwa"})
+  writeMetric:=func(kind string,m availabilityMetric){
+   percent:="";if m.AvailabilityPercent!=nil{percent=strconv.FormatFloat(*m.AvailabilityPercent,'f',4,64)}
+   _=writer.Write([]string{kind,m.Name,percent,strconv.FormatInt(m.ObservedSeconds,10),strconv.FormatInt(m.UnknownSeconds,10),strconv.Itoa(m.OutageCount),strconv.FormatInt(m.OutageSeconds,10),"","",""})
+   for _,out:=range m.Outages{
+    finish:="";if !out.End.IsZero(){finish=out.End.Format(time.RFC3339)}
+    _=writer.Write([]string{kind+" — przerwa",m.Name,"","","","","",out.Start.Format(time.RFC3339),finish,strconv.FormatBool(out.Open)})
+   }
+  }
+  writeMetric("Urządzenie / CLI",report.Device)
+  for _,metric:=range report.Aggregations{writeMetric("Agregacja LACP",metric)}
+  _=writer.Write([]string{"Metoda",report.Method})
+  _=writer.Write([]string{"Okres od",report.From.Format(time.RFC3339)})
+  _=writer.Write([]string{"Okres do",report.To.Format(time.RFC3339)})
+  _=writer.Write([]string{"Maksymalna luka próbki (s)",strconv.FormatInt(report.MaxSampleGapSeconds,10)})
+  writer.Flush()
+ })
+}
+

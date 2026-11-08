@@ -28,3 +28,19 @@ func TestPanelLoginCreatesSessionAndReportsRole(t *testing.T) {
  if err:=json.Unmarshal(session.Body.Bytes(),&identity);err!=nil{t.Fatal(err)}
  if identity["username"]!="rootadmin"||identity["role"]!="admin" { t.Fatalf("unexpected identity: %+v",identity) }
 }
+
+func TestPanelUserPasswordHashPersistsButIsNotExposed(t *testing.T) {
+ t.Setenv("PANEL_ADMIN_USER","persistadmin")
+ t.Setenv("PANEL_ADMIN_PASSWORD","another-strong-panel-password")
+ path:=filepath.Join(t.TempDir(),"users.json")
+ first:=newPanelUserStore(path)
+ if len(first.users)!=1 { t.Fatalf("bootstrap users=%d",len(first.users)) }
+ second:=newPanelUserStore(path)
+ var user panelUser
+ for _,u:=range second.users{user=u}
+ if user.PasswordHash=="" { t.Fatal("password hash was not persisted") }
+ handler:=second.usersHandler()
+ rec:=httptest.NewRecorder()
+ handler.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/users",nil))
+ if strings.Contains(rec.Body.String(),"passwordHash")||strings.Contains(rec.Body.String(),user.PasswordHash){t.Fatal("password hash leaked in users response")}
+}

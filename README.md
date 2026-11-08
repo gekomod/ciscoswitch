@@ -62,6 +62,8 @@ PANEL_USER=admin
 PANEL_PASSWORD=USE_A_RANDOM_PASSWORD_AT_LEAST_16_CHARS
 AUDIT_LOG_PATH=data/audit.jsonl
 PORT_PROFILES_PATH=data/port-profiles.json
+DIAGNOSTICS_HISTORY_PATH=data/diagnostics-history.json
+DIAGNOSTICS_INTERVAL=60s
 ```
 
 ## Błąd SSH: niezgodny klucz hosta

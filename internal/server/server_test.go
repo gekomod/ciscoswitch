@@ -962,3 +962,34 @@ func TestDiagnosticsAvailabilityClosesOutageAtLastKnownSampleBeforeGap(t *testin
  if metric.Outages[0].Open{t.Fatalf("outage must be closed at unknown-data boundary: %+v",metric.Outages[0])}
  if !metric.Outages[0].End.Equal(samples[2].CapturedAt){t.Fatalf("outage end=%s want last known sample %s",metric.Outages[0].End,samples[2].CapturedAt)}
 }
+
+
+func TestDiagnosticsEventsIncludeLLDPAddRemoveAndControlReadTransitions(t *testing.T) {
+ now:=time.Now().UTC()
+ store:=newDiagnosticsStore(filepath.Join(t.TempDir(),"history.json"),20)
+ samples:=[]diagnosticsSample{
+  {CapturedAt:now.Add(-2*time.Minute),Checks:map[string]bool{"lldp":true,"runningConfig":true},Neighbors:[]topologyLink{{LocalPort:"port1",Neighbor:"switch-a"}}},
+  {CapturedAt:now.Add(-time.Minute),Checks:map[string]bool{"lldp":true,"runningConfig":false},Neighbors:[]topologyLink{{LocalPort:"port2",Neighbor:"switch-b"}}},
+  {CapturedAt:now,Checks:map[string]bool{"lldp":true,"runningConfig":true},Neighbors:[]topologyLink{{LocalPort:"port2",Neighbor:"switch-b"}}},
+ }
+ for _,sample:=range samples{if err:=store.append(sample);err!=nil{t.Fatal(err)}}
+ handler:=diagnosticsEventsHandler(store)
+ rec:=httptest.NewRecorder();handler.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/events?window=24h&type=all&limit=50",nil))
+ if rec.Code!=http.StatusOK{t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String())}
+ var result struct{Events []diagnosticsEvent `json:"events"`}
+ if err:=json.Unmarshal(rec.Body.Bytes(),&result);err!=nil{t.Fatal(err)}
+ found:=map[string]bool{}
+ for _,event:=range result.Events{found[event.Type+":"+event.Title]=true}
+ for _,want:=range []string{"lldp:Zniknął sąsiad LLDP","lldp:Wykryto sąsiada LLDP","availability:Nieudany odczyt zarządzający","availability:Odczyt zarządzający przywrócony"}{if !found[want]{t.Errorf("missing event %q; got %+v",want,result.Events)}}
+ for i:=1;i<len(result.Events);i++{if result.Events[i].At.After(result.Events[i-1].At){t.Fatal("events are not sorted newest first")}}
+}
+func TestDiagnosticsEventsValidateFiltersAndLimit(t *testing.T) {
+ store:=newDiagnosticsStore(filepath.Join(t.TempDir(),"history.json"),10)
+ handler:=diagnosticsEventsHandler(store)
+ for _,query:=range []string{"/api/events?window=2d","/api/events?type=unknown","/api/events?limit=501"}{
+  rec:=httptest.NewRecorder();handler.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,query,nil))
+  if rec.Code!=http.StatusBadRequest{t.Errorf("%s status=%d want 400",query,rec.Code)}
+ }
+ rec:=httptest.NewRecorder();handler.ServeHTTP(rec,httptest.NewRequest(http.MethodPost,"/api/events",nil))
+ if rec.Code!=http.StatusMethodNotAllowed{t.Fatalf("POST status=%d want 405",rec.Code)}
+}

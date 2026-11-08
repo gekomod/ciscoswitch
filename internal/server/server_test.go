@@ -614,3 +614,16 @@ interface port1.0.1
  findings:=analyzeVLANAndPortSecurity(config,"")
  for _,f:=range findings{if f.Code=="trunk-native-not-allowed"{t.Fatalf("native VLAN should be in allowed list after add: %+v",findings)}}
 }
+
+func TestAuditDetectsEdgePortOnTrunkAndLACP(t *testing.T) {
+ config:=`interface port1.0.1
+ switchport mode trunk
+ spanning-tree edgeport
+interface port1.0.2
+ channel-group 1 mode active
+ spanning-tree edgeport
+`
+ findings:=analyzeVLANAndPortSecurity(config,"")
+ codes:=map[string]bool{};for _,f:=range findings{codes[f.Code]=true}
+ if !codes["edgeport-on-trunk"]||!codes["edgeport-on-lacp-member"]{t.Fatalf("expected topology-aware EdgePort findings, got %+v",findings)}
+}

@@ -207,6 +207,26 @@ $('delete-port-profile').onclick=async()=>{
 refreshSavedPortProfiles();
 
 
+function detectPortRole(port){
+ const description=String(port.description||'').trim();
+ const value=description.toLocaleLowerCase('pl-PL');
+ const rules=[
+  {role:'Uplink / switch',profile:'Trunk uplink',pattern:/\\b(uplink|up-link|switch|router|core|dist|agregacj|lacp|po[0-9]+)\\b/},
+  {role:'Access Point',profile:'Access Point',pattern:/\\b(ap|access.?point|wifi|wi-fi|wlan)\\b/},
+  {role:'CCTV / kamera',profile:'CCTV',pattern:/\\b(cctv|kamera|camera|nvr|rejestrator)\\b/},
+  {role:'VoIP / telefon',profile:'VoIP',pattern:/\\b(voip|telefon|phone|sip)\\b/},
+  {role:'Serwer / storage',profile:'Server',pattern:/\\b(serwer|server|nas|storage|hypervisor|esxi|proxmox|idrac|ilo)\\b/},
+  {role:'Stacja robocza',profile:'Access standard',pattern:/\\b(pc|komputer|workstation|desktop|laptop|drukarka|printer)\\b/}
+ ];
+ const match=rules.find(rule=>rule.pattern.test(value));
+ return match?{role:match.role,profile:match.profile,source:'Opis: '+description,confidence:'jawna'}:{role:'Nieustalona',profile:'Brak rekomendacji',source:description?'Opis nie zawiera rozpoznawalnego oznaczenia: '+description:'Brak opisu portu',confidence:'brak'};
+}
+function renderPortRoleAudit(){
+ const rows=latestPorts.map(port=>({port:port.name||'—',...detectPortRole(port)}));
+ const recognized=rows.filter(row=>row.confidence==='jawna').length;
+ $('port-role-count').textContent=recognized+' / '+rows.length+' rozpoznanych na podstawie opisu';
+ $('port-role-rows').innerHTML=rows.length?rows.map(row=>'<tr><td><b>'+esc(row.port)+'</b></td><td>'+esc(row.role)+'</td><td>'+esc(row.profile)+'</td><td>'+esc(row.source)+'</td></tr>').join(''):'<tr><td colspan="4" class="empty">Brak portów do analizy.</td></tr>';
+}
 function runPortAudit(){
  const rows=[];
  for(const p of latestPorts){
@@ -221,6 +241,7 @@ function runPortAudit(){
  $('port-audit-summary').innerHTML='<div class="metric"><span>Porty sprawdzone</span><b>'+latestPorts.length+'</b></div><div class="metric"><span>Wymagają uwagi</span><b>'+warnings+'</b></div><div class="metric"><span>Informacyjne</span><b>'+infos+'</b></div>';
  $('port-audit-status').textContent='Audyt zakończony na podstawie '+latestPorts.length+' portów z ostatniego odczytu SNMP. '+(rows.length?'Wykryto '+rows.length+' wskazówek do weryfikacji.':'Nie wykryto wskazanych niezgodności.')+' Wyniki nie oznaczają automatycznie awarii.';
  $('port-audit-rows').innerHTML=rows.length?rows.map(x=>'<tr><td><span class="state '+(x.level==='warning'?'down':'unknown')+'">'+(x.level==='warning'?'Uwaga':'Info')+'</span></td><td><b>'+esc(x.port)+'</b></td><td>'+esc(x.title)+'</td><td>'+esc(x.value)+'</td><td>'+esc(x.advice)+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">Nie wykryto problemów w kontrolowanych kryteriach.</td></tr>';
+ renderPortRoleAudit();
 }
 $('run-port-audit').onclick=async()=>{
  const button=$('run-port-audit');button.disabled=true;button.textContent='Odświeżam dane…';

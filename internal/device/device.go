@@ -104,7 +104,12 @@ func (s *Service) DeviceIdentity() (Identity, error) {
 	if err != nil { return out, fmt.Errorf("SNMP system identity: %w", err) }
 	if result == nil { return out, fmt.Errorf("switch nie zwrócił danych identyfikacyjnych SNMP") }
 	for _, pdu := range result.Variables {
-		value := strings.TrimSpace(fmt.Sprint(pdu.Value))
+		value := ""
+		switch raw := pdu.Value.(type) {
+		case []byte: value = strings.TrimSpace(string(raw))
+		case string: value = strings.TrimSpace(raw)
+		default: value = strings.TrimSpace(fmt.Sprint(raw))
+		}
 		switch pdu.Name {
 		case ".1.3.6.1.2.1.1.1.0": out.Description = value
 		case ".1.3.6.1.2.1.1.2.0": out.ObjectID = value

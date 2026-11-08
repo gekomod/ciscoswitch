@@ -617,3 +617,17 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .availability-aggregations{margin-top:16px}
 .availability-aggregations h5{margin-bottom:10px}
 @media(max-width:640px){.availability-head{align-items:flex-start;flex-direction:column}.availability-head label{width:100%;justify-content:space-between}}
+
+.availability-chart-wrap{margin-top:18px;padding:14px;border:1px solid var(--border);border-radius:11px;background:var(--surface-2,var(--background))}
+.availability-chart-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.availability-chart-head h5{margin:0;font-size:12px}
+.availability-chart-head span{font-size:10px;color:var(--muted)}
+.availability-chart{height:150px;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:5px;align-items:end;border-bottom:1px solid var(--border);padding:0 2px}
+.availability-bar-column{height:100%;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px}
+.availability-bar-track{height:104px;width:100%;display:flex;align-items:flex-end;justify-content:center}
+.availability-bar{width:min(100%,24px);min-height:2px;border-radius:4px 4px 0 0;background:var(--accent)}
+.availability-bar.unknown{height:3px!important;background:repeating-linear-gradient(135deg,var(--muted) 0 2px,transparent 2px 4px);opacity:.55}
+.availability-bar-column small{height:12px;font-size:8px;color:var(--muted);white-space:nowrap}
+.availability-bar-column span{font-size:8px;color:var(--muted);white-space:nowrap}
+#export-availability{white-space:nowrap}
+@media(max-width:640px){.availability-chart{gap:2px}.availability-bar-column small{font-size:7px}.availability-bar-column span{font-size:7px}.availability-chart-wrap{padding:9px}}

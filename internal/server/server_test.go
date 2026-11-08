@@ -870,3 +870,27 @@ func TestDiagnosticsHistoryReportsManualModeWhenSamplerDisabled(t *testing.T) {
  rec:=httptest.NewRecorder();h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/diagnostics/history",nil))
  if rec.Code!=http.StatusOK||!strings.Contains(rec.Body.String(),"\"collectionMode\":\"manual\""){t.Fatalf("expected manual collection mode, status=%d body=%s",rec.Code,rec.Body.String())}
 }
+
+func TestDiagnosticsAcknowledgeHandlerPersistsOperatorAndComment(t *testing.T) {
+ path:=filepath.Join(t.TempDir(),"history.json")
+ store:=newDiagnosticsStore(path,10)
+ sample:=diagnosticsSample{CapturedAt:time.Now().UTC(),Checks:map[string]bool{"lacp":true},Aggregations:[]topologyAggregation{{Name:"Po1",Ready:"Niegotowy"}}}
+ if err:=store.append(sample);err!=nil{t.Fatal(err)}
+ alert:=diagnosticsCurrentAlerts(sample)[0]
+ id:=diagnosticsAlertID(alert.Code,alert.Evidence,alert.At)
+ handler:=diagnosticsAcknowledgeHandler(store,path+".acks.json")
+ req:=httptest.NewRequest(http.MethodPost,"/api/diagnostics/acknowledge",strings.NewReader(`{"id":"`+id+`","comment":"Sprawdzam przewód uplink"}`))
+ req=req.WithContext(context.WithValue(req.Context(),identityContextKey{},panelIdentity{Username:"technik",Role:"operator"}))
+ rec:=httptest.NewRecorder();handler.ServeHTTP(rec,req)
+ if rec.Code!=http.StatusOK{t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String())}
+ var result struct{Saved bool `json:"saved"`;Acknowledgement diagnosticsAcknowledgement `json:"acknowledgement"`}
+ if err:=json.Unmarshal(rec.Body.Bytes(),&result);err!=nil{t.Fatal(err)}
+ if !result.Saved||result.Acknowledgement.Username!="technik"||result.Acknowledgement.Comment!="Sprawdzam przewód uplink"{t.Fatalf("unexpected acknowledgement: %+v",result)}
+}
+func TestDiagnosticsAcknowledgeRejectsStaleAlert(t *testing.T) {
+ store:=newDiagnosticsStore(filepath.Join(t.TempDir(),"history.json"),10)
+ handler:=diagnosticsAcknowledgeHandler(store,filepath.Join(t.TempDir(),"acks.json"))
+ req:=httptest.NewRequest(http.MethodPost,"/api/diagnostics/acknowledge",strings.NewReader(`{"id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`))
+ rec:=httptest.NewRecorder();handler.ServeHTTP(rec,req)
+ if rec.Code!=http.StatusConflict{t.Fatalf("status=%d want 409",rec.Code)}
+}

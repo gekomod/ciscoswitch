@@ -5,8 +5,6 @@ import (
  "net/http/httptest"
  "testing"
 
- "github.com/gosnmp/gosnmp"
- _ "github.com/gosnmp/gosnmp"
 )
 
 func TestRegisterMountsLoginAndAuthenticatedPanelRoutes(t *testing.T) {

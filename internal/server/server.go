@@ -123,7 +123,7 @@ m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method
   v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureVLANPortMembership(q.Ports,q.VLAN,q.Membership)})
   write(w,v,e)
  })
- m.HandleFunc("/api/port/settings",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,4096);var q struct{Port string `json:"port"`;Mode string `json:"mode"`;AccessVLAN int `json:"accessVlan"`;Allowed string `json:"allowed"`;Native int `json:"native"`;Speed string `json:"speed"`;Duplex string `json:"duplex"`;Description string `json:"description"`;AcknowledgeConnectivityRisk bool `json:"acknowledgeConnectivityRisk"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};if isProtectedPort(q.Port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",q.Port));return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){if err:=requireTopologyRiskAcknowledgement(svc.RunReadOnly,[]string{q.Port},q.AcknowledgeConnectivityRisk);err!=nil{return "",err};return svc.ConfigurePortSettings(q.Port,q.Mode,q.AccessVLAN,q.Allowed,q.Native,q.Speed,q.Duplex,q.Description)});write(w,v,e)})
+ m.HandleFunc("/api/port/settings",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,4096);var q struct{Port string `json:"port"`;Mode string `json:"mode"`;AccessVLAN int `json:"accessVlan"`;Allowed string `json:"allowed"`;Native int `json:"native"`;Speed string `json:"speed"`;Duplex string `json:"duplex"`;Description string `json:"description"`;AcknowledgeConnectivityRisk bool `json:"acknowledgeConnectivityRisk"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};if isProtectedPort(q.Port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",q.Port));return};if err:=requireTopologyRiskAcknowledgement(svc.RunReadOnly,[]string{q.Port},q.AcknowledgeConnectivityRisk);err!=nil{write(w,"",err);return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){if err:=requireTopologyRiskAcknowledgement(svc.RunReadOnly,[]string{q.Port},q.AcknowledgeConnectivityRisk);err!=nil{return "",err};return svc.ConfigurePortSettings(q.Port,q.Mode,q.AccessVLAN,q.Allowed,q.Native,q.Speed,q.Duplex,q.Description)});write(w,v,e)})
  m.HandleFunc("/api/ports/repair/preview",func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
   r.Body=http.MaxBytesReader(w,r.Body,4096)
@@ -145,6 +145,7 @@ m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method
   q:=request.PortRepairRequest
   if isProtectedPort(q.Port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",q.Port));return}
   if _,_,err:=validatePortRepair(svc.RunReadOnly,q);err!=nil{write(w,"",err);return}
+  if err:=requireTopologyRiskAcknowledgement(svc.RunReadOnly,[]string{q.Port},request.AcknowledgeConnectivityRisk);err!=nil{write(w,"",err);return}
   output,err:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){if _,_,checkErr:=validatePortRepair(svc.RunReadOnly,q);checkErr!=nil{return "",checkErr};if riskErr:=requireTopologyRiskAcknowledgement(svc.RunReadOnly,[]string{q.Port},request.AcknowledgeConnectivityRisk);riskErr!=nil{return "",riskErr};return svc.ConfigurePortRepair(q)})
   write(w,output,err)
  })
@@ -155,6 +156,7 @@ m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method
   if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return}
   for _,port:=range q.Ports{if isProtectedPort(port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",port));return}}
   if _,err:=device.BuildBulkPortSettingsCommands(q.Ports,q.Mode,q.AccessVLAN,q.Allowed,q.Native,q.Speed,q.Duplex,q.Description);err!=nil{write(w,"",err);return}
+  if err:=requireTopologyRiskAcknowledgement(svc.RunReadOnly,q.Ports,q.AcknowledgeConnectivityRisk);err!=nil{write(w,"",err);return}
   v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){if err:=requireTopologyRiskAcknowledgement(svc.RunReadOnly,q.Ports,q.AcknowledgeConnectivityRisk);err!=nil{return "",err};return svc.ConfigureBulkPortSettings(q.Ports,q.Mode,q.AccessVLAN,q.Allowed,q.Native,q.Speed,q.Duplex,q.Description)})
   write(w,v,e)
  })

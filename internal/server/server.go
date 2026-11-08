@@ -123,7 +123,7 @@ m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method
   v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureVLANPortMembership(q.Ports,q.VLAN,q.Membership)})
   write(w,v,e)
  })
- m.HandleFunc("/api/port/settings",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,4096);var q struct{Port string `json:"port"`;Mode string `json:"mode"`;AccessVLAN int `json:"accessVlan"`;Allowed string `json:"allowed"`;Native int `json:"native"`;Speed string `json:"speed"`;Duplex string `json:"duplex"`;Description string `json:"description"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};if isProtectedPort(q.Port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",q.Port));return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigurePortSettings(q.Port,q.Mode,q.AccessVLAN,q.Allowed,q.Native,q.Speed,q.Duplex,q.Description)});write(w,v,e)})
+ m.HandleFunc("/api/port/settings",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,4096);var q struct{Port string `json:"port"`;Mode string `json:"mode"`;AccessVLAN int `json:"accessVlan"`;Allowed string `json:"allowed"`;Native int `json:"native"`;Speed string `json:"speed"`;Duplex string `json:"duplex"`;Description string `json:"description"`;AcknowledgeConnectivityRisk bool `json:"acknowledgeConnectivityRisk"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};if isProtectedPort(q.Port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",q.Port));return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){if err:=requireTopologyRiskAcknowledgement(svc.RunReadOnly,[]string{q.Port},q.AcknowledgeConnectivityRisk);err!=nil{return "",err};return svc.ConfigurePortSettings(q.Port,q.Mode,q.AccessVLAN,q.Allowed,q.Native,q.Speed,q.Duplex,q.Description)});write(w,v,e)})
  m.HandleFunc("/api/ports/repair/preview",func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
   r.Body=http.MaxBytesReader(w,r.Body,4096)
@@ -140,21 +140,22 @@ m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method
  m.HandleFunc("/api/ports/repair/apply",func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
   r.Body=http.MaxBytesReader(w,r.Body,4096)
-  var q device.PortRepairRequest
-  if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return}
+  var request struct { device.PortRepairRequest; AcknowledgeConnectivityRisk bool `json:"acknowledgeConnectivityRisk"` }
+  if json.NewDecoder(r.Body).Decode(&request)!=nil{http.Error(w,"invalid JSON",400);return}
+  q:=request.PortRepairRequest
   if isProtectedPort(q.Port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",q.Port));return}
   if _,_,err:=validatePortRepair(svc.RunReadOnly,q);err!=nil{write(w,"",err);return}
-  output,err:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){if _,_,checkErr:=validatePortRepair(svc.RunReadOnly,q);checkErr!=nil{return "",checkErr};return svc.ConfigurePortRepair(q)})
+  output,err:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){if _,_,checkErr:=validatePortRepair(svc.RunReadOnly,q);checkErr!=nil{return "",checkErr};if riskErr:=requireTopologyRiskAcknowledgement(svc.RunReadOnly,[]string{q.Port},request.AcknowledgeConnectivityRisk);riskErr!=nil{return "",riskErr};return svc.ConfigurePortRepair(q)})
   write(w,output,err)
  })
  m.HandleFunc("/api/ports/settings/bulk",func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
   r.Body=http.MaxBytesReader(w,r.Body,8192)
-  var q struct{Ports []string `json:"ports"`;Mode string `json:"mode"`;AccessVLAN int `json:"accessVlan"`;Allowed string `json:"allowed"`;Native int `json:"native"`;Speed string `json:"speed"`;Duplex string `json:"duplex"`;Description string `json:"description"`}
+  var q struct{Ports []string `json:"ports"`;Mode string `json:"mode"`;AccessVLAN int `json:"accessVlan"`;Allowed string `json:"allowed"`;Native int `json:"native"`;Speed string `json:"speed"`;Duplex string `json:"duplex"`;Description string `json:"description"`;AcknowledgeConnectivityRisk bool `json:"acknowledgeConnectivityRisk"`}
   if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return}
   for _,port:=range q.Ports{if isProtectedPort(port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",port));return}}
   if _,err:=device.BuildBulkPortSettingsCommands(q.Ports,q.Mode,q.AccessVLAN,q.Allowed,q.Native,q.Speed,q.Duplex,q.Description);err!=nil{write(w,"",err);return}
-  v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureBulkPortSettings(q.Ports,q.Mode,q.AccessVLAN,q.Allowed,q.Native,q.Speed,q.Duplex,q.Description)})
+  v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){if err:=requireTopologyRiskAcknowledgement(svc.RunReadOnly,q.Ports,q.AcknowledgeConnectivityRisk);err!=nil{return "",err};return svc.ConfigureBulkPortSettings(q.Ports,q.Mode,q.AccessVLAN,q.Allowed,q.Native,q.Speed,q.Duplex,q.Description)})
   write(w,v,e)
  })
  m.HandleFunc("/api/ports/action/bulk",func(w http.ResponseWriter,r *http.Request){
@@ -1057,6 +1058,18 @@ func topologyChangeRisksFromSnapshot(config, switchport, lldpRaw string, configE
  if lldpErr!=nil || strings.TrimSpace(lldpRaw)=="" { risks=append(risks,topologyRisk{"info","change-lldp-unavailable","Sąsiedztwo LLDP niedostępne","Nie udało się uzyskać wiarygodnego odczytu LLDP.","Nie traktuj braku LLDP jako dowodu, że port nie prowadzi do innego urządzenia."}) }
  return risks
 }
+func requireTopologyRiskAcknowledgement(read func(string)(string,error), ports []string, acknowledged bool) error {
+ config,configErr:=read("show running-config")
+ sw,_:=read("show interface switchport")
+ lldp,lldpErr:=read("show lldp neighbors")
+ if configErr!=nil { if !acknowledged{return fmt.Errorf("nie można potwierdzić topologii; ponów podgląd i jawnie potwierdź ryzyko")};return nil }
+ for _,port:=range ports {
+  risks:=topologyChangeRisksFromSnapshot(config,sw,lldp,configErr,lldpErr,port)
+  if len(risks)>0&&!acknowledged{return fmt.Errorf("port %s ma ostrzeżenia topologii; wymagany jest podgląd i jawne potwierdzenie ryzyka",port)}
+ }
+ return nil
+}
+
 func topologyChangeRisks(read func(string)(string,error), port string) []topologyRisk {
  config,configErr:=read("show running-config")
  sw,_:=read("show interface switchport")

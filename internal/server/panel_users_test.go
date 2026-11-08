@@ -48,3 +48,14 @@ func TestPanelUsersHandlerRejectsWeakPasswordAndDuplicateLogin(t *testing.T) {
  handler.ServeHTTP(dup,httptest.NewRequest(http.MethodPost,"/api/users",strings.NewReader(`{"username":"OPERATOR1","password":"long-enough-password","role":"operator"}`)))
  if dup.Code!=http.StatusConflict { t.Fatalf("duplicate username status=%d",dup.Code) }
 }
+
+func TestPanelUsersCannotDemoteLastActiveAdmin(t *testing.T) {
+ store:=newPanelUserStore(filepath.Join(t.TempDir(),"users.json"))
+ store.mu.Lock()
+ store.users["only-admin"]=panelUser{ID:"only-admin",Username:"admin",Role:"admin",Active:true}
+ store.mu.Unlock()
+ handler:=store.usersHandler()
+ req:=httptest.NewRequest(http.MethodPatch,"/api/users/only-admin",strings.NewReader(`{"role":"operator"}`))
+ rec:=httptest.NewRecorder();handler.ServeHTTP(rec,req)
+ if rec.Code!=http.StatusConflict { t.Fatalf("last admin downgrade status=%d body=%s",rec.Code,rec.Body.String()) }
+}

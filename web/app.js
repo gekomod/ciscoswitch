@@ -970,14 +970,17 @@ function systemMetric(raw,kind){
  return 'Brak danych';
 }
 async function refreshSystem(){const button=$('refresh-system');button.disabled=true;button.textContent='Odczytuję…';try{
- const [d,identityResult]=await Promise.all([
-  api('/api/system'),
-  api('/api/device/identity').then(value=>({value})).catch(error=>({error}))
- ]);
- const identity=identityResult.value;
- $('sys-snmp-name').textContent=identity?.name||'Brak danych SNMP';
- $('sys-snmp-uptime').textContent=identity?.uptime||'Brak danych SNMP';
- $('sys-snmp-description').textContent=identity?.description||identityResult.error?.message||'Brak danych SNMP';
+ const [d,capabilityResult]=await Promise.all([
+   api('/api/system'),
+   api('/api/device/capabilities').then(value=>({value})).catch(error=>({error}))
+  ]);
+  const capabilities=capabilityResult.value;
+  const identity=capabilities?.identity;
+  $('sys-snmp-name').textContent=identity?.name||'Brak danych SNMP';
+  $('sys-snmp-uptime').textContent=identity?.uptime||'Brak danych SNMP';
+  $('sys-snmp-objectid').textContent=identity?.objectId||'Brak danych SNMP';
+  $('sys-snmp-description').textContent=identity?.description||capabilityResult.error?.message||'Brak danych SNMP';
+  $('sys-discovered-ports').textContent=Number.isFinite(capabilities?.interfacesObserved)?String(capabilities.interfacesObserved):'Brak danych SNMP';
  const versionText=String(d.version||'');
  const versionMatch=versionText.match(/\b\d+(?:\.\d+){1,3}(?:[-+._A-Za-z0-9]*)?\b/);
  $('sys-version').textContent=versionMatch?versionMatch[0]:'Informacja niedostępna';

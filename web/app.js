@@ -257,7 +257,12 @@ $('refresh-topology-map').onclick=async()=>{
   status.textContent='Odczytano '+portCount+' portów · '+linkCount+' rozpoznanych sąsiadów LLDP · '+lagCount+' agregacji · '+warning+' ostrzeżeń · '+info+' informacji. Źródła: running-config '+(checks.runningConfig?'OK':'brak')+', switchport '+(checks.switchport?'OK':'niedostępny')+', LLDP '+(checks.lldp?'OK':'brak rozpoznanych wpisów')+', LACP '+(checks.lacp?'OK':'brak rozpoznanych wpisów')+'.';
   const severityLabel=x=>x.severity==='critical'?'Krytyczne':x.severity==='warning'?'Ostrzeżenie':'Informacja';
   const severityClass=x=>x.severity==='critical'?'down':x.severity==='warning'?'unknown':'';
-  const riskCards=risks.map(x=>'<article class="topology-risk"><div><span class="state '+severityClass(x)+'">'+severityLabel(x)+'</span><b>'+esc(x.title)+'</b></div><p>'+esc(x.evidence)+'</p><small>'+esc(x.recommendation)+'</small></article>').join('');
+  const impactByCode=new Map((data.impacts||[]).map(x=>[x.code,x]));
+  const riskCards=risks.map(x=>{
+   const impact=impactByCode.get(x.code);
+   const impactHTML=impact?'<div class="topology-impact"><b>Co może zostać dotknięte</b><span>Porty skonfigurowane: '+esc((impact.configuredPorts||[]).join(' · ')||'Brak rozpoznanych')+'</span>'+(impact.livePorts?.length?'<span>Porty aktywne w odczycie LACP: '+esc(impact.livePorts.join(' · '))+'</span>':'')+'<span>Potencjalnie dotknięte VLAN-y: '+esc(impact.vlanEvidenceAvailable?(impact.vlans||[]).map(v=>'VLAN '+v).join(', ')||'Brak rozpoznanych':'Brak wiarygodnych danych VLAN')+'</span>'+(impact.neighbors?.length?'<span>Sąsiedzi LLDP: '+esc(impact.neighbors.join(' · '))+'</span>':'')+'<small>'+esc(impact.note)+'</small></div>':'';
+   return '<article class="topology-risk"><div><span class="state '+severityClass(x)+'">'+severityLabel(x)+'</span><b>'+esc(x.title)+'</b></div><p>'+esc(x.evidence)+'</p><small>'+esc(x.recommendation)+'</small>'+impactHTML+'</article>';
+  }).join('');
   const linkCards=data.links.map(x=>'<article class="topology-neighbor"><small>LLDP · '+esc(x.localPort)+'</small><b>'+esc(x.neighbor)+'</b><span>Rozpoznany sąsiad — fizyczna ciągłość i stan portu wymagają potwierdzenia.</span></article>').join('');
   const lagCards=data.aggregations.map(x=>{
    const state=x.ready==='Gotowy'?'up':x.ready==='Niegotowy'?'down':'unknown';

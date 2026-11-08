@@ -11,6 +11,7 @@ import (
  "net/http/httptest"
  "testing"
  "strings"
+ "sync"
 
  "gs948mx-manager/internal/device"
 )
@@ -851,4 +852,21 @@ func TestDiagnosticsFlappingWindowEndpoint(t *testing.T) {
  rec:=httptest.NewRecorder();h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/diagnostics/history?windowMinutes=60",nil))
  if rec.Code!=http.StatusOK{t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String())}
  if !strings.Contains(rec.Body.String(),"lacp-flapping"){t.Fatalf("expected flapping alert, got %s",rec.Body.String())}
+}
+
+func TestDiagnosticsStoreConcurrentAppendsAreSerialized(t *testing.T) {
+ store:=newDiagnosticsStore(filepath.Join(t.TempDir(),"history.json"),500)
+ var wg sync.WaitGroup
+ errs:=make(chan error,32)
+ for i:=0;i<32;i++{wg.Add(1);go func(n int){defer wg.Done();errs<-store.append(diagnosticsSample{CapturedAt:time.Unix(int64(n),0),Checks:map[string]bool{}})}(i)}
+ wg.Wait();close(errs);for err:=range errs{if err!=nil{t.Fatal(err)}}
+ items,err:=store.list();if err!=nil{t.Fatal(err)}
+ if len(items)!=32{t.Fatalf("concurrent append lost samples: got %d want 32",len(items))}
+}
+func TestDiagnosticsHistoryReportsManualModeWhenSamplerDisabled(t *testing.T) {
+ t.Setenv("DIAGNOSTICS_INTERVAL","0")
+ store:=newDiagnosticsStore(filepath.Join(t.TempDir(),"history.json"),10)
+ h:=diagnosticsHistoryHandler(store)
+ rec:=httptest.NewRecorder();h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/diagnostics/history",nil))
+ if rec.Code!=http.StatusOK||!strings.Contains(rec.Body.String(),"\"collectionMode\":\"manual\""){t.Fatalf("expected manual collection mode, status=%d body=%s",rec.Code,rec.Body.String())}
 }

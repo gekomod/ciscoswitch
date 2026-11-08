@@ -1200,14 +1200,14 @@ func collectDiagnosticsSample(read func(string)(string,error)) diagnosticsSample
  sample:=diagnosticsSample{CapturedAt:time.Now().UTC(),Checks:map[string]bool{},Aggregations:[]topologyAggregation{},Uplinks:[]string{},Neighbors:[]topologyLink{}}
  config,configErr:=read("show running-config");sample.Checks["runningConfig"]=configErr==nil
  sw,swErr:=read("show interface switchport");sample.Checks["switchport"]=swErr==nil&&strings.Contains(sw,"Interface name")
- lldp,lldpErr:=read("show lldp neighbors");sample.Checks["lldp"]=lldpErr==nil&&strings.TrimSpace(lldp)!=""
- lacp,lacpErr:=read("show etherchannel detail");sample.Checks["lacp"]=lacpErr==nil&&strings.TrimSpace(lacp)!=""
+ lldp,lldpErr:=read("show lldp neighbors");sample.Checks["lldp"]=lldpErr==nil&&len(parseTopologyLLDP(lldp))>0
+ lacp,lacpErr:=read("show etherchannel detail");liveParsed:=[]topologyAggregation{};if lacpErr==nil{liveParsed=parseTopologyLACP(lacp)};sample.Checks["lacp"]=lacpErr==nil&&len(liveParsed)>0
  ports,groups,_:=parseTopologyConfig(config,sw)
  for _,p:=range ports{if p.Role=="Uplink / switch"{sample.Uplinks=append(sample.Uplinks,p.Port)}}
  sort.Strings(sample.Uplinks)
  if sample.Checks["lldp"]{sample.Neighbors=parseTopologyLLDP(lldp)}
  if sample.Checks["runningConfig"]{
-  liveGroups:=[]topologyAggregation{};if sample.Checks["lacp"]{liveGroups=parseTopologyLACP(lacp)}
+  liveGroups:=liveParsed
   for i:=range groups{
    for _,live:=range liveGroups{if !strings.EqualFold(groups[i].Name,live.Name){continue}
     groups[i].Live=true;groups[i].Ready=live.Ready;groups[i].Partner=live.Partner;groups[i].LiveMembers=append([]string(nil),live.Members...)
@@ -1219,7 +1219,7 @@ func collectDiagnosticsSample(read func(string)(string,error)) diagnosticsSample
  }
  if sample.Checks["lacp"]{
   known:=map[string]bool{};for _,g:=range sample.Aggregations{known[strings.ToLower(g.Name)]=true}
-  for _,live:=range parseTopologyLACP(lacp){if !known[strings.ToLower(live.Name)]{live.Live=true;sample.Aggregations=append(sample.Aggregations,live)}}
+  for _,live:=range liveParsed{if !known[strings.ToLower(live.Name)]{live.Live=true;sample.Aggregations=append(sample.Aggregations,live)}}
  }
  return sample
 }

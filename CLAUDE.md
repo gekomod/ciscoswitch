@@ -5,7 +5,8 @@ Panel WWW (Go) do zarządzania przełącznikiem **Allied Telesis AT-GS948MX** z 
 Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 
 ## Struktura `internal/server`
-- `server.go` — `Register` (wszystkie trasy API) i `write`.
+- `server.go` — `Register`: trasy odczytu i wywołania grup tras; `write`.
+- `routes_config.go` — trasy zmian: podglądy, ustawienia urządzenia, konfiguracja portów, narzędzia (zapis, CLI).
 - `config_backup.go` — eksport, porównanie, kopie konfiguracji, `runWithPreChangeBackup`.
 - `ports.go`, `port_safety.go`, `port_profiles.go` — operacje na portach, porty chronione, profile.
 - `topology.go` — parsery topologii (config, LLDP, LACP) i analiza ryzyka zmian.
@@ -40,7 +41,7 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 1. Pomiary `[perf]` na żywym switchu.
 2. Jeden odczyt `show running-config` na operację zmiany portu (powtórzone odczyty obsługuje już cache 5 s).
 3. Dopasowanie parserów (LACP, STP, LLDP, MAC, VLAN) do prawdziwych wyjść z AW+ 5.4.6 + testy na tych wyjściach.
-4. Zrobione: gofmt i podział server.go. Dalej można wydzielić grupy tras z `Register` (ok. 750 linii).
+4. Zrobione: gofmt, podział server.go, wydzielenie grup tras z `Register` (server.go: 132 linie).
 5. SNMPv3: AES dostępny (`SWITCH_SNMP_V3_PRIV_PROTOCOL`, wybór w formularzu); potwierdzić, że AW+ 5.4.6 przyjmuje `priv aes`.
 
 ## Zasady

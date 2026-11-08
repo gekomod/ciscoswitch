@@ -53,7 +53,19 @@ func main() {
   IdleTimeout: 60 * time.Second,
   MaxHeaderBytes: 1 << 20,
  }
- log.Fatal(httpServer.ListenAndServe())
+diagnosticsPath:=env("DIAGNOSTICS_HISTORY_PATH",filepath.Join("data","diagnostics-history.json"))
+ diagnosticsInterval:=60*time.Second
+ if raw:=strings.TrimSpace(os.Getenv("DIAGNOSTICS_INTERVAL"));raw!=""{
+  if raw=="0"{diagnosticsInterval=0}else if parsed,parseErr:=time.ParseDuration(raw);parseErr!=nil||parsed<10*time.Second{
+   log.Printf("Nieprawidłowy DIAGNOSTICS_INTERVAL=%q; używam 60s (minimum 10s, 0 wyłącza sampler)",raw)
+  }else{diagnosticsInterval=parsed}
+ }
+ collectorCtx,cancelCollector:=context.WithCancel(context.Background())
+ server.StartDiagnosticsCollector(collectorCtx,svc.RunReadOnly,diagnosticsPath,diagnosticsInterval)
+ if diagnosticsInterval>0{log.Printf("Switch diagnostics sampler enabled (interval=%s, history=%s)",diagnosticsInterval,diagnosticsPath)}else{log.Printf("Switch diagnostics sampler disabled")}
+ err=httpServer.ListenAndServe()
+ cancelCollector()
+ if err!=nil&&err!=http.ErrServerClosed{log.Fatal(err)}
 }
 func loadEnv(path string) error {
  f,err:=os.Open(path); if err!=nil{return err}; defer f.Close()

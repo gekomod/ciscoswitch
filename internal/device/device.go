@@ -518,6 +518,54 @@ func (s *Service) ConfigureVLANPortMembership(ports []string, vlan int, membersh
 func (s *Service) ConfigureVLAN(id int,name string,remove bool)(string,error) {
  cmds,err:=BuildVLANCommands(id,name,remove);if err!=nil{return "",err};return s.runConfig(cmds)
 }
+// PortRepairRequest describes an intentionally partial port update. Unselected
+// fields are never emitted as commands and therefore remain untouched.
+type PortRepairRequest struct {
+ Port string
+ Mode string
+ AccessVLAN int
+ Allowed string
+ Native int
+ Description string
+ UpdateAccessVLAN bool
+ UpdateTrunk bool
+ UpdateDescription bool
+}
+
+func BuildPortRepairCommands(q PortRepairRequest) ([]string,error) {
+ if !validPort(q.Port) { return nil,fmt.Errorf("nieprawidłowy port") }
+ if q.Mode!="access"&&q.Mode!="trunk" { return nil,fmt.Errorf("nieprawidłowy tryb bieżącego portu") }
+ if !q.UpdateAccessVLAN&&!q.UpdateTrunk&&!q.UpdateDescription { return nil,fmt.Errorf("nie wybrano żadnego parametru do naprawy") }
+ if q.UpdateAccessVLAN&&q.Mode!="access" { return nil,fmt.Errorf("Access VLAN można naprawiać wyłącznie na porcie pozostającym w trybie access") }
+ if q.UpdateTrunk&&q.Mode!="trunk" { return nil,fmt.Errorf("VLAN trunk można naprawiać wyłącznie na porcie pozostającym w trybie trunk") }
+ commands:=[]string{"configure terminal","interface "+q.Port}
+ if q.UpdateDescription {
+  description:=strings.TrimSpace(q.Description)
+  ok,_:=regexp.MatchString("^[A-Za-z0-9 _./:-]*$",description)
+  if len(description)>64||!ok { return nil,fmt.Errorf("opis portu: maks. 64 znaki; dozwolone litery łacińskie, cyfry, spacja i _ . / : -") }
+  if description=="" { commands=append(commands,"no description") } else { commands=append(commands,"description "+description) }
+ }
+ if q.UpdateAccessVLAN {
+  if q.AccessVLAN<1||q.AccessVLAN>4094 { return nil,fmt.Errorf("access VLAN musi być z zakresu 1–4094") }
+  commands=append(commands,fmt.Sprintf("switchport access vlan %d",q.AccessVLAN))
+ }
+ if q.UpdateTrunk {
+  vlans,err:=parseVLANList(q.Allowed);if err!=nil{return nil,err}
+  if q.Native<1||q.Native>4094{return nil,fmt.Errorf("native VLAN musi być z zakresu 1–4094")}
+  found:=false;canonical:=make([]string,0,len(vlans))
+  for _,v:=range vlans { if v==q.Native {found=true};canonical=append(canonical,strconv.Itoa(v)) }
+  if !found{return nil,fmt.Errorf("native VLAN musi znajdować się na liście dozwolonych VLAN-ów")}
+  commands=append(commands,"switchport trunk allowed vlan none","switchport trunk allowed vlan add "+strings.Join(canonical,","),fmt.Sprintf("switchport trunk native vlan %d",q.Native))
+ }
+ commands=append(commands,"end")
+ return commands,nil
+}
+
+func (s *Service) ConfigurePortRepair(q PortRepairRequest) (string,error) {
+ commands,err:=BuildPortRepairCommands(q);if err!=nil{return "",err}
+ return s.runConfig(commands)
+}
+
 func BuildBulkPortSettingsCommands(ports []string,mode string,access int,allowed string,native int,speed,duplex,description string)([]string,error) {
  if len(ports)<1||len(ports)>52{return nil,fmt.Errorf("wybierz od 1 do 52 portów")}
  seen:=map[string]bool{}

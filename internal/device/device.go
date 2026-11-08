@@ -19,6 +19,8 @@ type Config struct {
  Host, SSHPort, SSHUser, SSHPassword, SSHHostKeyFingerprint string
  SNMPCommunity, SNMPPort, SNMPVersion string
  SNMPV3User, SNMPV3AuthPassword, SNMPV3PrivacyPassword string
+ // SNMPV3PrivacyProtocol: "des" (domyślnie, zgodność wsteczna) lub "aes" (AES-128).
+ SNMPV3PrivacyProtocol string
  Timeout time.Duration
  // StatusCacheTTL i ReadCacheTTL: 0 = wartość domyślna (5 s), wartość ujemna wyłącza cache.
  StatusCacheTTL, ReadCacheTTL time.Duration
@@ -84,7 +86,7 @@ func newSNMPClient(c Config) (*gosnmp.GoSNMP, error) {
   UserName: strings.TrimSpace(c.SNMPV3User),
   AuthenticationProtocol: gosnmp.SHA,
   AuthenticationPassphrase: c.SNMPV3AuthPassword,
-  PrivacyProtocol: gosnmp.DES,
+  PrivacyProtocol: privacyProtocol(c.SNMPV3PrivacyProtocol),
   PrivacyPassphrase: c.SNMPV3PrivacyPassword,
  }
  return &g,nil
@@ -408,7 +410,19 @@ func (s *Service) ConfigureSSHUser(username,password string,privilege int,remove
  return s.runConfig([]string{"configure terminal",fmt.Sprintf("username %s privilege %d password %s",username,privilege,password),"end"})
 }
 
-func BuildSNMPv3UserCommands(username, group, authPassword, privacyPassword string, remove bool) ([]string, error) {
+// privacyProtocol zamienia nazwę z .env na protokół gosnmp. Puste lub nieznane = DES.
+func privacyProtocol(name string) gosnmp.SnmpV3PrivProtocol {
+ if NormalizePrivacyProtocol(name) == "aes" { return gosnmp.AES }
+ return gosnmp.DES
+}
+
+// NormalizePrivacyProtocol zwraca "aes" albo "des" (domyślnie).
+func NormalizePrivacyProtocol(name string) string {
+ if strings.EqualFold(strings.TrimSpace(name), "aes") { return "aes" }
+ return "des"
+}
+
+func BuildSNMPv3UserCommands(username, group, authPassword, privacyPassword, privProtocol string, remove bool) ([]string, error) {
  validName := regexp.MustCompile("^[A-Za-z0-9_.-]{1,32}$")
  username = strings.TrimSpace(username)
  group = strings.TrimSpace(group)
@@ -418,10 +432,10 @@ func BuildSNMPv3UserCommands(username, group, authPassword, privacyPassword stri
  validPassword := regexp.MustCompile("^[A-Za-z0-9!@#$%^&*()_+={}.,:-]{8,64}$")
  if !validPassword.MatchString(authPassword) || !validPassword.MatchString(privacyPassword) { return nil, fmt.Errorf("hasła SNMPv3 muszą mieć 8–64 znaki; dozwolone litery, cyfry i bezpieczne znaki specjalne bez spacji") }
  if authPassword == privacyPassword { return nil, fmt.Errorf("hasło uwierzytelniania i szyfrowania muszą być różne") }
- return []string{"configure terminal", "snmp-server view panel-readonly 1.3.6.1.2.1 included", "snmp-server group " + group + " priv read panel-readonly", "snmp-server user " + username + " " + group + " auth sha " + authPassword + " priv des " + privacyPassword, "end"}, nil
+ return []string{"configure terminal", "snmp-server view panel-readonly 1.3.6.1.2.1 included", "snmp-server group " + group + " priv read panel-readonly", "snmp-server user " + username + " " + group + " auth sha " + authPassword + " priv " + NormalizePrivacyProtocol(privProtocol) + " " + privacyPassword, "end"}, nil
 }
-func (s *Service) ConfigureSNMPv3User(username, group, authPassword, privacyPassword string, remove bool) (string, error) {
- cmds, err := BuildSNMPv3UserCommands(username, group, authPassword, privacyPassword, remove)
+func (s *Service) ConfigureSNMPv3User(username, group, authPassword, privacyPassword, privProtocol string, remove bool) (string, error) {
+ cmds, err := BuildSNMPv3UserCommands(username, group, authPassword, privacyPassword, privProtocol, remove)
  if err != nil { return "", err }
  return s.runConfig(cmds)
 }

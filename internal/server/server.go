@@ -120,9 +120,9 @@ apiMux.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.M
  apiMux.HandleFunc("/api/snmp/v3-user",func(w http.ResponseWriter,r *http.Request){
    if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
    r.Body=http.MaxBytesReader(w,r.Body,4096)
-   var q struct{Username string `json:"username"`;Group string `json:"group"`;AuthPassword string `json:"authPassword"`;PrivacyPassword string `json:"privacyPassword"`;Delete bool `json:"delete"`}
+   var q struct{Username string `json:"username"`;Group string `json:"group"`;AuthPassword string `json:"authPassword"`;PrivacyPassword string `json:"privacyPassword"`;PrivacyProtocol string `json:"privacyProtocol"`;Delete bool `json:"delete"`}
    if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return}
-   v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureSNMPv3User(q.Username,q.Group,q.AuthPassword,q.PrivacyPassword,q.Delete)})
+   v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigureSNMPv3User(q.Username,q.Group,q.AuthPassword,q.PrivacyPassword,q.PrivacyProtocol,q.Delete)})
    write(w,v,e)
   })
   apiMux.HandleFunc("/api/snmp/v3-trap-host",func(w http.ResponseWriter,r *http.Request){

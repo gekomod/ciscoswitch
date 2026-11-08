@@ -1117,7 +1117,7 @@ const ouiVendors={
 function macVendor(mac){const key=normalizeMAC(mac).replace(/:/g,'').slice(0,6);return ouiVendors[key]||'Nieznany producent';}
 function normalizeMAC(value){const hex=String(value||'').replace(/[^0-9a-f]/gi,'').toLowerCase();return hex.length===12?hex.match(/.{2}/g).join(':'):'';}
 function parseFDB(raw){
- const rows=[],macPattern=/(?:[0-9a-f]{4}\.){2}[0-9a-f]{4}|(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}|\b[0-9a-f]{12}\b/ig,portPattern=/\bport\d+\.\d+\.\d+\b/i;
+ const rows=[],macPattern=/(?:[0-9a-f]{4}\.){2}[0-9a-f]{4}|(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}|\b[0-9a-f]{12}\b/ig,portPattern=/\b(?:port\d+\.\d+\.\d+|sa\d+|po\d+)\b/i;
  for(const line of String(raw||'').split(/\r?\n/)){const mm=line.match(macPattern),pm=line.match(portPattern);if(!mm||!pm)continue;const mac=normalizeMAC(mm[0]);if(!mac)continue;const beforeMAC=line.slice(0,line.toLowerCase().indexOf(mm[0].toLowerCase())).trim(),vlanMatch=beforeMAC.match(/^(?:vlan\s*)?(\d{1,4})(?:\s|$)/i);rows.push({mac,port:pm[0],vlan:vlanMatch?vlanMatch[1]:'',source:line.trim()});}
  return rows;
 }
@@ -1172,7 +1172,7 @@ async function inspectTopologyVLAN(){
  button.disabled=true;status.textContent='Odczyt członkostwa VLAN '+id+'…';box.innerHTML='<div class="empty">Pobieranie danych…</div>';
  try{
   const d=await api('/api/command',{command:'show vlan '+id}),raw=d.output||'',members=new Map();
-  for(const m of raw.matchAll(/(port\d+\.\d+\.\d+)\s*\(([ut])\)/gi))members.set(m[1],m[2].toLowerCase());
+  for(const m of raw.matchAll(/\b(port\d+\.\d+\.\d+|sa\d+|po\d+)\s*\(([ut])\)/gi))members.set(m[1],m[2].toLowerCase());
   const rows=latestPorts.map(p=>({port:p.name,mode:members.get(p.name)||'none',device:topologyData.rows.find(r=>r.port===p.name)}));
   box.innerHTML=rows.map(x=>{
    const r=x.device,macs=r&&r.macs?r.macs.split(', ').filter(Boolean):[],ips=r&&r.ips?r.ips.split(', ').filter(Boolean):[];
@@ -1254,10 +1254,10 @@ async function changeSNMPTrap(remove){const q={address:$('snmp-trap-ip').value.t
 $('snmp-trap-add').onclick=()=>changeSNMPTrap(false);
 $('snmp-trap-remove').onclick=()=>changeSNMPTrap(true);
 async function changeSNMPv3User(remove){
- const q={username:$('snmp-v3-user').value.trim(),group:$('snmp-v3-group').value.trim(),authPassword:$('snmp-v3-auth').value,privacyPassword:$('snmp-v3-privacy').value,delete:remove};
+ const q={username:$('snmp-v3-user').value.trim(),group:$('snmp-v3-group').value.trim(),authPassword:$('snmp-v3-auth').value,privacyPassword:$('snmp-v3-privacy').value,privacyProtocol:($('snmp-v3-priv-protocol')?.value||'aes'),delete:remove};
  if(!q.username){alert('Wpisz nazwę użytkownika SNMPv3.');return;}
  if(!remove&&(!q.authPassword||!q.privacyPassword)){alert('Wpisz oba hasła SNMPv3.');return;}
- if(!confirm((remove?'Usunąć':'Utworzyć')+' użytkownika SNMPv3 '+q.username+(remove?'?':' z SHA + AES (authPriv)?')))return;
+ if(!confirm((remove?'Usunąć':'Utworzyć')+' użytkownika SNMPv3 '+q.username+(remove?'?':' z SHA + '+q.privacyProtocol.toUpperCase()+' (authPriv)?')))return;
  const b=remove?$('snmp-v3-remove'):$('snmp-v3-add');b.disabled=true;
  try{const d=await api('/api/snmp/v3-user',q);showFriendlyResult('snmp-v3-output',d.output,'Użytkownik SNMPv3');$('snmp-v3-auth').value='';$('snmp-v3-privacy').value='';await refreshSNMP();}
  catch(e){showFriendlyResult('snmp-v3-output',e.message,'Użytkownik SNMPv3');}

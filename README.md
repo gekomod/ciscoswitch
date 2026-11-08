@@ -4,7 +4,7 @@ Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948
 
 ## Moduły
 - Wyszukiwanie sekcji w bocznej nawigacji; skrót `Ctrl+K` lub `/`, filtrowanie bez przeładowania strony.
-- Dashboard z odczytem portów IF-MIB przez SNMPv2c lub SNMPv3 authPriv (SHA/DES), wybieranym w `.env` (porty 1–52, w tym dwa SFP+ 10G i dwa porty combo).
+- Dashboard z odczytem portów IF-MIB przez SNMPv2c lub SNMPv3 authPriv (SHA + AES lub DES, `SWITCH_SNMP_V3_PRIV_PROTOCOL`), wybieranym w `.env` (porty 1–52, w tym dwa SFP+ 10G i dwa porty combo).
 - Włączanie i wyłączanie portu.
 - VLAN: podgląd listy, tworzenie i usuwanie VLAN 2–4094.
 - Porty: access/trunk, VLAN access, lista VLAN dozwolonych na trunk, native VLAN.

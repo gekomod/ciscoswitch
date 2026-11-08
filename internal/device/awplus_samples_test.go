@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/gosnmp/gosnmp"
 )
 
 func sample(t *testing.T, name string) string {
@@ -60,5 +62,22 @@ func TestCLIErrorIgnoresInformationalPercentLines(t *testing.T) {
 		if cliError("awplus(config)#\n"+line+"\n") == "" {
 			t.Fatalf("error not detected: %q", line)
 		}
+	}
+}
+
+func TestSNMPv3PrivacyProtocol(t *testing.T) {
+	cmds, err := BuildSNMPv3UserCommands("monitor01", "monitoring", "AuthPass123!", "PrivPass456!", "AES", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cmds[3]; got != "snmp-server user monitor01 monitoring auth sha AuthPass123! priv aes PrivPass456!" {
+		t.Fatalf("unexpected %q", got)
+	}
+	cmds, _ = BuildSNMPv3UserCommands("monitor01", "monitoring", "AuthPass123!", "PrivPass456!", "", false)
+	if cmds[3] != "snmp-server user monitor01 monitoring auth sha AuthPass123! priv des PrivPass456!" {
+		t.Fatalf("default must stay DES for compatibility: %q", cmds[3])
+	}
+	if privacyProtocol("aes") != gosnmp.AES || privacyProtocol("") != gosnmp.DES || privacyProtocol("xyz") != gosnmp.DES {
+		t.Fatal("privacy protocol mapping")
 	}
 }

@@ -31,6 +31,7 @@ func main() {
   SNMPV3User: os.Getenv("SWITCH_SNMP_V3_USER"),
   SNMPV3AuthPassword: os.Getenv("SWITCH_SNMP_V3_AUTH_PASSWORD"),
   SNMPV3PrivacyPassword: os.Getenv("SWITCH_SNMP_V3_PRIV_PASSWORD"),
+  SNMPV3PrivacyProtocol: env("SWITCH_SNMP_V3_PRIV_PROTOCOL","des"),
   Timeout: 4*time.Second,
   StatusCacheTTL: cacheTTL("STATUS_CACHE_TTL"),
   ReadCacheTTL: cacheTTL("READ_CACHE_TTL"),

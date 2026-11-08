@@ -21,7 +21,7 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 - `internal/device/testdata/awplus/` — prawdziwe wyjścia AW+ 5.4.x z ntc-templates (Apache 2.0); testy w `awplus_samples_test.go`.
 - Naprawione: zawijane listy "Configured Vlans", statyczne LAG (`static-channel-group N` → `saN`, wcześniej w ogóle niewykrywane),
   VLAN w tablicy MAC (kolumny VLAN, port, MAC), wykrywanie błędów CLI (AW+ zaczyna od "% " także linie informacyjne).
-- Znane ograniczenie: wpisy MAC za statycznym LAG (`sa1`) są pomijane w topologii (parser szuka `portX.Y.Z`).
+- Wpisy MAC i członkostwo VLAN za LAG (`saN`, `poN`) są widoczne w topologii jako osobne wiersze.
 - Brak próbki `show lldp neighbors` (skrót) i `show spanning-tree` — format niepotwierdzony; pobrać z własnego switcha.
 
 ## Do zweryfikowania na prawdziwym switchu
@@ -31,10 +31,10 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 
 ## Dalszy plan
 1. Pomiary `[perf]` na żywym switchu.
-2. Jeden odczyt `show running-config` na operację zmiany portu (teraz kilka, częściowo łagodzone przez cache).
+2. Jeden odczyt `show running-config` na operację zmiany portu (powtórzone odczyty obsługuje już cache 5 s).
 3. Dopasowanie parserów (LACP, STP, LLDP, MAC, VLAN) do prawdziwych wyjść z AW+ 5.4.6 + testy na tych wyjściach.
 4. Rozbicie długich jednolinijkowych handlerów w `internal/server/server.go`.
-5. SNMPv3: rozważyć AES zamiast DES, jeśli firmware obsługuje.
+5. SNMPv3: AES dostępny (`SWITCH_SNMP_V3_PRIV_PROTOCOL`, wybór w formularzu); potwierdzić, że AW+ 5.4.6 przyjmuje `priv aes`.
 
 ## Zasady
 - Zmiany konfiguracji testować najpierw na nieużywanym porcie; nie dotykać portów z PROTECTED_PORTS.

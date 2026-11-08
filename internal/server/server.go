@@ -708,6 +708,8 @@ func bulkPortPreviewHandler(read func(string) (string,error)) http.Handler {
   }
   raw,err := read("show interface switchport")
   if err != nil { http.Error(w,"nie udało się odczytać bieżącej konfiguracji portów; podgląd i zapis zostały zablokowane",http.StatusBadGateway); return }
+  topologyConfig,topologyConfigErr:=read("show running-config")
+  topologyLLDP,topologyLLDPErr:=read("show lldp neighbors")
   previews := make([]bulkPortPreviewItem,0,len(ports))
   for _,port := range ports {
    current,parseErr := device.ParseSwitchportDetails(raw,port)
@@ -717,6 +719,8 @@ func bulkPortPreviewHandler(read func(string) (string,error)) http.Handler {
    warnings := []string{"Bieżąca konfiguracja została odczytana bez wprowadzania zmian."}
    if strings.ToLower(current.Mode) != q.Mode { warnings=append(warnings,"Zmiana trybu portu z "+current.Mode+" na "+q.Mode+" może przerwać łączność urządzeń.") }
    if q.Mode == "trunk" { warnings=append(warnings,"Zmiana listy allowed VLAN może przerwać ruch urządzeń korzystających z tego portu.") }
+   risks:=topologyChangeRisksFromSnapshot(topologyConfig,raw,topologyLLDP,topologyConfigErr,topologyLLDPErr,port)
+   for _,risk:=range risks{warnings=append(warnings,risk.Title+": "+risk.Evidence+" Zalecenie: "+risk.Recommendation)}
    previews=append(previews,bulkPortPreviewItem{
     Port:port,
     Current:map[string]any{"port":current.Port,"mode":current.Mode,"defaultVlan":current.DefaultVLAN,"configuredVlans":current.ConfiguredVLANs},
@@ -1038,13 +1042,10 @@ func parseTopologyLACP(raw string)[]topologyAggregation{
  }
  return groups
 }
-func topologyChangeRisks(read func(string)(string,error), port string) []topologyRisk {
+func topologyChangeRisksFromSnapshot(config, switchport, lldpRaw string, configErr, lldpErr error, port string) []topologyRisk {
  risks:=make([]topologyRisk,0)
- config,err:=read("show running-config")
- if err!=nil { return []topologyRisk{{"info","topology-check-unavailable","Niepełna analiza wpływu zmiany","Nie udało się odczytać running-config; rola portu i członkostwo LAG nie zostały potwierdzone.","Przed zmianą sprawdź topologię ręcznie. Podgląd nie może potwierdzić, że port jest bezpieczny."}} }
- sw,_:=read("show interface switchport")
- ports,lags,_:=parseTopologyConfig(config,sw)
- lldpRaw,lldpErr:=read("show lldp neighbors")
+ if configErr!=nil { return []topologyRisk{{"info","topology-check-unavailable","Niepełna analiza wpływu zmiany","Nie udało się odczytać running-config; rola portu i członkostwo LAG nie zostały potwierdzone.","Przed zmianą sprawdź topologię ręcznie. Podgląd nie może potwierdzić, że port jest bezpieczny."}} }
+ ports,lags,_:=parseTopologyConfig(config,switchport)
  links:=parseTopologyLLDP(lldpRaw)
  target:=topologyPort{};found:=false
  for _,item:=range ports { if strings.EqualFold(item.Port,port){target=item;found=true;break} }
@@ -1055,6 +1056,12 @@ func topologyChangeRisks(read func(string)(string,error), port string) []topolog
  if isProtectedPort(port) { risks=append(risks,topologyRisk{"critical","change-protected-port","Port jest objęty ochroną",port+" znajduje się na liście PROTECTED_PORTS.","Operacja powinna zostać zablokowana; użyj alternatywnego portu zarządzającego."}) }
  if lldpErr!=nil || strings.TrimSpace(lldpRaw)=="" { risks=append(risks,topologyRisk{"info","change-lldp-unavailable","Sąsiedztwo LLDP niedostępne","Nie udało się uzyskać wiarygodnego odczytu LLDP.","Nie traktuj braku LLDP jako dowodu, że port nie prowadzi do innego urządzenia."}) }
  return risks
+}
+func topologyChangeRisks(read func(string)(string,error), port string) []topologyRisk {
+ config,configErr:=read("show running-config")
+ sw,_:=read("show interface switchport")
+ lldp,lldpErr:=read("show lldp neighbors")
+ return topologyChangeRisksFromSnapshot(config,sw,lldp,configErr,lldpErr,port)
 }
 
 func topologyMapHandler(read func(string)(string,error))http.Handler{

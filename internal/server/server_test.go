@@ -795,3 +795,38 @@ func TestRequireTopologyRiskAcknowledgementBlocksUnconfirmedAndAllowsConfirmed(t
  if err:=requireTopologyRiskAcknowledgement(fixture,[]string{"port1.0.48"},false);err==nil{t.Fatal("unconfirmed uplink risk must block apply")}
  if err:=requireTopologyRiskAcknowledgement(fixture,[]string{"port1.0.48"},true);err!=nil{t.Fatalf("explicit acknowledgement should allow reviewed change: %v",err)}
 }
+
+
+func TestDiagnosticsTransitionsRequireTwoComparableSamples(t *testing.T) {
+ first:=diagnosticsSample{CapturedAt:time.Unix(100,0),Checks:map[string]bool{"lacp":true},Aggregations:[]topologyAggregation{{Name:"Po1",Live:true,Ready:"Gotowy",LiveMembers:[]string{"port1.0.1","port1.0.2"}}}}
+ if got:=diagnosticsTransitions([]diagnosticsSample{first});len(got)!=0{t.Fatalf("first sample must not create transitions: %+v",got)}
+ second:=diagnosticsSample{CapturedAt:time.Unix(200,0),Checks:map[string]bool{"lacp":true},Aggregations:[]topologyAggregation{{Name:"Po1",Live:true,Ready:"Niegotowy",LiveMembers:[]string{"port1.0.1"}}}}
+ got:=diagnosticsTransitions([]diagnosticsSample{first,second})
+ if len(got)!=2{t.Fatalf("transitions=%+v; want ready change and lost member",got)}
+ codes:=map[string]bool{};for _,v:=range got{codes[v.Type]=true}
+ if !codes["lacp-ready"]||!codes["lacp-member-lost"]{t.Fatalf("missing transitions: %+v",got)}
+}
+func TestDiagnosticsTransitionsDoNotTreatMissingDataAsRecovery(t *testing.T) {
+ first:=diagnosticsSample{Checks:map[string]bool{"lacp":true},Aggregations:[]topologyAggregation{{Name:"Po1",Live:true,Ready:"Niegotowy"}}}
+ gap:=diagnosticsSample{Checks:map[string]bool{"lacp":false}}
+ recovered:=diagnosticsSample{Checks:map[string]bool{"lacp":true},Aggregations:[]topologyAggregation{{Name:"Po1",Live:true,Ready:"Gotowy"}}}
+ if got:=diagnosticsTransitions([]diagnosticsSample{first,gap});len(got)!=0{t.Fatalf("gap must not imply recovery: %+v",got)}
+ if got:=diagnosticsTransitions([]diagnosticsSample{gap,recovered});len(got)!=0{t.Fatalf("recovery after gap must not be inferred: %+v",got)}
+}
+func TestDiagnosticsStoreRetainsBoundedHistoryAndSecurePermissions(t *testing.T) {
+ path:=filepath.Join(t.TempDir(),"nested","history.json")
+ store:=newDiagnosticsStore(path,2)
+ for i:=1;i<=3;i++{if err:=store.append(diagnosticsSample{CapturedAt:time.Unix(int64(i),0),Checks:map[string]bool{}});err!=nil{t.Fatal(err)}}
+ items,err:=store.list();if err!=nil{t.Fatal(err)}
+ if len(items)!=2||items[0].CapturedAt.Unix()!=2||items[1].CapturedAt.Unix()!=3{t.Fatalf("unexpected retained items: %+v",items)}
+ info,err:=os.Stat(path);if err!=nil{t.Fatal(err)}
+ if info.Mode().Perm()!=0600{t.Fatalf("file permissions=%o want 600",info.Mode().Perm())}
+ dirInfo,err:=os.Stat(filepath.Dir(path));if err!=nil{t.Fatal(err)}
+ if dirInfo.Mode().Perm()!=0700{t.Fatalf("directory permissions=%o want 700",dirInfo.Mode().Perm())}
+}
+func TestDiagnosticsCurrentAlertsDistinguishSeverity(t *testing.T) {
+ sample:=diagnosticsSample{CapturedAt:time.Unix(10,0),Checks:map[string]bool{"lacp":true,"runningConfig":true},Uplinks:[]string{"port1.0.48"},Aggregations:[]topologyAggregation{{Name:"Po1",Ready:"Niegotowy",MemberMismatch:true}}}
+ alerts:=diagnosticsCurrentAlerts(sample)
+ found:=map[string]string{};for _,a:=range alerts{found[a.Code]=a.Severity}
+ if found["lacp-not-ready"]!="critical"||found["lacp-member-mismatch"]!="warning"||found["single-explicit-uplink"]!="info"{t.Fatalf("unexpected alert severity map: %+v",found)}
+}

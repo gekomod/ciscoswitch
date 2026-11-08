@@ -1294,6 +1294,14 @@ func diagnosticsCollectHandler(read func(string)(string,error),store *diagnostic
   _=json.NewEncoder(w).Encode(map[string]any{"sample":sample,"alerts":diagnosticsCurrentAlerts(sample),"saved":true,"retention":500})
  })
 }
+func diagnosticsSamplingSettings()(string,string){
+ raw:=strings.TrimSpace(os.Getenv("DIAGNOSTICS_INTERVAL"))
+ if raw=="0"{return "manual","wyłączone"}
+ if raw==""{return "scheduled","60s"}
+ interval,err:=time.ParseDuration(raw)
+ if err!=nil||interval<10*time.Second{return "scheduled","60s"}
+ return "scheduled",interval.String()
+}
 func diagnosticsHistoryHandler(store *diagnosticsStore)http.Handler{
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodGet{http.Error(w,"method not allowed",405);return}
@@ -1309,6 +1317,6 @@ func diagnosticsHistoryHandler(store *diagnosticsStore)http.Handler{
   for key,count:=range counts{if count>=3{parts:=strings.SplitN(key,"|",2);alerts=append(alerts,diagnosticsAlert{"warning","lacp-flapping","Powtarzające się zmiany stanu LACP",parts[1]+": "+strconv.Itoa(count)+" zmian w ostatnich "+strconv.Itoa(windowMinutes)+" minutach. Sprawdź okablowanie, porty i partnera LACP.",all[len(all)-1].CapturedAt})}}
   items:=all;if len(items)>limit{items=items[len(items)-limit:]}
   w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
-  _=json.NewEncoder(w).Encode(map[string]any{"samples":items,"alerts":alerts,"transitions":windowTransitions,"sampleCount":len(all),"hasEnoughHistory":len(all)>=2,"windowMinutes":windowMinutes,"flappingThreshold":3,"collectionMode":func()string{if strings.TrimSpace(os.Getenv("DIAGNOSTICS_INTERVAL"))=="0"{return "manual"};return "scheduled"}(),"collectionInterval":func()string{v:=strings.TrimSpace(os.Getenv("DIAGNOSTICS_INTERVAL"));if v==""{return "60s"};return v}(),"note":func()string{if len(all)<2{return "Zebrano mniej niż dwie próbki. Nie można jeszcze ocenić zmian ani flappingu."};return "Zmiany są porównywane między kolejnymi próbkami z dostępnym odczytem. Brak danych nie jest traktowany jako powrót do normy. Flapping wymaga co najmniej trzech zmian w wybranym oknie."}()})
+  _=json.NewEncoder(w).Encode(map[string]any{"samples":items,"alerts":alerts,"transitions":windowTransitions,"sampleCount":len(all),"hasEnoughHistory":len(all)>=2,"windowMinutes":windowMinutes,"flappingThreshold":3,"collectionMode":func()string{mode,_:=diagnosticsSamplingSettings();return mode}(),"collectionInterval":func()string{_,cadence:=diagnosticsSamplingSettings();return cadence}(),"note":func()string{if len(all)<2{return "Zebrano mniej niż dwie próbki. Nie można jeszcze ocenić zmian ani flappingu."};return "Zmiany są porównywane między kolejnymi próbkami z dostępnym odczytem. Brak danych nie jest traktowany jako powrót do normy. Flapping wymaga co najmniej trzech zmian w wybranym oknie."}()})
  })
 }

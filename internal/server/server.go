@@ -1313,6 +1313,13 @@ type diagnosticsAcknowledgement struct {
  Comment string \`json:"comment"\`
 }
 type diagnosticsAckStore struct { mu sync.Mutex; path string }
+var diagnosticsAckRegistryMu sync.Mutex
+var diagnosticsAckRegistry = map[string]*diagnosticsAckStore{}
+func sharedDiagnosticsAckStore(path string)*diagnosticsAckStore{
+ diagnosticsAckRegistryMu.Lock();defer diagnosticsAckRegistryMu.Unlock()
+ if store:=diagnosticsAckRegistry[path];store!=nil{return store}
+ store:=&diagnosticsAckStore{path:path};diagnosticsAckRegistry[path]=store;return store
+}
 func (a *diagnosticsAckStore) list()([]diagnosticsAcknowledgement,error){
  a.mu.Lock();defer a.mu.Unlock()
  raw,err:=os.ReadFile(a.path);if os.IsNotExist(err){return []diagnosticsAcknowledgement{},nil};if err!=nil{return nil,err}
@@ -1338,7 +1345,7 @@ func diagnosticsAlertID(code,evidence string,at time.Time)string{
  return hex.EncodeToString(sum[:])
 }
 func diagnosticsAcknowledgeHandler(store *diagnosticsStore,path string)http.Handler{
- acks:=&diagnosticsAckStore{path:path}
+ acks:=sharedDiagnosticsAckStore(path)
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
   r.Body=http.MaxBytesReader(w,r.Body,2048)
@@ -1368,7 +1375,7 @@ func diagnosticsHistoryHandler(store *diagnosticsStore)http.Handler{
   for _,tr:=range transitions{if !tr.At.Before(cutoff){windowTransitions=append(windowTransitions,tr);if tr.Type=="lacp-ready"||tr.Type=="lacp-member-lost"||tr.Type=="lacp-member-restored"{counts[tr.Type+"|"+tr.Subject]++}}}
   alerts:=[]diagnosticsAlert{};if len(all)>0{alerts=diagnosticsCurrentAlerts(all[len(all)-1])}
   for key,count:=range counts{if count>=3{parts:=strings.SplitN(key,"|",2);alerts=append(alerts,diagnosticsAlert{"warning","lacp-flapping","Powtarzające się zmiany stanu LACP",parts[1]+": "+strconv.Itoa(count)+" zmian w ostatnich "+strconv.Itoa(windowMinutes)+" minutach. Sprawdź okablowanie, porty i partnera LACP.",all[len(all)-1].CapturedAt})}}
-  ackStore:=&diagnosticsAckStore{path:store.path+".acks.json"};ackRows,_:=ackStore.list();ackByID:=map[string]diagnosticsAcknowledgement{};for _,ack:=range ackRows{ackByID[ack.ID]=ack}
+  ackStore:=sharedDiagnosticsAckStore(store.path+".acks.json");ackRows,_:=ackStore.list();ackByID:=map[string]diagnosticsAcknowledgement{};for _,ack:=range ackRows{ackByID[ack.ID]=ack}
   alertRows:=make([]map[string]any,0,len(alerts));for _,alert:=range alerts{id:=diagnosticsAlertID(alert.Code,alert.Evidence,alert.At);row:=map[string]any{"severity":alert.Severity,"code":alert.Code,"title":alert.Title,"evidence":alert.Evidence,"at":alert.At,"id":id,"acknowledged":false};if ack,ok:=ackByID[id];ok{row["acknowledged"]=true;row["acknowledgement"]=ack};alertRows=append(alertRows,row)}
   items:=all;if len(items)>limit{items=items[len(items)-limit:]}
   w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")

@@ -365,7 +365,7 @@ function renderComplianceRecommendations(profile,repairs){
   $('bulk-native').value=String(profile.native||1);
   $('bulk-speed').value=profile.speed||'auto';
   $('bulk-duplex').value=profile.duplex||'auto';
-  $('bulk-description').value=profile.portDescription||'';
+  $('bulk-description').value=repair.description;
   $('bulk-mode').onchange();
   if(profile.mode==='trunk'){$('bulk-native').disabled=false;$('bulk-allowed').disabled=false;}
   else{$('bulk-access-vlan').disabled=false;$('bulk-allowed').disabled=true;$('bulk-native').disabled=true;}
@@ -396,10 +396,11 @@ function renderComplianceResults(profile,items,statusByPort){
   if(portRows.length){
    const role=complianceRepairRole(item.port);
    const profileAccess=mode==='access';
-   const blocked=role.uplink&&profileAccess;
+   const descriptionUnknown=(role.status.description===undefined||role.status.description===null)&&String(profile.portDescription||'').trim()!=='';
+   const blocked=(role.uplink&&profileAccess)||descriptionUnknown;
    const portMatch=item.port.match(/^port1\.0\.(\d+)$/i);
    const unsupported=!portMatch||Number(portMatch[1])<1||Number(portMatch[1])>52;
-   repairs.push({port:item.port,changes:portRows,blocked:blocked||unsupported,risk:!blocked&&!unsupported,reason:blocked?'Opis portu wskazuje uplink, switch, LACP lub zarządzanie — rekomendacja profilu Access jest zablokowana.':unsupported?'Nazwa portu nie pasuje do zakresu formularza operacji masowej (1–52).':role.uplink?'Port wygląda na uplink — wymagane ręczne sprawdzenie.':'Pełny profil ustawia także speed/duplex; ich bieżąca konfiguracja nie jest odczytywana.'});
+   repairs.push({port:item.port,changes:portRows,description:String(profile.portDescription||'').trim()!==''?profile.portDescription:String(role.status.description||''),blocked:blocked||unsupported,risk:!blocked&&!unsupported,reason:role.uplink&&profileAccess?'Opis portu wskazuje uplink, switch, LACP lub zarządzanie — rekomendacja profilu Access jest zablokowana.':descriptionUnknown?'Nie odczytano opisu portu, a profil ma go zmienić — blokada, aby nie nadpisać nieznanej wartości.':unsupported?'Nazwa portu nie pasuje do zakresu formularza operacji masowej (1–52).':role.uplink?'Port wygląda na uplink — wymagane ręczne sprawdzenie.':'Pełny profil ustawia także speed/duplex; ich bieżąca konfiguracja nie jest odczytywana.'});
   }
  }
  const badge=state=>state==='ok'?'<span class="state up">Zgodne</span>':state==='diff'?'<span class="state down">Różnica</span>':'<span class="state unknown">Brak danych</span>';

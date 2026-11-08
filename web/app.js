@@ -337,7 +337,7 @@ let lastComplianceRepairs=[];
 function complianceRepairRole(port){
  const status=latestPorts.find(p=>p.name===port)||{};
  const description=String(status.description||'').toLocaleLowerCase('pl-PL');
- const uplink=/\\b(uplink|up-link|switch|router|core|dist|agregacj|lacp|po[0-9]+|management|mgmt|zarz[aą]dz)\\b/.test(description);
+ const uplink=/\b(uplink|up-link|switch|router|core|dist|agregacj|lacp|po[0-9]+|management|mgmt|zarz[aą]dz)\b/.test(description);
  const role=detectPortRole(status);
  return {status,role,uplink};
 }
@@ -355,7 +355,7 @@ function renderComplianceRecommendations(profile,repairs){
  host.querySelectorAll('.repair-profile-btn:not(:disabled)').forEach(button=>button.addEventListener('click',()=>{
   const repair=repairs.find(item=>item.port===button.dataset.repairPort);
   if(!repair)return;
-  const match=repair.port.match(/^port1\\.0\\.(\\d+)$/i);
+  const match=repair.port.match(/^port1\.0\.(\d+)$/i);
   if(!match||Number(match[1])<1||Number(match[1])>52){alert('Nie można bezpiecznie odwzorować nazwy portu na formularz operacji masowej.');return;}
   $('bulk-ports').value=match[1];
   $('bulk-mode').value=profile.mode;
@@ -397,7 +397,7 @@ function renderComplianceResults(profile,items,statusByPort){
    const role=complianceRepairRole(item.port);
    const profileAccess=mode==='access';
    const blocked=role.uplink&&profileAccess;
-   const portMatch=item.port.match(/^port1\\.0\\.(\\d+)$/i);
+   const portMatch=item.port.match(/^port1\.0\.(\d+)$/i);
    const unsupported=!portMatch||Number(portMatch[1])<1||Number(portMatch[1])>52;
    repairs.push({port:item.port,changes:portRows,blocked:blocked||unsupported,risk:!blocked&&!unsupported&&(mode==='trunk'||(profile.speed&&profile.speed!=='auto')||(profile.duplex&&profile.duplex!=='auto')),reason:blocked?'Opis portu wskazuje uplink, switch, LACP lub zarządzanie — rekomendacja profilu Access jest zablokowana.':unsupported?'Nazwa portu nie pasuje do zakresu formularza operacji masowej (1–52).':role.uplink?'Port wygląda na uplink — wymagane ręczne sprawdzenie.':''});
   }

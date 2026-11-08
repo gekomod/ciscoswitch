@@ -1393,7 +1393,7 @@ async function collectDiagnosticsCenter(){
  const button=$('collect-diagnostics');if(!button)return;
  button.disabled=true;button.textContent='Zbieranie…';
  try{const result=await api('/api/diagnostics/collect',{});await refreshDiagnosticsCenter();if($('diagnostics-meta'))$('diagnostics-meta').textContent='Próbka zapisana: '+new Date(result.sample.capturedAt).toLocaleString()+' · '+Object.values(result.sample.checks||{}).filter(Boolean).length+' / 4 kontroli dostępnych.';}
- catch(e){if($('diagnostics-meta'))$('diagnostics-meta').textContent='Nie udało się zebrać próbki: '+e.message;}
+ catch(e){if($('diagnostics-meta'))$('diagnostics-meta').textContent='Odczyt próbki nie powiódł się: '+e.message+' (jeśli próbka została zapisana, historia odświeży się ponownie).';await refreshDiagnosticsCenter();await refreshAvailability();}
  finally{button.disabled=false;button.textContent='Zbierz próbkę';}
 }
 if($('collect-diagnostics')){$('collect-diagnostics').addEventListener('click',collectDiagnosticsCenter);$('refresh-diagnostics')?.addEventListener('click',refreshDiagnosticsCenter);$('diagnostics-window')?.addEventListener('change',refreshDiagnosticsCenter);refreshDiagnosticsCenter();setInterval(()=>{if(!document.hidden){refreshDiagnosticsCenter();refreshAvailability();}},30000);$('availability-window')?.addEventListener('change',refreshAvailability);refreshAvailability();}

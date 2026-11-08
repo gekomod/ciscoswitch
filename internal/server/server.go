@@ -2,6 +2,8 @@ package server
 
 import (
  "encoding/json"
+ "context"
+ "log"
  "crypto/rand"
  "sync"
  "bufio"
@@ -35,7 +37,7 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/api/security-audit", securityAuditHandler(svc.RunReadOnly))
  m.Handle("/api/topology/map", topologyMapHandler(svc.RunReadOnly))
  diagnosticsPath:=os.Getenv("DIAGNOSTICS_HISTORY_PATH");if diagnosticsPath==""{diagnosticsPath=filepath.Join("data","diagnostics-history.json")}
- diagnosticsStore:=newDiagnosticsStore(diagnosticsPath,500)
+ diagnosticsStore:=sharedDiagnosticsStore(diagnosticsPath,500)
  m.Handle("/api/diagnostics/collect",diagnosticsCollectHandler(svc.RunReadOnly,diagnosticsStore))
  m.Handle("/api/diagnostics/history",diagnosticsHistoryHandler(diagnosticsStore))
  m.Handle("/api/monitor/history", monitorHistoryHandler(filepath.Join("data", "monitor-history.jsonl")))
@@ -1170,6 +1172,27 @@ type diagnosticsSample struct {
  Neighbors []topologyLink `json:"neighbors"`
 }
 type diagnosticsStore struct { mu sync.Mutex; path string; retention int }
+var diagnosticsRegistryMu sync.Mutex
+var diagnosticsRegistry = map[string]*diagnosticsStore{}
+func sharedDiagnosticsStore(path string, retention int)*diagnosticsStore{
+ diagnosticsRegistryMu.Lock();defer diagnosticsRegistryMu.Unlock()
+ if store:=diagnosticsRegistry[path];store!=nil{return store}
+ store:=newDiagnosticsStore(path,retention);diagnosticsRegistry[path]=store;return store
+}
+func StartDiagnosticsCollector(ctx context.Context, read func(string)(string,error), path string, interval time.Duration){
+ if interval<=0{return}
+ store:=sharedDiagnosticsStore(path,500)
+ go func(){
+  ticker:=time.NewTicker(interval);defer ticker.Stop()
+  for{select{
+  case <-ctx.Done():return
+  case <-ticker.C:
+   sample:=collectDiagnosticsSample(read)
+   if !sample.Checks["runningConfig"]&&!sample.Checks["lacp"]&&!sample.Checks["lldp"]{continue}
+   if err:=store.append(sample);err!=nil{log.Printf("diagnostics history write failed: %v",err)}
+  }}
+ }()
+}
 func newDiagnosticsStore(path string, retention int)*diagnosticsStore{if retention<2||retention>5000{retention=500};return &diagnosticsStore{path:path,retention:retention}}
 func (s *diagnosticsStore) readLocked()([]diagnosticsSample,error){
  raw,err:=os.ReadFile(s.path);if os.IsNotExist(err){return []diagnosticsSample{},nil};if err!=nil{return nil,err}

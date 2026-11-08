@@ -16,6 +16,8 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 - `loading.js` — przechwytuje `fetch` do `/api/` po kliknięciu: pasek postępu, przycisk zajęty, komunikaty. Ładowany przed `app.js`.
 - `faceplate.js` — front switcha na przeglądzie; korzysta z `latestPorts`, zdarzenia `ports:updated` (wysyłanego w `load()`), `openPortDialog`, `openPortDiagnostics`, `activatePage`.
 - Menu: grupy Przegląd, Porty, Przełączanie, Sieć, System, Narzędzia (makieta: artefakt „Panel AT-GS948MX”).
+- `files.js` + `internal/device/files.go` + `internal/server/files_routes.go` — pliki we flash i ustawienia startu. Formaty `dir` i `show boot` niepotwierdzone na GS948MX.
+- Plan dalszych modułów: 2) monitorowanie (show log, NTP, mirroring), 3) ruch (IGMP snooping, storm control, loop protection, QoS), 4) bezpieczeństwo (port security, ACL, DHCP snooping) z dodatkowymi blokadami.
 - `services.js` + `internal/device/services.go` + `internal/server/services_routes.go` — moduł usług (SSH zablokowane, SNMP/DHCP wymagają potwierdzenia).
 - Domyślne stany usług AW+ nie są pewne; stan „nieustalony” jest celowy. Potwierdzić na switchu formaty `show http`, `show telnet`, `show lldp`.
 

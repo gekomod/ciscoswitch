@@ -33,6 +33,10 @@ Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948
 
 Przegląd pokazuje front AT-GS948MX: 48 portów miedzianych (górny rząd nieparzyste, dolny parzyste) i 4 SFP, w kolorach według stanu (1 Gb/s, 10 Gb/s, 10/100 Mb/s, brak łącza, wyłączony). Czerwona kropka oznacza przyrost błędów w ostatnich 5 minutach. Kliknięcie portu otwiera szczegóły (tryb, VLAN-y, prędkość, MTU, liczniki) i akcje panelu: ustawienia portu, ruch i historia, topologia, włączenie lub wyłączenie (porty z `PROTECTED_PORTS` są zablokowane).
 
+## Pliki i firmware
+
+Sekcja „Pliki i firmware” (grupa System) pokazuje zawartość pamięci flash (`dir`) i ustawienia startu (`show boot`). Pozwala wybrać firmware uruchamiany przy następnym starcie (`boot system`), firmware zapasowy (`boot system backup`), plik konfiguracji startowej (`boot config-file`) oraz zapisać running-config do nowego pliku (`copy running-config flash:/nazwa.cfg`). Akcje działają tylko na plikach, które istnieją we flash (sprawdzane na świeżym odczycie), nazwy nowych plików są ograniczone do bezpiecznych znaków, a istniejące pliki nie są nadpisywane. Zmiany działają po restarcie; panel nie restartuje switcha. Gdy formatu `dir` nie da się rozpoznać, panel pokazuje surową odpowiedź. Wgrywanie nowego firmware nie jest jeszcze obsługiwane.
+
 ## Usługi switcha
 
 Sekcja „Usługi” pokazuje stan serwera SSH, serwera WWW (HTTP), Telnetu, agenta SNMP, LLDP i serwera DHCP oraz pozwala je włączać i wyłączać. Stan pochodzi z running-config (jawne `service x` / `no service x`), a gdy wpisu brak, z odpowiedzi polecenia `show`; jeśli żadne źródło nie jest jednoznaczne, panel pokazuje „Stan nieustalony” zamiast zgadywać. Wyłączenie SSH jest zablokowane (panel z niego korzysta), a wyłączenie SNMP i serwera DHCP wymaga potwierdzenia ryzyka. Przed każdą zmianą panel zapisuje kopię konfiguracji; po zmianie proponuje zapis do startup-config.

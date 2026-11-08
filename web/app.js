@@ -114,7 +114,7 @@ function initNavigationSearch(){
 }
 initNavigationSearch();
 
-function syncPortChoices(){for(const id of ['cfg-port','edgeport-port','detail-port','bulk-source-port','compare-port-a','compare-port-b']){const sel=$(id),old=sel.value;sel.innerHTML=latestPorts.map(p=>'<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>').join('');if([...sel.options].some(o=>o.value===old))sel.value=old;}}
+function syncPortChoices(){for(const id of ['cfg-port','edgeport-port','detail-port','bulk-source-port','compare-port-a','compare-port-b','compliance-ports']){const sel=$(id),old=sel.value;sel.innerHTML=latestPorts.map(p=>'<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>').join('');if([...sel.options].some(o=>o.value===old))sel.value=old;}}
 $('bulk-profile').onchange=()=>{
  const profile=$('bulk-profile').value;
  if(!profile)return;
@@ -153,6 +153,7 @@ async function refreshSavedPortProfiles(){
   const data=await api('/api/port-profiles');
   savedPortProfiles=Array.isArray(data.profiles)?data.profiles:[];
   renderSavedPortProfiles();
+  renderComplianceProfiles();
   if(status)status.textContent='Zapisane profile: '+savedPortProfiles.length+' / 100. Dane przechowywane lokalnie na serwerze panelu.';
  }catch(e){if(status)status.textContent='Nie udało się pobrać profili: '+e.message;}
  finally{if(button)button.disabled=false;}
@@ -305,6 +306,85 @@ $('compare-ports').onclick=async()=>{
   $('compare-rows').innerHTML='<tr><td colspan="4" class="empty">Porównanie niekompletne. Sprawdź dostępność odczytu switchport.</td></tr>';
  }
  finally{button.disabled=false;}
+};
+
+function renderComplianceProfiles(){
+ const select=$('compliance-profile'),selected=select.value;
+ select.innerHTML='<option value="">Wybierz profil…</option>'+savedPortProfiles.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' · '+esc(p.mode.toUpperCase())+'</option>').join('');
+ if(savedPortProfiles.some(p=>p.id===selected))select.value=selected;
+}
+function parseProfileVLANs(raw){
+ const values=new Set();
+ for(const token of String(raw||'').split(',')){
+  const part=token.trim();if(!part)continue;
+  const match=part.match(/^(\d{1,4})(?:-(\d{1,4}))?$/);
+  if(!match)return null;
+  const first=Number(match[1]),last=Number(match[2]||match[1]);
+  if(first<1||last>4094||last<first||last-first>4093)return null;
+  for(let vlan=first;vlan<=last;vlan++)values.add(vlan);
+ }
+ return [...values].sort((a,b)=>a-b);
+}
+function complianceCell(label,expected,actual,normalizer){
+ const knownExpected=expected!==undefined&&expected!==null&&expected!=='';
+ const knownActual=actual!==undefined&&actual!==null&&actual!=='';
+ if(!knownExpected||!knownActual)return {label,expected:compareValue(expected),actual:compareValue(actual),state:'unknown'};
+ const norm=normalizer|| (v=>String(v).trim().toLocaleLowerCase('pl-PL'));
+ const same=norm(expected)===norm(actual);
+ return {label,expected:String(expected),actual:String(actual),state:same?'ok':'diff'};
+}
+function renderComplianceResults(profile,items,statusByPort){
+ const rows=[];let diff=0,unknown=0,ok=0;
+ for(const item of items){
+  const status=statusByPort.get(item.port)||{};
+  const mode=String(profile.mode||'').toLowerCase();
+  rows.push({port:item.port,field:complianceCell('Tryb',mode,item.mode)});
+  const expectedVlan=mode==='access'?profile.accessVlan:profile.native;
+  rows.push({port:item.port,field:complianceCell(mode==='access'?'Access VLAN':'Native VLAN',expectedVlan,item.defaultVlan)});
+  const expectedList=mode==='access'?[Number(profile.accessVlan)]:parseProfileVLANs(profile.allowed);
+  const actualList=Array.isArray(item.configuredVlans)?[...item.configuredVlans].map(Number).sort((a,b)=>a-b):null;
+  rows.push({port:item.port,field:complianceCell('Dozwolone VLAN',expectedList?expectedList.join(', '):undefined,actualList?actualList.join(', '):undefined,v=>String(v).split(',').map(x=>x.trim()).filter(Boolean).sort((a,b)=>Number(a)-Number(b)).join(','))});
+  if(profile.portDescription!==undefined&&profile.portDescription!==null){
+   rows.push({port:item.port,field:complianceCell('Opis portu',profile.portDescription,status.description)});
+  }
+  // Speed/duplex profile values are configured policy, while SNMP speed is negotiated
+  // operational state. Do not mislabel negotiated state as configured compliance.
+  if(profile.speed&&profile.speed!=='auto')rows.push({port:item.port,field:{label:'Prędkość skonfigurowana',expected:profile.speed+' Mb/s',actual:'Brak wiarygodnego odczytu konfiguracji',state:'unknown'}});
+  if(profile.duplex&&profile.duplex!=='auto')rows.push({port:item.port,field:{label:'Duplex skonfigurowany',expected:profile.duplex,actual:'Brak wiarygodnego odczytu konfiguracji',state:'unknown'}});
+ }
+ const badge=state=>state==='ok'?'<span class="state up">Zgodne</span>':state==='diff'?'<span class="state down">Różnica</span>':'<span class="state unknown">Brak danych</span>';
+ $('compliance-rows').innerHTML=rows.map(({port,field})=>{
+  if(field.state==='ok')ok++;else if(field.state==='diff')diff++;else unknown++;
+  return '<tr><td><b>'+esc(port)+'</b></td><td>'+esc(field.label)+'</td><td>'+esc(field.expected)+'</td><td>'+esc(field.actual)+'</td><td>'+badge(field.state)+'</td></tr>';
+ }).join('')||'<tr><td colspan="5" class="empty">Brak wyników do wyświetlenia.</td></tr>';
+ $('compliance-summary').textContent='Profil „'+profile.name+'”: '+diff+' różnic · '+unknown+' parametrów bez danych · '+ok+' zgodnych odczytów. Status zgodności jest wyliczany wyłącznie z parametrów, które można porównać wiarygodnie.';
+}
+$('run-compliance').onclick=async()=>{
+ const selected=[...$('compliance-ports').selectedOptions].map(o=>o.value);
+ const profile=savedPortProfiles.find(p=>p.id===$('compliance-profile').value);
+ const button=$('run-compliance');
+ if(!selected.length){alert('Wybierz co najmniej jeden port.');return;}
+ if(!profile){alert('Wybierz zapisany profil.');return;}
+ button.disabled=true;
+ $('compliance-summary').textContent='Odczytuję aktualny stan SNMP i konfigurację switchport…';
+ $('compliance-rows').innerHTML='<tr><td colspan="5" class="empty">Trwa jeden zbiorczy odczyt konfiguracji…</td></tr>';
+ try{
+  const [statusData,configData]=await Promise.all([
+   api('/api/status'),
+   api('/api/ports/switchport/bulk',{ports:selected})
+  ]);
+  if(!statusData.reachable)throw new Error('Switch jest nieosiągalny — wynik nie może być uznany za aktualny.');
+  const statusByPort=new Map((Array.isArray(statusData.ports)?statusData.ports:[]).map(p=>[p.name,p]));
+  const items=Array.isArray(configData.ports)?configData.ports:[];
+  if(items.length!==selected.length)throw new Error('Odczyt konfiguracji nie zawiera wszystkich wybranych portów.');
+  const byPort=new Map(items.map(p=>[p.port,p]));
+  const ordered=selected.map(port=>byPort.get(port));
+  if(ordered.some(item=>!item))throw new Error('Brak kompletnego odczytu jednego z portów.');
+  renderComplianceResults(profile,ordered,statusByPort);
+ }catch(e){
+  $('compliance-summary').textContent='Nie można potwierdzić zgodności: '+e.message;
+  $('compliance-rows').innerHTML='<tr><td colspan="5" class="empty">Wynik niekompletny — nie wyciągnięto wniosków o zgodności.</td></tr>';
+ }finally{button.disabled=false;}
 };
 $('bulk-copy-source').onclick=async()=>{
  const port=$('bulk-source-port').value,button=$('bulk-copy-source');

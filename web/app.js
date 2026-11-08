@@ -114,7 +114,7 @@ function initNavigationSearch(){
 }
 initNavigationSearch();
 
-function syncPortChoices(){for(const id of ['cfg-port','edgeport-port','detail-port','bulk-source-port','compare-port-a','compare-port-b','compliance-ports']){const sel=$(id),old=sel.value;sel.innerHTML=latestPorts.map(p=>'<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>').join('');if([...sel.options].some(o=>o.value===old))sel.value=old;}}
+function syncPortChoices(){for(const id of ['cfg-port','edgeport-port','detail-port','bulk-source-port','compare-port-a','compare-port-b','compliance-ports']){const sel=$(id);const old=sel.multiple?[...sel.selectedOptions].map(o=>o.value):[sel.value];sel.innerHTML=latestPorts.map(p=>'<option value="'+esc(p.name)+'">'+esc(p.name)+'</option>').join('');for(const option of sel.options)option.selected=old.includes(option.value);}}
 $('bulk-profile').onchange=()=>{
  const profile=$('bulk-profile').value;
  if(!profile)return;
@@ -333,31 +333,83 @@ function complianceCell(label,expected,actual,normalizer){
  const same=norm(expected)===norm(actual);
  return {label,expected:String(expected),actual:String(actual),state:same?'ok':'diff'};
 }
+let lastComplianceRepairs=[];
+function complianceRepairRole(port){
+ const status=latestPorts.find(p=>p.name===port)||{};
+ const description=String(status.description||'').toLocaleLowerCase('pl-PL');
+ const uplink=/\\b(uplink|up-link|switch|router|core|dist|agregacj|lacp|po[0-9]+|management|mgmt|zarz[aą]dz)\\b/.test(description);
+ const role=detectPortRole(status);
+ return {status,role,uplink};
+}
+function renderComplianceRecommendations(profile,repairs){
+ const host=$('compliance-recommendations');
+ if(!host)return;
+ if(!repairs.length){
+  host.innerHTML='<div class="empty">Nie wykryto różnic, dla których można bezpiecznie przygotować rekomendację.</div>';
+  return;
+ }
+ host.innerHTML='<div class="repair-intro"><b>Proponowane działania</b><span>Każda pozycja jedynie wypełnia formularz. Zmiana nie jest wysyłana automatycznie.</span></div><div class="table-wrap"><table><thead><tr><th>PORT</th><th>WYKRYTE RÓŻNICE</th><th>OCENA</th><th>AKCJA</th></tr></thead><tbody>'+repairs.map(item=>{
+  const status=item.blocked?'<span class="state down">Zablokowana</span>':item.risk?'<span class="state unknown">Wymaga uwagi</span>':'<span class="state up">Do przygotowania</span>';
+  return '<tr><td><b>'+esc(item.port)+'</b></td><td>'+esc(item.changes.join(' · '))+'</td><td>'+status+(item.reason?'<small class="repair-reason">'+esc(item.reason)+'</small>':'')+'</td><td><button type="button" class="btn '+(item.blocked?'ghost':'primary')+' repair-profile-btn" data-repair-port="'+esc(item.port)+'" '+(item.blocked?'disabled':'')+'>Przygotuj w formularzu</button></td></tr>';
+ }).join('')+'</tbody></table></div><p class="note">Formularz profilu masowego jest pełnym profilem: może również ustawić speed/duplex zgodnie z zapisanym profilem. Te wartości nie są wiarygodnie odczytywane w audycie. Sprawdź je przed zatwierdzeniem. Podgląd i backend nadal blokują porty z PROTECTED_PORTS; przed zapisem wykonywana jest kopia konfiguracji.</p>';
+ host.querySelectorAll('.repair-profile-btn:not(:disabled)').forEach(button=>button.addEventListener('click',()=>{
+  const repair=repairs.find(item=>item.port===button.dataset.repairPort);
+  if(!repair)return;
+  const match=repair.port.match(/^port1\\.0\\.(\\d+)$/i);
+  if(!match||Number(match[1])<1||Number(match[1])>52){alert('Nie można bezpiecznie odwzorować nazwy portu na formularz operacji masowej.');return;}
+  $('bulk-ports').value=match[1];
+  $('bulk-mode').value=profile.mode;
+  $('bulk-profile').value='';
+  $('bulk-access-vlan').value=String(profile.accessVlan||1);
+  $('bulk-allowed').value=profile.allowed||'';
+  $('bulk-native').value=String(profile.native||1);
+  $('bulk-speed').value=profile.speed||'auto';
+  $('bulk-duplex').value=profile.duplex||'auto';
+  $('bulk-description').value=profile.portDescription||'';
+  $('bulk-mode').onchange();
+  if(profile.mode==='trunk'){$('bulk-native').disabled=false;$('bulk-allowed').disabled=false;}
+  else{$('bulk-access-vlan').disabled=false;$('bulk-allowed').disabled=true;$('bulk-native').disabled=true;}
+  $('bulk-output').textContent='Przygotowano port '+repair.port+' z profilu „'+profile.name+'”. Wykryte różnice: '+repair.changes.join(', ')+'. Sprawdź wszystkie pola, w szczególności speed/duplex. Następnie użyj „Sprawdź i zastosuj do portów” — wymagany będzie osobny podgląd i potwierdzenie.';
+  $('bulk-port-settings').scrollIntoView({behavior:'smooth',block:'start'});
+ }));
+}
 function renderComplianceResults(profile,items,statusByPort){
  const rows=[];let diff=0,unknown=0,ok=0;
+ const repairs=[];
+ const mode=String(profile.mode||'').toLowerCase();
+ const expectedList=mode==='access'?[Number(profile.accessVlan)]:parseProfileVLANs(profile.allowed);
  for(const item of items){
   const status=statusByPort.get(item.port)||{};
-  const mode=String(profile.mode||'').toLowerCase();
-  rows.push({port:item.port,field:complianceCell('Tryb',mode,item.mode)});
+  const portRows=[];
+  const add=(field)=>{rows.push({port:item.port,field});if(field.state==='diff')portRows.push(field.label);};
+  const modeField=complianceCell('Tryb',mode,item.mode);add(modeField);
   const expectedVlan=mode==='access'?profile.accessVlan:profile.native;
-  rows.push({port:item.port,field:complianceCell(mode==='access'?'Access VLAN':'Native VLAN',expectedVlan,item.defaultVlan)});
-  const expectedList=mode==='access'?[Number(profile.accessVlan)]:parseProfileVLANs(profile.allowed);
+  const vlanField=complianceCell(mode==='access'?'Access VLAN':'Native VLAN',expectedVlan,item.defaultVlan);add(vlanField);
   const actualList=Array.isArray(item.configuredVlans)?[...item.configuredVlans].map(Number).sort((a,b)=>a-b):null;
-  rows.push({port:item.port,field:complianceCell('Dozwolone VLAN',expectedList?expectedList.join(', '):undefined,actualList?actualList.join(', '):undefined,v=>String(v).split(',').map(x=>x.trim()).filter(Boolean).sort((a,b)=>Number(a)-Number(b)).join(','))});
-  if(profile.portDescription!==undefined&&profile.portDescription!==null){
-   rows.push({port:item.port,field:complianceCell('Opis portu',profile.portDescription,status.description)});
+  const listField=complianceCell('Dozwolone VLAN',expectedList?expectedList.join(', '):undefined,actualList?actualList.join(', '):undefined,v=>String(v).split(',').map(x=>x.trim()).filter(Boolean).sort((a,b)=>Number(a)-Number(b)).join(','));
+  add(listField);
+  if(profile.portDescription!==undefined&&profile.portDescription!==null&&String(profile.portDescription).trim()!==''){
+   add(complianceCell('Opis portu',profile.portDescription,status.description));
   }
-  // Speed/duplex profile values are configured policy, while SNMP speed is negotiated
-  // operational state. Do not mislabel negotiated state as configured compliance.
   if(profile.speed&&profile.speed!=='auto')rows.push({port:item.port,field:{label:'Prędkość skonfigurowana',expected:profile.speed+' Mb/s',actual:'Brak wiarygodnego odczytu konfiguracji',state:'unknown'}});
   if(profile.duplex&&profile.duplex!=='auto')rows.push({port:item.port,field:{label:'Duplex skonfigurowany',expected:profile.duplex,actual:'Brak wiarygodnego odczytu konfiguracji',state:'unknown'}});
+  if(portRows.length){
+   const role=complianceRepairRole(item.port);
+   const profileAccess=mode==='access';
+   const blocked=role.uplink&&profileAccess;
+   const portMatch=item.port.match(/^port1\\.0\\.(\\d+)$/i);
+   const unsupported=!portMatch||Number(portMatch[1])<1||Number(portMatch[1])>52;
+   repairs.push({port:item.port,changes:portRows,blocked:blocked||unsupported,risk:!blocked&&!unsupported&&(mode==='trunk'||(profile.speed&&profile.speed!=='auto')||(profile.duplex&&profile.duplex!=='auto')),reason:blocked?'Opis portu wskazuje uplink, switch, LACP lub zarządzanie — rekomendacja profilu Access jest zablokowana.':unsupported?'Nazwa portu nie pasuje do zakresu formularza operacji masowej (1–52).':role.uplink?'Port wygląda na uplink — wymagane ręczne sprawdzenie.':''});
+  }
  }
  const badge=state=>state==='ok'?'<span class="state up">Zgodne</span>':state==='diff'?'<span class="state down">Różnica</span>':'<span class="state unknown">Brak danych</span>';
  $('compliance-rows').innerHTML=rows.map(({port,field})=>{
   if(field.state==='ok')ok++;else if(field.state==='diff')diff++;else unknown++;
   return '<tr><td><b>'+esc(port)+'</b></td><td>'+esc(field.label)+'</td><td>'+esc(field.expected)+'</td><td>'+esc(field.actual)+'</td><td>'+badge(field.state)+'</td></tr>';
  }).join('')||'<tr><td colspan="5" class="empty">Brak wyników do wyświetlenia.</td></tr>';
- $('compliance-summary').textContent='Profil „'+profile.name+'”: '+diff+' różnic · '+unknown+' parametrów bez danych · '+ok+' zgodnych odczytów. Status zgodności jest wyliczany wyłącznie z parametrów, które można porównać wiarygodnie.';
+ lastComplianceRepairs=repairs;
+ renderComplianceRecommendations(profile,repairs);
+ $('compliance-summary').textContent='Profil „'+profile.name+'”: '+diff+' różnic · '+unknown+' parametrów bez danych · '+ok+' zgodnych odczytów. Rekomendacje obejmują tylko jawnie wykryte różnice; brak danych nie jest traktowany jako niezgodność.';
 }
 $('run-compliance').onclick=async()=>{
  const selected=[...$('compliance-ports').selectedOptions].map(o=>o.value);
@@ -383,7 +435,7 @@ $('run-compliance').onclick=async()=>{
   renderComplianceResults(profile,ordered,statusByPort);
  }catch(e){
   $('compliance-summary').textContent='Nie można potwierdzić zgodności: '+e.message;
-  $('compliance-rows').innerHTML='<tr><td colspan="5" class="empty">Wynik niekompletny — nie wyciągnięto wniosków o zgodności.</td></tr>';
+  $('compliance-rows').innerHTML='<tr><td colspan="5" class="empty">Wynik niekompletny — nie wyciągnięto wniosków o zgodności.</td></tr>';lastComplianceRepairs=[];$('compliance-recommendations').innerHTML='<div class="empty">Brak rekomendacji — odczyt niekompletny.</div>';
  }finally{button.disabled=false;}
 };
 $('bulk-copy-source').onclick=async()=>{

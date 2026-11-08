@@ -830,3 +830,25 @@ func TestDiagnosticsCurrentAlertsDistinguishSeverity(t *testing.T) {
  found:=map[string]string{};for _,a:=range alerts{found[a.Code]=a.Severity}
  if found["lacp-not-ready"]!="critical"||found["lacp-member-mismatch"]!="warning"||found["single-explicit-uplink"]!="info"{t.Fatalf("unexpected alert severity map: %+v",found)}
 }
+
+func TestDiagnosticsTransitionsCollectChangesAcrossAllSamples(t *testing.T) {
+ samples:=[]diagnosticsSample{}
+ for i,state:=range []string{"Gotowy","Niegotowy","Gotowy","Niegotowy"} {
+  samples=append(samples,diagnosticsSample{CapturedAt:time.Now().Add(time.Duration(i)*time.Minute),Checks:map[string]bool{"lacp":true},Aggregations:[]topologyAggregation{{Name:"Po1",Live:true,Ready:state}}})
+ }
+ got:=diagnosticsTransitions(samples)
+ if len(got)!=3{t.Fatalf("expected all 3 transitions, got %+v",got)}
+}
+func TestDiagnosticsFlappingWindowEndpoint(t *testing.T) {
+ path:=filepath.Join(t.TempDir(),"history.json")
+ store:=newDiagnosticsStore(path,20)
+ states:=[]string{"Gotowy","Niegotowy","Gotowy","Niegotowy"}
+ for i,state:=range states {
+  sample:=diagnosticsSample{CapturedAt:time.Now().Add(time.Duration(i-3)*time.Minute),Checks:map[string]bool{"lacp":true},Aggregations:[]topologyAggregation{{Name:"Po1",Live:true,Ready:state}}}
+  if err:=store.append(sample);err!=nil{t.Fatal(err)}
+ }
+ h:=diagnosticsHistoryHandler(store)
+ rec:=httptest.NewRecorder();h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/diagnostics/history?windowMinutes=60",nil))
+ if rec.Code!=http.StatusOK{t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String())}
+ if !strings.Contains(rec.Body.String(),"lacp-flapping"){t.Fatalf("expected flapping alert, got %s",rec.Body.String())}
+}

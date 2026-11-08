@@ -1376,7 +1376,7 @@ func diagnosticsAcknowledgeHandler(store *diagnosticsStore,path string)http.Hand
   found:=false;var row diagnosticsAcknowledgement
   for _,alert:=range diagnosticsCurrentAlerts(samples[len(samples)-1]){if diagnosticsAlertID(alert.Code,alert.Evidence,alert.At)==q.ID{found=true;row=diagnosticsAcknowledgement{ID:q.ID,Code:alert.Code,Evidence:alert.Evidence,At:alert.At};break}}
   if !found{http.Error(w,"alarm nie jest już aktywny lub jego stan się zmienił; odśwież listę",409);return}
-  username:="unknown";if authenticated,_,ok:=r.BasicAuth();ok&&strings.TrimSpace(authenticated)!=""{username=authenticated}
+  username:="unknown";if identity,ok:=r.Context().Value(identityContextKey{}).(panelIdentity);ok&&strings.TrimSpace(identity.Username)!=""{username=identity.Username}else if authenticated,_,ok:=r.BasicAuth();ok&&strings.TrimSpace(authenticated)!=""{username=authenticated}
   row.AcknowledgedAt=time.Now().UTC();row.Username=username;row.Comment=strings.TrimSpace(q.Comment)
   if err=acks.save(row);err!=nil{http.Error(w,"nie udało się zapisać potwierdzenia alarmu",500);return}
   w.Header().Set("Content-Type","application/json");w.Header().Set("Cache-Control","no-store");_=json.NewEncoder(w).Encode(map[string]any{"saved":true,"acknowledgement":row})

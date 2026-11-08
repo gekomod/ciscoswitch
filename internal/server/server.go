@@ -1082,8 +1082,8 @@ func parseTopologyConfig(config,switchport string)([]topologyPort,[]topologyAggr
   if len(f)>=5&&f[0]=="switchport"&&f[1]=="trunk"&&f[2]=="native"&&f[3]=="vlan"{current.NativeVLAN,_=strconv.Atoi(f[4])}
   if len(f)>=2&&f[0]=="spanning-tree"&&f[1]=="edgeport"{current.EdgePort=true}
   if len(f)>=2&&f[0]=="description"{current.Description=strings.TrimSpace(line[len(f[0]):])}
-  if len(f)>=3&&(f[0]=="channel-group"||f[0]=="static-channel-group"){
-   name:="Po"+f[1];current.LAG=name;key:=strings.ToLower(name);if lags[key]==nil{lags[key]=&topologyAggregation{Name:name,Members:[]string{}}};lags[key].Members=append(lags[key].Members,current.Port)
+  if (len(f)>=3&&f[0]=="channel-group")||(len(f)>=2&&f[0]=="static-channel-group"){
+   name:="Po"+f[1];if f[0]=="static-channel-group"{name="sa"+f[1]};current.LAG=name;key:=strings.ToLower(name);if lags[key]==nil{lags[key]=&topologyAggregation{Name:name,Members:[]string{}}};lags[key].Members=append(lags[key].Members,current.Port)
   }
  }
  // Prefer the switch's parsed switchport view for operationally visible VLAN membership.
@@ -1094,7 +1094,7 @@ func parseTopologyConfig(config,switchport string)([]topologyPort,[]topologyAggr
   read:=func(label string)string{re:=regexp.MustCompile(`(?im)^\s*`+regexp.QuoteMeta(label)+`\s*:\s*(.*?)\s*$`);m:=re.FindStringSubmatch(block);if len(m)>1{return strings.TrimSpace(m[1])};return ""}
   if mode:=read("Switchport mode");mode!=""{p.Mode=strings.ToLower(mode)}
   if n,e:=strconv.Atoi(read("Default Vlan"));e==nil&&n>0{p.NativeVLAN=n}
-  if raw:=read("Configured Vlans");raw!=""{set:=parseAuditVLANSet(strings.ReplaceAll(raw," ",","));vals:=make([]int,0,len(set));for n:=range set{vals=append(vals,n)};sort.Ints(vals);if len(vals)>0{p.VLANs=vals}}
+  if raw:=device.SwitchportVLANField(block,"Configured Vlans");raw!=""{set:=parseAuditVLANSet(strings.ReplaceAll(raw," ",","));vals:=make([]int,0,len(set));for n:=range set{vals=append(vals,n)};sort.Ints(vals);if len(vals)>0{p.VLANs=vals}}
  }
  out:=make([]topologyPort,0,len(ports));for _,p:=range ports{
   desc:=strings.ToLower(p.Description)

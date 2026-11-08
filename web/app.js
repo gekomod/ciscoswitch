@@ -1118,7 +1118,7 @@ function macVendor(mac){const key=normalizeMAC(mac).replace(/:/g,'').slice(0,6);
 function normalizeMAC(value){const hex=String(value||'').replace(/[^0-9a-f]/gi,'').toLowerCase();return hex.length===12?hex.match(/.{2}/g).join(':'):'';}
 function parseFDB(raw){
  const rows=[],macPattern=/(?:[0-9a-f]{4}\.){2}[0-9a-f]{4}|(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}|\b[0-9a-f]{12}\b/ig,portPattern=/\bport\d+\.\d+\.\d+\b/i;
- for(const line of String(raw||'').split(/\r?\n/)){const mm=line.match(macPattern),pm=line.match(portPattern);if(!mm||!pm)continue;const mac=normalizeMAC(mm[0]);if(!mac)continue;const beforeMAC=line.slice(0,line.toLowerCase().indexOf(mm[0].toLowerCase())).trim(),vlanMatch=beforeMAC.match(/^(?:vlan\s*)?(\d{1,4})$/i);rows.push({mac,port:pm[0],vlan:vlanMatch?vlanMatch[1]:'',source:line.trim()});}
+ for(const line of String(raw||'').split(/\r?\n/)){const mm=line.match(macPattern),pm=line.match(portPattern);if(!mm||!pm)continue;const mac=normalizeMAC(mm[0]);if(!mac)continue;const beforeMAC=line.slice(0,line.toLowerCase().indexOf(mm[0].toLowerCase())).trim(),vlanMatch=beforeMAC.match(/^(?:vlan\s*)?(\d{1,4})(?:\s|$)/i);rows.push({mac,port:pm[0],vlan:vlanMatch?vlanMatch[1]:'',source:line.trim()});}
  return rows;
 }
 function parseARP(raw){

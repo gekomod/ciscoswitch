@@ -317,11 +317,15 @@ func inConfigMode(cmds []string)bool {
  return inside
 }
 
-// cliError zwraca pierwszy komunikat błędu AlliedWare Plus (linie zaczynające się od "%").
+// cliErrorRE rozpoznaje komunikaty błędów AlliedWare Plus. AW+ zaczyna od "% " także
+// zwykłe linie informacyjne (np. "% Static Aggregator: sa1"), więc nie wystarczy sam prefiks.
+var cliErrorRE=regexp.MustCompile(`(?i)^%\s*(invalid|incomplete|unrecognized|ambiguous|error|unknown command|.*\b(fail(ed|ure)?|not (found|exist|allowed|permitted|supported)|does not exist|cannot|can't|unable)\b)`)
+
+// cliError zwraca pierwszy komunikat błędu AlliedWare Plus z odpowiedzi CLI.
 func cliError(out string)string {
  for _,line:=range strings.Split(out,"\n"){
   l:=strings.TrimSpace(line)
-  if strings.HasPrefix(l,"% ")&&!strings.HasPrefix(strings.ToLower(l),"% warning"){return l}
+  if cliErrorRE.MatchString(l){return l}
  }
  return ""
 }
@@ -625,6 +629,27 @@ type SwitchportDetails struct {
  Raw string `json:"raw"`
 }
 
+// SwitchportVLANField zwraca wartość pola listy VLAN z bloku "show interface switchport"
+// razem z liniami kontynuacji: AW+ zawija długie listy do kolejnych linii zawierających
+// wyłącznie numery VLAN.
+func SwitchportVLANField(block, label string) string {
+ lines := strings.Split(block, "\n")
+ head := regexp.MustCompile(`(?i)^\s*`+regexp.QuoteMeta(label)+`\s*:\s*(.*?)\s*$`)
+ onlyNumbers := regexp.MustCompile(`^\s*[0-9][0-9,\s-]*$`)
+ for i, line := range lines {
+  m := head.FindStringSubmatch(strings.TrimRight(line, "\r"))
+  if m == nil { continue }
+  parts := []string{m[1]}
+  for _, next := range lines[i+1:] {
+   next = strings.TrimRight(next, "\r")
+   if !onlyNumbers.MatchString(next) { break }
+   parts = append(parts, strings.TrimSpace(next))
+  }
+  return strings.TrimSpace(strings.Join(parts, " "))
+ }
+ return ""
+}
+
 // ParseSwitchportDetails extracts one exact interface block from AlliedWare Plus
 // "show interface switchport". Missing fields stay empty; the parser never guesses.
 func ParseSwitchportDetails(output, port string) (SwitchportDetails, error) {
@@ -641,7 +666,7 @@ func ParseSwitchportDetails(output, port string) (SwitchportDetails, error) {
    m := re.FindStringSubmatch(block); if len(m) < 2 { return "" }; return strings.TrimSpace(m[1])
   }
   details := SwitchportDetails{Port:port,Mode:value("Switchport mode"),IngressFilter:value("Ingress filter"),AcceptableFrameTypes:value("Acceptable frame types"),DefaultVLAN:value("Default Vlan"),Raw:strings.TrimSpace(block)}
-  if raw := value("Configured Vlans"); raw != "" {
+  if raw := SwitchportVLANField(block, "Configured Vlans"); raw != "" {
    for _, token := range strings.Fields(raw) {
     n, err := strconv.Atoi(strings.Trim(token, ","))
     if err == nil && n >= 1 && n <= 4094 { details.ConfiguredVLANs = append(details.ConfiguredVLANs, n) }

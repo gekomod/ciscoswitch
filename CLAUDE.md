@@ -17,6 +17,13 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 - `runConfig`: `terminal length 0` + `exit`, wykrywanie błędów CLI (`% ...`, bez `% Warning`).
 - `PERF_LOG=1` loguje czas każdego zapytania (`[perf] ...`).
 
+## Parsery a prawdziwe wyjścia AW+
+- `internal/device/testdata/awplus/` — prawdziwe wyjścia AW+ 5.4.x z ntc-templates (Apache 2.0); testy w `awplus_samples_test.go`.
+- Naprawione: zawijane listy "Configured Vlans", statyczne LAG (`static-channel-group N` → `saN`, wcześniej w ogóle niewykrywane),
+  VLAN w tablicy MAC (kolumny VLAN, port, MAC), wykrywanie błędów CLI (AW+ zaczyna od "% " także linie informacyjne).
+- Znane ograniczenie: wpisy MAC za statycznym LAG (`sa1`) są pomijane w topologii (parser szuka `portX.Y.Z`).
+- Brak próbki `show lldp neighbors` (skrót) i `show spanning-tree` — format niepotwierdzony; pobrać z własnego switcha.
+
 ## Do zweryfikowania na prawdziwym switchu
 - Czy AW+ 5.4.6 poprawnie kończy sesję po `exit` i akceptuje `terminal length 0`.
 - Czy współdzielone połączenie SSH jest stabilne (limity sesji AW+).

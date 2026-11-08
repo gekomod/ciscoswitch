@@ -40,6 +40,15 @@ type monitorPortRate struct { RX float64 `json:"rx"`; TX float64 `json:"tx"` }
 type monitorHistoryResponse struct { Events []monitorRecord `json:"events"`; Samples []monitorRecord `json:"samples"`; PortEvents []monitorRecord `json:"portEvents"`; CounterEvents []monitorRecord `json:"counterEvents"`; PortSamples []monitorRecord `json:"portSamples"` }
 type monitorHistoryStore struct { path string; mu sync.Mutex }
 
+var monitorStoresMu sync.Mutex
+var monitorStores = map[string]*monitorHistoryStore{}
+func sharedMonitorHistoryStore(path string) *monitorHistoryStore {
+ if strings.TrimSpace(path)=="" { path=filepath.Join("data","monitor-history.jsonl") }
+ monitorStoresMu.Lock(); defer monitorStoresMu.Unlock()
+ if store:=monitorStores[path];store!=nil{return store}
+ store:=&monitorHistoryStore{path:path};monitorStores[path]=store;return store
+}
+
 type monitorEventHub struct {
 	mu sync.Mutex
 	nextID uint64
@@ -110,7 +119,7 @@ func monitorStreamHandler() http.Handler {
 
 func monitorHistoryHandler(path string) http.Handler {
  if strings.TrimSpace(path)=="" { path=filepath.Join("data","monitor-history.jsonl") }
- store:=&monitorHistoryStore{path:path}
+ store:=sharedMonitorHistoryStore(path)
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request) {
   switch r.Method {
   case http.MethodGet:
@@ -190,7 +199,7 @@ func (s *monitorHistoryStore) prune() error {
 // UI because it needs closely spaced counter snapshots and is already persisted there.
 func StartMonitorCollector(ctx context.Context, svc *device.Service, path string, interval time.Duration) {
  if svc==nil || interval<=0 { return }
- store:=&monitorHistoryStore{path:path}
+ store:=sharedMonitorHistoryStore(path)
  go func(){
   var previousReachable *bool
   previousPorts:=map[string]device.Port{}

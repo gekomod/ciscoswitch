@@ -175,3 +175,29 @@ Endpoint `GET /api/events?window=24h&type=all&limit=200` udostępnia wspólną o
 ### Korelacja zdarzeń
 
 Endpoint `GET /api/events` w widoku kategorii `all` zwraca również pole `correlations`. Grupowanie obejmuje zdarzenia różnych kategorii występujące w jednym pięciominutowym oknie, jeśli przynajmniej jedno ma poziom ostrzeżenia lub krytyczny. Panel pokazuje kategorie, liczbę zdarzeń i zakres czasu. Jest to wskazówka diagnostyczna oparta na zbieżności czasowej — nie dowód wspólnej przyczyny ani automatyczna diagnoza awarii.
+
+
+## Konta i role panelu
+
+Panel ma osobne konta lokalne, niezależne od użytkowników SSH skonfigurowanych na przełączniku.
+
+Przy pierwszym uruchomieniu ustaw na serwerze panelu:
+- `PANEL_ADMIN_USER` — login początkowego administratora.
+- `PANEL_ADMIN_PASSWORD` — hasło początkowego administratora (minimum 12 znaków).
+- `PANEL_USERS_PATH` — opcjonalna ścieżka pliku kont; domyślnie `data/panel-users.json`.
+
+Przykład konfiguracji środowiska (nie wpisuj haseł do repozytorium):
+```bash
+export PANEL_ADMIN_USER=admin
+export PANEL_ADMIN_PASSWORD='zmien-to-na-dlugie-losowe-haslo'
+export PANEL_USERS_PATH=data/panel-users.json
+```
+
+Po pierwszym utworzeniu pliku kont hasło administratora jest przechowywane jako bcrypt; plik i katalog otrzymują uprawnienia ograniczone do właściciela. Zmiana hasła początkowego w zmiennych środowiskowych nie nadpisuje istniejącej bazy kont.
+
+Role:
+- **Podgląd (viewer):** odczyt danych i diagnostyki; żądania zmieniające stan są odrzucane przez serwer.
+- **Operator (operator):** obsługa funkcji operacyjnych panelu; nie może zarządzać kontami panelu.
+- **Administrator (admin):** pełny dostęp, w tym tworzenie kont, zmiana ról, blokowanie kont i reset haseł.
+
+Sesja jest przechowywana w ciasteczku HttpOnly, SameSite=Strict; sesja przeglądarki trwa maksymalnie 8 godzin. Interfejs WWW i endpointy API wymagają zalogowania. Nie można zablokować ani zdegradować ostatniego aktywnego administratora. Konta panelu nie są kontami AlliedWare Plus/SSH.

@@ -1035,7 +1035,10 @@ async function refreshSystem(){const button=$('refresh-system');button.disabled=
  }catch(e){for(const id of ['sys-version','sys-cpu','sys-memory','sys-temperature','sys-fans','sys-power','sys-boot'])$(id).textContent='Błąd odczytu';$('system-health').dataset.loaded='false';}
  finally{button.disabled=false;button.textContent='Odśwież parametry';}}
 $('refresh-system').onclick=refreshSystem;
-$('alert-filter')?.addEventListener('change',renderEvents);\n$('alert-source-filter')?.addEventListener('change',renderEvents);\n$('alert-port-filter')?.addEventListener('change',renderEvents);\n$('alert-search')?.addEventListener('input',renderEvents);
+$('alert-filter')?.addEventListener('change',renderEvents);
+$('alert-source-filter')?.addEventListener('change',renderEvents);
+$('alert-port-filter')?.addEventListener('change',renderEvents);
+$('alert-search')?.addEventListener('input',renderEvents);
 $('alert-refresh')?.addEventListener('click',async()=>{const b=$('alert-refresh');b.disabled=true;try{await restoreMonitorHistory();}finally{b.disabled=false;}});
 
 const vlanSelectedPorts=new Set();

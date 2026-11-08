@@ -61,7 +61,7 @@ diagnosticsPath:=env("DIAGNOSTICS_HISTORY_PATH",filepath.Join("data","diagnostic
  collectorCtx,cancelCollector:=context.WithCancel(context.Background())
  server.StartDiagnosticsCollector(collectorCtx,svc.RunReadOnly,diagnosticsPath,diagnosticsInterval)
  if diagnosticsInterval>0{log.Printf("Switch diagnostics sampler enabled (interval=%s, history=%s)",diagnosticsInterval,diagnosticsPath)}else{log.Printf("Switch diagnostics sampler disabled")}
- err=httpServer.ListenAndServe()
+ err := httpServer.ListenAndServe()
  cancelCollector()
  if err!=nil&&err!=http.ErrServerClosed{log.Fatal(err)}
 }

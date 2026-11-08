@@ -602,3 +602,18 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .diagnostic-acknowledged{margin-top:8px;padding:7px 9px;border-radius:7px;background:var(--surface);font-size:10px;color:var(--muted)}
 .diagnostic-acknowledged small{margin-top:4px}
 .diagnostic-ack-form .btn{font-size:10px;padding:7px 10px}
+
+
+.availability-panel{margin:18px 0;padding:18px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.availability-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+.availability-head h4,.availability-aggregations h5{margin:0 0 5px;font-size:14px}
+.availability-head p{margin:0;color:var(--muted);font-size:12px}
+.availability-head label{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+.availability-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.availability-card{display:flex;flex-direction:column;gap:7px;padding:14px;border:1px solid var(--border);border-radius:11px;background:var(--surface-2,var(--background))}
+.availability-card>span{font-size:12px;color:var(--muted);font-weight:600}
+.availability-card strong{font-size:27px;letter-spacing:-.7px}
+.availability-card small{font-size:11px;color:var(--muted);line-height:1.45}
+.availability-aggregations{margin-top:16px}
+.availability-aggregations h5{margin-bottom:10px}
+@media(max-width:640px){.availability-head{align-items:flex-start;flex-direction:column}.availability-head label{width:100%;justify-content:space-between}}

@@ -1364,7 +1364,7 @@ function renderDiagnosticsCenter(data){
  const latest=list[list.length-1];
  meta.textContent='Próbek w historii: '+(data.sampleCount??list.length)+' · Ostatni odczyt: '+(latest?new Date(latest.capturedAt).toLocaleString():'brak')+' · '+(data.hasEnoughHistory?'porównanie aktywne':'za mało historii do wykrywania zmian')+' · próbkowanie serwera: '+(data.collectionMode==='scheduled'?'automatyczne co '+(data.collectionInterval||'60s'):'wyłączone — tylko ręczne')+' · flapping od 3 zmian';
  const severityLabel={critical:'KRYTYCZNY',warning:'OSTRZEŻENIE',info:'INFORMACJA'};
- alerts.innerHTML=(data.alerts||[]).length?(data.alerts||[]).map(a=>'<article class="diagnostic-alert severity-'+esc(a.severity)+'"><span>'+esc(severityLabel[a.severity]||a.severity)+'</span><div><b>'+esc(a.title)+'</b><small>'+esc(a.evidence)+'</small></div></article>').join(''):'<div class="empty">Brak rozpoznanych bieżących alarmów. To nie jest certyfikat poprawności całej sieci.</div>';
+ alerts.innerHTML=(data.alerts||[]).length?(data.alerts||[]).map(a=>'<article class="diagnostic-alert severity-'+esc(a.severity)+'"><span>'+esc(severityLabel[a.severity]||a.severity)+'</span><div class="diagnostic-alert-body"><b>'+esc(a.title)+'</b><small>'+esc(a.evidence)+'</small>'+(a.acknowledged?'<div class="diagnostic-acknowledged">Potwierdził: '+esc(a.acknowledgement?.username||'operator')+' · '+esc(new Date(a.acknowledgement?.acknowledgedAt||a.at).toLocaleString())+(a.acknowledgement?.comment?'<small>'+esc(a.acknowledgement.comment)+'</small>':'')+'</div>':'<div class="diagnostic-ack-form"><input type="text" maxlength="500" placeholder="Komentarz operatora (opcjonalnie)" data-ack-comment="'+esc(a.id)+'"><button class="btn small" type="button" data-ack-alert="'+esc(a.id)+'">Potwierdź alarm</button></div>')+'</div></article>').join(''):'<div class="empty">Brak rozpoznanych bieżących alarmów. To nie jest certyfikat poprawności całej sieci.</div>';
  transitions.innerHTML=(data.transitions||[]).length?(data.transitions||[]).slice().reverse().map(t=>'<article class="diagnostic-transition"><span class="severity-dot severity-'+esc(t.severity)+'"></span><div><b>'+esc(t.subject)+'</b><small>'+esc(t.from)+' → '+esc(t.to)+'</small></div><time>'+esc(new Date(t.at).toLocaleString())+'</time></article>').join(''):'<div class="empty">'+esc(data.note||'Brak zmian między porównywalnymi próbkami.')+'</div>';
  samples.innerHTML=list.length?list.slice().reverse().slice(0,8).map(s=>'<article class="diagnostic-sample"><b>'+esc(new Date(s.capturedAt).toLocaleString())+'</b><small>Kontrole: '+Object.entries(s.checks||{}).filter(([,v])=>v).map(([k])=>({runningConfig:'konfiguracja',switchport:'switchport',lldp:'LLDP',lacp:'LACP'}[k]||k)).join(' · ')+' </small><small>LACP: '+(s.aggregations||[]).length+' · uplinki: '+(s.uplinks||[]).length+' · sąsiedzi: '+(s.neighbors||[]).length+'</small></article>').join(''):'<div class="empty">Brak zapisanych próbek.</div>';
 }
@@ -1381,3 +1381,13 @@ async function collectDiagnosticsCenter(){
  finally{button.disabled=false;button.textContent='Zbierz próbkę';}
 }
 if($('collect-diagnostics')){$('collect-diagnostics').addEventListener('click',collectDiagnosticsCenter);$('refresh-diagnostics')?.addEventListener('click',refreshDiagnosticsCenter);$('diagnostics-window')?.addEventListener('change',refreshDiagnosticsCenter);refreshDiagnosticsCenter();setInterval(()=>{if(!document.hidden)refreshDiagnosticsCenter();},30000);}
+
+async function acknowledgeDiagnosticsAlert(id,button){
+ const input=$('diagnostics-alerts')?.querySelector('[data-ack-comment="'+id+'"]');
+ button.disabled=true;button.textContent='Zapisywanie…';
+ try{await api('/api/diagnostics/acknowledge',{id,comment:input?.value||''});await refreshDiagnosticsCenter();}
+ catch(e){button.disabled=false;button.textContent='Potwierdź alarm';const meta=$('diagnostics-meta');if(meta)meta.textContent='Nie udało się potwierdzić alarmu: '+e.message;}
+}
+$('diagnostics-alerts')?.addEventListener('click',event=>{
+ const button=event.target.closest('[data-ack-alert]');if(button)acknowledgeDiagnosticsAlert(button.dataset.ackAlert,button);
+});

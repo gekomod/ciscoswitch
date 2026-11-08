@@ -365,8 +365,8 @@ function renderPortNetworkContext(){
    const mode=(switchport.match(/TRYB:\s*([^\n]+)/i)||[])[1]||'nieznany';
    const native=(switchport.match(/DEFAULT \/ NATIVE VLAN:\s*([^\n]+)/i)||[])[1]||'brak danych';
    const allowed=(switchport.match(/DOZWOLONE VLAN:\s*([^\n]+)/i)||[])[1]||'brak danych';
-    const ingress=(switchport.match(/INGRESS FILTER:\\s*([^\\n]+)/i)||[])[1]||'Niedostępny';
-    const frames=(switchport.match(/TYP RAMEK:\\s*([^\\n]+)/i)||[])[1]||'Niedostępny';
+    const ingress=(switchport.match(/INGRESS FILTER:\s*([^\n]+)/i)||[])[1]||'Niedostępny';
+    const frames=(switchport.match(/TYP RAMEK:\s*([^\n]+)/i)||[])[1]||'Niedostępny';
     showFriendlyResult(id,'Port '+port+' · tryb '+mode+' · VLAN domyślny '+native+' · dozwolone: '+allowed+' · ingress filter: '+ingress+' · typ ramek: '+frames+' · wpisy VLAN w tabeli: '+vlanLines.length,'Konfiguracja VLAN portu');
    continue;
   }
@@ -399,7 +399,7 @@ async function loadPortNetworkContext(){
    'INGRESS FILTER: '+(switchport.ingressFilter||'Niedostępny'),
    'TYP RAMEK: '+(switchport.acceptableFrameTypes||'Niedostępny')
   ];
-  const ctx={vlan:{output:vlanLines.join('\\n')+'\\n\\n--- show vlan all ---\\n'+(vlans.output||'')},mac:{output:mac.output||''},lldp:{output:lldp.output||''}};
+  const ctx={vlan:{output:vlanLines.join('\n')+'\n\n--- show vlan all ---\n'+(vlans.output||'')},mac:{output:mac.output||''},lldp:{output:lldp.output||''}};
   portNetworkContext.set(port,ctx);renderPortNetworkContext();
  }catch(e){
   portNetworkContext.set(port,{vlan:{error:e.message},mac:{error:e.message},lldp:{error:e.message}});
@@ -466,7 +466,7 @@ function formatRate(v){if(!Number.isFinite(v))return '—';if(v>=1e9)return (v/1
 let statusLoading=false;async function load(){if(statusLoading)return;statusLoading=true;try{const d=await api('/api/status');latestPorts=sorted(d.ports||[]);recordStatusEvents(d);const up=latestPorts.filter(p=>p.oper==='up').length;$('host').textContent=d.host||'—';$('snmp-status').textContent=(d.snmpVersion==='3'?'SNMPv3':'SNMPv2c')+(d.reachable?' ONLINE':' OFFLINE');$('connection').classList.toggle('offline',!d.reachable);$('connection').innerHTML='<i></i> '+(d.reachable?'Połączono':'Brak połączenia');$('device-state').textContent=d.reachable?'ONLINE':'OFFLINE';$('device-state').classList.toggle('device-state-online',d.reachable);$('device-state').classList.toggle('device-state-offline',!d.reachable);$('count').textContent=latestPorts.length;$('up').textContent=up;$('updated').textContent=new Date().toLocaleTimeString();$('warning').textContent=d.warning||'';$('warning').classList.toggle('hidden',!d.warning);$('health-snmp').textContent=d.reachable?'Połączono':'Brak połączenia';$('health-snmp').className=d.reachable?'good':'bad';$('health-interfaces').textContent=latestPorts.length;$('health-up').textContent=up+' / '+latestPorts.length;$('health-time').textContent=new Date().toLocaleTimeString();$('map-online').textContent=(d.snmpVersion==='3'?'SNMPv3':'SNMPv2c')+(d.reachable?' ONLINE':' OFFLINE');syncPortChoices();render();renderMap();renderPortHistory();renderPortQuality();sampleTraffic();}catch(e){$('warning').textContent='Nie udało się pobrać danych switcha: '+e.message;$('warning').classList.remove('hidden');$('connection').classList.add('offline');$('connection').innerHTML='<i></i> Błąd odczytu';$('device-state').textContent='BRAK DANYCH';$('device-state').classList.remove('device-state-online');$('device-state').classList.add('device-state-offline');$('health-snmp').textContent='Błąd odczytu';$('health-snmp').className='bad';$('map-online').textContent='ODCZYT NIEUDANY';}finally{statusLoading=false;}}
 function parseVlanSelection(value){
  const result=new Set();
- for(const token of String(value||'').split(/[\\s,]+/).filter(Boolean)){
+ for(const token of String(value||'').split(/[\s,]+/).filter(Boolean)){
   const match=token.match(/^(\\d{1,4})(?:-(\\d{1,4}))?$/);
   if(!match)return null;
   const start=Number(match[1]),end=Number(match[2]||match[1]);
@@ -488,10 +488,10 @@ $('bulk-apply').onclick=async()=>{
   const previews=Array.isArray(previewResult.previews)?previewResult.previews:[];
   if(previews.length!==payload.ports.length)throw new Error('Podgląd zbiorczy nie zwrócił kompletu portów. Zapis został zablokowany.');
   const warnings=[...new Set(previews.flatMap(item=>Array.isArray(item.warnings)?item.warnings:[]))];
-  const currentSummary=previews.map(item=>item.port+': '+(item.current?.mode||'tryb nieznany')+' · VLAN '+(item.current?.defaultVlan||'—')).join('\\n');
-  const summary='Profil '+(payload.mode==='access'?'Access':'Trunk')+' zostanie zastosowany na '+payload.ports.length+' portach:\\n'+payload.ports.join(', ')+'\\n\\nStan bieżący:\\n'+currentSummary+'\\n\\nNowe ustawienia: '+(payload.mode==='access'?'Access VLAN: '+payload.accessVlan:'Native VLAN: '+payload.native+' · dozwolone VLAN: '+payload.allowed)+'\\n\\nWszystkie porty sprawdzono jednym wspólnym odczytem konfiguracji switcha. Przed zmianą zostanie utworzona kopia konfiguracji.'+(warnings.length?'\\n\\nUwagi: '+warnings.join(' · '):'');
+  const currentSummary=previews.map(item=>item.port+': '+(item.current?.mode||'tryb nieznany')+' · VLAN '+(item.current?.defaultVlan||'—')).join('\n');
+  const summary='Profil '+(payload.mode==='access'?'Access':'Trunk')+' zostanie zastosowany na '+payload.ports.length+' portach:\n'+payload.ports.join(', ')+'\n\nStan bieżący:\n'+currentSummary+'\n\nNowe ustawienia: '+(payload.mode==='access'?'Access VLAN: '+payload.accessVlan:'Native VLAN: '+payload.native+' · dozwolone VLAN: '+payload.allowed)+'\n\nWszystkie porty sprawdzono jednym wspólnym odczytem konfiguracji switcha. Przed zmianą zostanie utworzona kopia konfiguracji.'+(warnings.length?'\n\nUwagi: '+warnings.join(' · '):'');
   showFriendlyResult('bulk-output',summary,'Podgląd profilu portów');
-  if(!confirm(summary+'\\n\\nZastosować profil?'))return;
+  if(!confirm(summary+'\n\nZastosować profil?'))return;
   const result=await api('/api/ports/settings/bulk',payload);
    let verification;
    try{verification=await api('/api/ports/switchport/bulk',{ports:payload.ports});}
@@ -507,7 +507,7 @@ $('bulk-apply').onclick=async()=>{
     return {port,ok:modeOK&&vlanOK,detail:!modeOK?'Tryb: '+(mode||'nieustalony'):!vlanOK?'VLAN wymaga sprawdzenia':'Konfiguracja potwierdzona'};
    });
   const verified=checks.filter(x=>x.ok).length;
-  const report='Weryfikacja po zastosowaniu: '+verified+'/'+checks.length+' portów potwierdzonych.\\n'+checks.map(x=>(x.ok?'✓ ':'! ')+x.port+' — '+x.detail).join('\\n');
+  const report='Weryfikacja po zastosowaniu: '+verified+'/'+checks.length+' portów potwierdzonych.\n'+checks.map(x=>(x.ok?'✓ ':'! ')+x.port+' — '+x.detail).join('\n');
   showFriendlyResult('bulk-output',report,'Wynik konfiguracji portów');
   addEvent('Profil '+payload.mode.toUpperCase()+' zastosowany na '+payload.ports.length+' portach; potwierdzono '+verified+'/'+checks.length,'warning');
   await load();
@@ -720,9 +720,9 @@ async function applyVLANMembership(){
  const payload={ports,vlan,membership};button.disabled=true;
  try{
   const preview=await api('/api/vlan/ports/preview',payload);
-  const summary='Zmiana członkostwa '+membership.toUpperCase()+' dla VLAN '+vlan+' na '+ports.length+' portach. Podgląd nie zmienia konfiguracji.'+(preview.warnings?.length?'\\n\\nUwagi: '+preview.warnings.join(' · '):'');
+  const summary='Zmiana członkostwa '+membership.toUpperCase()+' dla VLAN '+vlan+' na '+ports.length+' portach. Podgląd nie zmienia konfiguracji.'+(preview.warnings?.length?'\n\nUwagi: '+preview.warnings.join(' · '):'');
   showFriendlyResult('vlan-membership-output',summary,'Podgląd zmiany VLAN');
-  if(!confirm(summary+'\\n\\nZastosować zmianę?'))return;
+  if(!confirm(summary+'\n\nZastosować zmianę?'))return;
   await api('/api/vlan/ports/apply',payload);
   let good=0;
   try{const check=await api('/api/command',{command:'show vlan '+vlan}),observed=new Map();for(const match of String(check.output||'').matchAll(/(port\d+\.\d+\.\d+)\s*\(([ut])\)/gi))observed.set(match[1],match[2].toLowerCase());const expected=membership==='tagged'?'t':'u';good=ports.filter(port=>observed.get(port)===expected).length;}
@@ -938,11 +938,11 @@ $('load-lldp').onclick=async()=>{try{const d=await api('/api/command',{command:'
 $('load-logs').onclick=()=>loadDiagnostic('show log tail 30','logs-output');
 $('create-vlan').onclick=async()=>{
  const id=Number($('vlan-id').value),name=$('vlan-name').value.trim();
- try{const p=await api('/api/vlan/preview',{id,name,delete:false});const summary='Utworzenie VLAN '+id+(name?' („'+name+'”)':'')+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\\n\\nUwagi: '+p.warnings.join(' · '):'');showFriendlyResult('vlan-output',summary,'Podgląd VLAN');if(!confirm(summary+'\\n\\nZastosować zmianę?'))return;const d=await api('/api/vlan',{id,name,delete:false});showFriendlyResult('vlan-output',d.output,'Utworzenie VLAN');alert('Zlecenie utworzenia VLAN przekazane. Odśwież listę, aby potwierdzić stan.');}catch(e){showFriendlyResult('vlan-output',e.message,'Operacja VLAN');}
+ try{const p=await api('/api/vlan/preview',{id,name,delete:false});const summary='Utworzenie VLAN '+id+(name?' („'+name+'”)':'')+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\n\nUwagi: '+p.warnings.join(' · '):'');showFriendlyResult('vlan-output',summary,'Podgląd VLAN');if(!confirm(summary+'\n\nZastosować zmianę?'))return;const d=await api('/api/vlan',{id,name,delete:false});showFriendlyResult('vlan-output',d.output,'Utworzenie VLAN');alert('Zlecenie utworzenia VLAN przekazane. Odśwież listę, aby potwierdzić stan.');}catch(e){showFriendlyResult('vlan-output',e.message,'Operacja VLAN');}
 };
 $('delete-vlan').onclick=async()=>{
  const id=Number($('vlan-id').value);
- try{const p=await api('/api/vlan/preview',{id,delete:true});const summary='Usunięcie VLAN '+id+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\\n\\nUwagi: '+p.warnings.join(' · '):'');showFriendlyResult('vlan-output',summary,'Podgląd usunięcia VLAN');if(!confirm(summary+'\\n\\nCzy na pewno usunąć VLAN?'))return;const d=await api('/api/vlan',{id,delete:true});showFriendlyResult('vlan-output',d.output,'Usunięcie VLAN');}catch(e){showFriendlyResult('vlan-output',e.message,'Operacja VLAN');}
+ try{const p=await api('/api/vlan/preview',{id,delete:true});const summary='Usunięcie VLAN '+id+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\n\nUwagi: '+p.warnings.join(' · '):'');showFriendlyResult('vlan-output',summary,'Podgląd usunięcia VLAN');if(!confirm(summary+'\n\nCzy na pewno usunąć VLAN?'))return;const d=await api('/api/vlan',{id,delete:true});showFriendlyResult('vlan-output',d.output,'Usunięcie VLAN');}catch(e){showFriendlyResult('vlan-output',e.message,'Operacja VLAN');}
 };
 $('show-vlans').onclick=async()=>{
  const button=$('show-vlans'),summary=$('vlan-list-summary');
@@ -965,9 +965,9 @@ $('apply-port-settings').onclick=async()=>{
  try{
   const p=await api('/api/port/preview',payload);
   const current=p.current||{};
-  const summary='Port '+payload.port+' — stan bieżący: '+(current.mode||'nieustalony')+', VLAN '+(current.defaultVlan||'—')+'.\\nNowy tryb: '+(payload.mode==='access'?'Access':'Trunk')+'. '+(payload.mode==='access'?'Access VLAN: '+payload.accessVlan:'Native VLAN: '+payload.native+' · dozwolone VLAN: '+payload.allowed)+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\\n\\nUwagi: '+p.warnings.join(' · '):'');
+  const summary='Port '+payload.port+' — stan bieżący: '+(current.mode||'nieustalony')+', VLAN '+(current.defaultVlan||'—')+'.\nNowy tryb: '+(payload.mode==='access'?'Access':'Trunk')+'. '+(payload.mode==='access'?'Access VLAN: '+payload.accessVlan:'Native VLAN: '+payload.native+' · dozwolone VLAN: '+payload.allowed)+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\n\nUwagi: '+p.warnings.join(' · '):'');
   showFriendlyResult('output',summary,'Podgląd portu');
-  if(!confirm(summary+'\\n\\nZastosować konfigurację?'))return;
+  if(!confirm(summary+'\n\nZastosować konfigurację?'))return;
   await api('/api/port/settings',payload);
   const state=await api('/api/port/switchport?port='+encodeURIComponent(payload.port));
   const modeOK=String(state.mode||'').toLowerCase()===payload.mode,native=Number.parseInt(state.defaultVlan,10);
@@ -990,7 +990,7 @@ async function refreshAudit(){const body=$('audit-rows');body.innerHTML='<tr><td
 $('refresh-audit').onclick=refreshAudit;
 function renderConfigBackups(items){const el=$('config-backups');if(!items.length){el.textContent='Brak zapisanych kopii.';return;}el.innerHTML=items.map(x=>'<div class="health-line"><span><b>'+esc(new Date(x.createdAt).toLocaleString())+'</b><small> · '+fmtCount(x.size)+' B · Integralność: '+(x.verified?'potwierdzona':'niepotwierdzona')+'</small><br><small class="'+(x.verified?'good':'bad')+'">'+(x.verified?'SHA-256 zweryfikowany':'NIEZWERYFIKOWANA KOPIA')+'</small></span><span class="backup-actions">'+(x.verified?'<button class="btn ghost" type="button" data-compare-backup="'+esc(x.id)+'">Porównaj z bieżącą</button> <button class="btn ghost" type="button" data-restore-preview="'+esc(x.id)+'">Sprawdź kopię</button>':'')+' <a class="btn ghost" href="/api/config/backups/download?id='+encodeURIComponent(x.id)+'">Pobierz</a></span></div>').join('');}
 async function refreshConfigBackups(){const el=$('config-backups');el.textContent='Odczyt historii kopii…';try{const r=await fetch('/api/config/backups');if(!r.ok)throw new Error('HTTP '+r.status);renderConfigBackups(await r.json());}catch(e){el.textContent='Nie udało się odczytać historii: '+e.message;}}
-$('config-backups').addEventListener('click',async event=>{const button=event.target.closest('[data-compare-backup]');if(!button)return;const id=button.dataset.compareBackup,box=$('config-diff');button.disabled=true;button.textContent='Porównuję…';box.textContent='Sprawdzanie integralności kopii i porównywanie z bieżącą konfiguracją…';try{const response=await fetch('/api/config/backups/compare?id='+encodeURIComponent(id),{cache:'no-store'});if(!response.ok)throw new Error('Nie udało się porównać kopii: HTTP '+response.status);const d=await response.json();box.textContent=d.identical?'Kopia '+d.backupId+' jest zgodna z bieżącą konfiguracją.':'Kopia '+d.backupId+' różni się od bieżącej konfiguracji · Dodane od czasu kopii: '+d.addedInCurrent+' · Brakujące względem kopii: '+d.removedFromCurrent+' · Linie: kopia '+d.backupLines+' / bieżąca '+d.currentLines+' · integralność kopii potwierdzona';}catch(e){box.textContent=e.message;}finally{button.disabled=false;button.textContent='Porównaj z bieżącą';}});$('config-backups').addEventListener('click',async event=>{const button=event.target.closest('[data-restore-preview]');if(!button)return;const id=button.dataset.restorePreview,box=$('config-diff');button.disabled=true;button.textContent='Weryfikuję…';box.textContent='Sprawdzanie SHA-256 i struktury kopii. Żadne polecenie nie zostanie wysłane do switcha…';try{const response=await fetch('/api/config/backups/restore-preview?id='+encodeURIComponent(id),{cache:'no-store'});if(!response.ok)throw new Error('Nie można zweryfikować kopii: HTTP '+response.status);const d=await response.json();box.textContent='Kopia '+d.backupId+' · integralność SHA-256: potwierdzona · '+d.lineCount+' niepustych linii · '+fmtCount(d.size)+' B.\\n'+d.message+'\\nNie wykonano żadnej zmiany na switchu.';}catch(e){box.textContent=e.message;}finally{button.disabled=false;button.textContent='Sprawdź kopię';}});$('refresh-config-backups').onclick=refreshConfigBackups;
+$('config-backups').addEventListener('click',async event=>{const button=event.target.closest('[data-compare-backup]');if(!button)return;const id=button.dataset.compareBackup,box=$('config-diff');button.disabled=true;button.textContent='Porównuję…';box.textContent='Sprawdzanie integralności kopii i porównywanie z bieżącą konfiguracją…';try{const response=await fetch('/api/config/backups/compare?id='+encodeURIComponent(id),{cache:'no-store'});if(!response.ok)throw new Error('Nie udało się porównać kopii: HTTP '+response.status);const d=await response.json();box.textContent=d.identical?'Kopia '+d.backupId+' jest zgodna z bieżącą konfiguracją.':'Kopia '+d.backupId+' różni się od bieżącej konfiguracji · Dodane od czasu kopii: '+d.addedInCurrent+' · Brakujące względem kopii: '+d.removedFromCurrent+' · Linie: kopia '+d.backupLines+' / bieżąca '+d.currentLines+' · integralność kopii potwierdzona';}catch(e){box.textContent=e.message;}finally{button.disabled=false;button.textContent='Porównaj z bieżącą';}});$('config-backups').addEventListener('click',async event=>{const button=event.target.closest('[data-restore-preview]');if(!button)return;const id=button.dataset.restorePreview,box=$('config-diff');button.disabled=true;button.textContent='Weryfikuję…';box.textContent='Sprawdzanie SHA-256 i struktury kopii. Żadne polecenie nie zostanie wysłane do switcha…';try{const response=await fetch('/api/config/backups/restore-preview?id='+encodeURIComponent(id),{cache:'no-store'});if(!response.ok)throw new Error('Nie można zweryfikować kopii: HTTP '+response.status);const d=await response.json();box.textContent='Kopia '+d.backupId+' · integralność SHA-256: potwierdzona · '+d.lineCount+' niepustych linii · '+fmtCount(d.size)+' B.\n'+d.message+'\nNie wykonano żadnej zmiany na switchu.';}catch(e){box.textContent=e.message;}finally{button.disabled=false;button.textContent='Sprawdź kopię';}});$('refresh-config-backups').onclick=refreshConfigBackups;
 $('create-config-backup').onclick=async()=>{const b=$('create-config-backup');if(!confirm('Pobrać running-config i zapisać lokalną kopię na serwerze panelu? Plik może zawierać hasła i inne dane poufne.'))return;b.disabled=true;try{const r=await fetch('/api/config/backups',{method:'POST'});if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json();$('config-diff').textContent='Utworzono kopię '+d.id+'\nSHA256: '+d.sha256;await refreshConfigBackups();}catch(e){$('config-diff').textContent='Nie udało się utworzyć kopii: '+e.message;}finally{b.disabled=false;}};
 $('compare-config').onclick=async()=>{const box=$('config-diff'),button=$('compare-config');button.disabled=true;box.textContent='Pobieranie i porównywanie konfiguracji…';try{const response=await fetch('/api/config/compare');if(!response.ok)throw new Error('Błąd porównania: HTTP '+response.status);const d=await response.json();const added=Number(d.added)||0,removed=Number(d.removed)||0;box.textContent='Różnice: '+added+' dodanych w running-config · '+removed+' usuniętych względem startup-config · Linie: running '+d.runningLines+' / startup '+d.startupLines+'. '+(added===0&&removed===0?'Konfiguracje są zgodne.':'Szczegółowe linie pominięto, ponieważ mogą zawierać dane poufne.');}catch(e){box.textContent=e.message;}finally{button.disabled=false;}};
 $('save-config').onclick=async()=>{if(!confirm('Zapisać running-config do startup-config?'))return;try{const d=await api('/api/save',{});showFriendlyResult('output',d.output,'Zapis konfiguracji');alert('Polecenie zapisu wysłane.');}catch(x){alert(x.message);}};

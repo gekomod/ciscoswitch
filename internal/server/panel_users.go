@@ -121,7 +121,7 @@ func (s *panelUserStore) usersHandler() http.Handler {
   s.mu.Lock();defer s.mu.Unlock();u,ok:=s.users[id];if !ok{http.NotFound(w,r);return}
   if q.Role!=""&&!validPanelRole(q.Role){http.Error(w,"invalid role",400);return}
   if q.Password!=""&&len(q.Password)<12{http.Error(w,"hasło musi mieć co najmniej 12 znaków",400);return}
-  if (q.Role=="viewer"||q.Active!=nil&&!*q.Active)&&u.Role=="admin"&&u.Active {admins:=0;for _,x:=range s.users{if x.Role=="admin"&&x.Active{admins++}};if admins<=1{http.Error(w,"nie można zablokować ani zdegradować ostatniego aktywnego administratora",409);return}}
+  losesAdmin:=u.Role=="admin"&&u.Active&&((q.Role!=""&&q.Role!="admin")||(q.Active!=nil&&!*q.Active));if losesAdmin {admins:=0;for _,x:=range s.users{if x.Role=="admin"&&x.Active{admins++}};if admins<=1{http.Error(w,"nie można zablokować ani zdegradować ostatniego aktywnego administratora",409);return}}
   if q.Role!=""{u.Role=q.Role};if q.Active!=nil{u.Active=*q.Active};if q.Password!=""{hash,err:=bcrypt.GenerateFromPassword([]byte(q.Password),bcrypt.DefaultCost);if err!=nil{http.Error(w,"password hashing failed",500);return};u.PasswordHash=string(hash)}
   u.UpdatedAt=time.Now().UTC();s.users[id]=u
   if err:=s.writeLocked();err!=nil{http.Error(w,"nie można zapisać zmian",500);return}

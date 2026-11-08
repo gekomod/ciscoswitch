@@ -929,3 +929,21 @@ func TestDiagnosticsAvailabilityEndpointRejectsUnsupportedWindow(t *testing.T) {
  rec:=httptest.NewRecorder();h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/diagnostics/availability?window=30d",nil))
  if rec.Code!=http.StatusBadRequest {t.Fatalf("status=%d want 400",rec.Code)}
 }
+
+
+func TestDiagnosticsAvailabilityCSVExportIncludesCoverageAndBOM(t *testing.T) {
+ store:=newDiagnosticsStore(filepath.Join(t.TempDir(),"history.json"),10)
+ now:=time.Now().UTC()
+ if err:=store.append(diagnosticsSample{CapturedAt:now.Add(-time.Minute),Checks:map[string]bool{"runningConfig":true}});err!=nil{t.Fatal(err)}
+ if err:=store.append(diagnosticsSample{CapturedAt:now,Checks:map[string]bool{"runningConfig":false}});err!=nil{t.Fatal(err)}
+ h:=diagnosticsAvailabilityCSVHandler(store)
+ rec:=httptest.NewRecorder();h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/diagnostics/availability.csv?window=24h",nil))
+ if rec.Code!=http.StatusOK{t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String())}
+ if !strings.HasPrefix(rec.Body.String(),"\uFEFF")||!strings.Contains(rec.Body.String(),"Brak danych (s)")||!strings.Contains(rec.Header().Get("Content-Disposition"),"switch-availability-24h.csv"){t.Fatalf("unexpected CSV response: headers=%v body=%q",rec.Header(),rec.Body.String()[:min(200,len(rec.Body.String()))])}
+}
+func TestDiagnosticsAvailabilityReportBuildsFixedTimeline(t *testing.T) {
+ store:=newDiagnosticsStore(filepath.Join(t.TempDir(),"history.json"),10)
+ report,err:=buildDiagnosticsAvailabilityReport(store,"7d")
+ if err!=nil{t.Fatal(err)}
+ if len(report.Timeline)!=7{t.Fatalf("timeline buckets=%d want 7",len(report.Timeline))}
+}

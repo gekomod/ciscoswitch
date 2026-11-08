@@ -78,6 +78,61 @@ func newSNMPClient(c Config) (*gosnmp.GoSNMP, error) {
  return &g,nil
 }
 
+
+type Identity struct {
+	Description string `json:"description"`
+	ObjectID string `json:"objectId"`
+	Name string `json:"name"`
+	Uptime string `json:"uptime"`
+	UptimeTicks uint64 `json:"uptimeTicks"`
+}
+
+// DeviceIdentity reads standard SNMPv2-MIB identity objects. It does not
+// depend on vendor-specific CLI output and is safe for read-only discovery.
+func (s *Service) DeviceIdentity() (Identity, error) {
+	var out Identity
+	g, err := newSNMPClient(s.cfg)
+	if err != nil { return out, err }
+	if err = g.Connect(); err != nil { return out, err }
+	defer g.Conn.Close()
+	result, err := g.Get([]string{
+		".1.3.6.1.2.1.1.1.0", // sysDescr
+		".1.3.6.1.2.1.1.2.0", // sysObjectID
+		".1.3.6.1.2.1.1.3.0", // sysUpTime
+		".1.3.6.1.2.1.1.5.0", // sysName
+	})
+	if err != nil { return out, fmt.Errorf("SNMP system identity: %w", err) }
+	if result == nil { return out, fmt.Errorf("switch nie zwrócił danych identyfikacyjnych SNMP") }
+	for _, pdu := range result.Variables {
+		value := strings.TrimSpace(fmt.Sprint(pdu.Value))
+		switch pdu.Name {
+		case ".1.3.6.1.2.1.1.1.0": out.Description = value
+		case ".1.3.6.1.2.1.1.2.0": out.ObjectID = value
+		case ".1.3.6.1.2.1.1.5.0": out.Name = value
+		case ".1.3.6.1.2.1.1.3.0":
+			var ticks uint64
+			switch v := pdu.Value.(type) {
+			case uint32: ticks = uint64(v)
+			case uint64: ticks = v
+			case uint: ticks = uint64(v)
+			case int: if v > 0 { ticks = uint64(v) }
+			case int64: if v > 0 { ticks = uint64(v) }
+			}
+			out.UptimeTicks = ticks
+			seconds := ticks / 100
+			days := seconds / 86400
+			hours := (seconds % 86400) / 3600
+			minutes := (seconds % 3600) / 60
+			secs := seconds % 60
+			out.Uptime = fmt.Sprintf("%d d %02d:%02d:%02d", days, hours, minutes, secs)
+		}
+	}
+	if out.Description == "" && out.Name == "" && out.ObjectID == "" {
+		return out, fmt.Errorf("switch nie udostępnia standardowych obiektów identyfikacyjnych SNMP")
+	}
+	return out, nil
+}
+
 func (s *Service) Status() Status {
  version:=strings.ToLower(strings.TrimSpace(s.cfg.SNMPVersion))
  if version=="" { version="2c" }

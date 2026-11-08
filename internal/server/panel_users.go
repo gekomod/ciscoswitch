@@ -82,7 +82,7 @@ func (s *panelUserStore) login(w http.ResponseWriter,r *http.Request) {
 }
 func (s *panelUserStore) identity(r *http.Request)(panelIdentity,bool) {
  c,err:=r.Cookie("panel_session");if err!=nil{return panelIdentity{},false}
- s.mu.Lock();defer s.mu.Unlock();id,ok:=s.sessions[c.Value];if !ok{return panelIdentity{},false}
+ s.mu.Lock();defer s.mu.Unlock();session,ok:=s.sessions[c.Value];if !ok{return panelIdentity{},false};if time.Now().After(session.ExpiresAt){delete(s.sessions,c.Value);return panelIdentity{},false};id:=session.Identity
  u,exists:=s.users[id.UserID];if !exists||!u.Active{return panelIdentity{},false};id.Role=u.Role;id.Username=u.Username;return id,true
 }
 func (s *panelUserStore) middleware(next http.Handler) http.Handler {

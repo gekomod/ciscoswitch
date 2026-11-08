@@ -406,6 +406,7 @@ function renderComplianceRecommendations(profile,repairs){
    const preview=await api('/api/ports/repair/preview',payload);
    const summary='Naprawa częściowa portu '+repair.port+'\n\nWykryte różnice: '+repair.changes.join(', ')+'\n\nZostaną zmienione wyłącznie wskazane parametry. Tryb portu, speed i duplex pozostaną bez zmian.\n\nBieżący tryb: '+(preview.current?.mode||'—')+' · VLAN: '+(preview.current?.defaultVlan||'—')+(Array.isArray(preview.warnings)&&preview.warnings.length?'\n\nAnaliza wpływu na łączność:\n'+preview.warnings.map(x=>'• '+x).join('\n'):'')+'\n\nPrzed zmianą zostanie wykonana kopia running-config. Kontynuować?';
    if(!confirm(summary))return;
+   payload.acknowledgeConnectivityRisk=true;
    button.textContent='Zapisuję…';
    await api('/api/ports/repair/apply',payload);
    let actual=await api('/api/port/switchport?port='+encodeURIComponent(repair.port));
@@ -796,6 +797,7 @@ $('bulk-apply').onclick=async()=>{
   const summary='Profil '+(payload.mode==='access'?'Access':'Trunk')+' zostanie zastosowany na '+payload.ports.length+' portach:\n'+payload.ports.join(', ')+'\n\nStan bieżący:\n'+currentSummary+'\n\nNowe ustawienia: '+(payload.mode==='access'?'Access VLAN: '+payload.accessVlan:'Native VLAN: '+payload.native+' · dozwolone VLAN: '+payload.allowed)+'\n\nWszystkie porty sprawdzono jednym wspólnym odczytem konfiguracji switcha. Przed zmianą zostanie utworzona kopia konfiguracji.'+(warnings.length?'\n\nUwagi: '+warnings.join(' · '):'');
   showFriendlyResult('bulk-output',summary,'Podgląd profilu portów');
   if(!confirm(summary+'\n\nZastosować profil?'))return;
+  payload.acknowledgeConnectivityRisk=true;
   const result=await api('/api/ports/settings/bulk',payload);
    let verification;
    try{verification=await api('/api/ports/switchport/bulk',{ports:payload.ports});}
@@ -1272,6 +1274,7 @@ $('apply-port-settings').onclick=async()=>{
   const summary='Port '+payload.port+' — stan bieżący: '+(current.mode||'nieustalony')+', VLAN '+(current.defaultVlan||'—')+'.\nNowy tryb: '+(payload.mode==='access'?'Access':'Trunk')+'. '+(payload.mode==='access'?'Access VLAN: '+payload.accessVlan:'Native VLAN: '+payload.native+' · dozwolone VLAN: '+payload.allowed)+'. Podgląd nie zmienia konfiguracji.'+(p.warnings?.length?'\n\nUwagi: '+p.warnings.join(' · '):'');
   showFriendlyResult('output',summary,'Podgląd portu');
   if(!confirm(summary+'\n\nZastosować konfigurację?'))return;
+  payload.acknowledgeConnectivityRisk=true;
   await api('/api/port/settings',payload);
   const state=await api('/api/port/switchport?port='+encodeURIComponent(payload.port));
   const modeOK=String(state.mode||'').toLowerCase()===payload.mode,native=Number.parseInt(state.defaultVlan,10);

@@ -594,8 +594,19 @@ function renderEvents(){
  for(const event of recentEvents){if(Object.prototype.hasOwnProperty.call(counts,event.type))counts[event.type]++;}
  for(const [id,value] of [['alert-danger-count',counts.danger],['alert-warning-count',counts.warning],['alert-info-count',counts.info],['alert-total-count',recentEvents.length]]){const node=$(id);if(node)node.textContent=String(value);}
  const filter=$('alert-filter')?.value||'all';
- const visible=recentEvents.filter(x=>filter==='all'||x.type===filter).slice(0,100);
- el.innerHTML=visible.length?visible.map(x=>'<div class="event-row is-'+esc(x.type)+'"><i></i><span>'+esc(x.message)+'</span><small>'+esc(x.at)+'</small></div>').join(''):'<div class="empty">Brak zdarzeń dla wybranego poziomu.</div>';
+ const filtered=recentEvents.filter(x=>filter==='all'||x.type===filter);
+ const groups=new Map();
+ for(const event of filtered){
+  const key=(event.type||'info')+'|'+String(event.message||'');
+  const group=groups.get(key)||{...event,count:0,lastAt:event.at,lastTimestamp:event.timestamp};
+  group.count++;
+  if((Date.parse(event.timestamp)||0)>(Date.parse(group.lastTimestamp)||0)){group.lastAt=event.at;group.lastTimestamp=event.timestamp;}
+  groups.set(key,group);
+ }
+ const visible=[...groups.values()].sort((a,b)=>(Date.parse(b.lastTimestamp)||0)-(Date.parse(a.lastTimestamp)||0)).slice(0,100);
+ el.innerHTML=visible.length?visible.map(x=>'<div class="event-row is-'+esc(x.type)+'"><i></i><span>'+esc(x.message)+(x.count>1?'<em class="event-repeat">×'+x.count+'</em>':'')+'</span><small>'+esc(x.lastAt)+'</small></div>').join(''):'<div class="empty">Brak zdarzeń dla wybranego poziomu.</div>';
+ const repeated=visible.filter(x=>x.count>1).length;
+ const summary=$('alert-repeat-summary');if(summary)summary.textContent=repeated?repeated+' powtarzających się typów zdarzeń':'Brak powtarzających się zdarzeń';
 }
 function receiveMonitorRecord(record){
  if(!record||typeof record!=='object')return;

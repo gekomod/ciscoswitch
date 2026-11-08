@@ -29,6 +29,14 @@ Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948
 - Centrum diagnostyki awarii: serwer zbiera automatycznie read-only próbki znormalizowanego stanu LACP, jawnie opisanych uplinków, sąsiadów LLDP i dostępności odczytów. Pierwsza próbka jest zbierana przy starcie, kolejne według `DIAGNOSTICS_INTERVAL` (domyślnie `60s`, minimum `10s`, `0` wyłącza sampler). Historia jest zapisywana atomowo w lokalnym pliku JSON z uprawnieniami katalogu 0700 i pliku 0600; domyślna retencja wynosi 12 000 próbek (około 8,3 dnia przy interwale 60 sekund). API `POST /api/diagnostics/collect` nadal pozwala ręcznie zebrać próbkę, a `GET /api/diagnostics/history?limit=100&windowMinutes=60` zwraca historię, alarmy i zmiany z całego zachowanego okna. Trzy lub więcej zmian tego samego stanu LACP w wybranym oknie generują alarm powtarzających się zmian (flapping). Dostępne okna: 5–1440 minut. LACP Ready=0 jest alarmem krytycznym, rozbieżność członków — ostrzeżeniem, a pojedynczy jawnie opisany uplink — informacją o ryzyku topologii, nie awarii. Brak danych nie jest traktowany jako powrót do normy. Krótkie zaniki krótsze niż interwał próbkowania mogą pozostać niewykryte. Ścieżkę pliku można zmienić przez `DIAGNOSTICS_HISTORY_PATH`.
 - Historia ruchu per port jest zapisywana lokalnie w `data/monitor-history.jsonl` i odtwarzana po ponownym otwarciu panelu; retencja jest ograniczona do 60 próbek na port w odpowiedzi API, a plik ma limit 2 MiB i uprawnienia 0600.
 
+## Wydajność
+
+- Stan portów jest odczytywany przez SNMP GETBULK (wiele wierszy tabeli w jednym zapytaniu) zamiast GETNEXT dla każdego wiersza osobno.
+- Odczyty `show` korzystają z jednego współdzielonego połączenia SSH (ponowne łączenie po zerwaniu lub 45 s bezczynności) zamiast nowego logowania przy każdym poleceniu.
+- Wyniki SNMP i `show` są buforowane przez `STATUS_CACHE_TTL` / `READ_CACHE_TTL` (domyślnie 5 s), a równoległe zapytania o to samo są łączone w jedno. Każda zmiana konfiguracji z panelu czyści cache, więc odczyt zwrotny jest zawsze świeży. Konsola diagnostyczna CLI zawsze pyta switch bezpośrednio.
+- Zmiany konfiguracji wyłączają stronicowanie (`terminal length 0`) i kończą sesję poleceniem `exit`, zamiast czekać na timeout. Komunikaty błędów AlliedWare Plus (linie zaczynające się od `% `, poza `% Warning`) są zgłaszane jako błąd operacji.
+- `PERF_LOG=1` loguje czas każdego zapytania do switcha (`[perf] ...`); domyślnie logowane są tylko zapytania dłuższe niż 1,5 s.
+
 ## Instalacja — Debian 13
 
 ```bash

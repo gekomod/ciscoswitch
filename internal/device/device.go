@@ -8,6 +8,7 @@ import (
  "sort"
  "strconv"
  "strings"
+ "sync"
  "time"
 
  "github.com/gosnmp/gosnmp"
@@ -19,8 +20,18 @@ type Config struct {
  SNMPCommunity, SNMPPort, SNMPVersion string
  SNMPV3User, SNMPV3AuthPassword, SNMPV3PrivacyPassword string
  Timeout time.Duration
+ // StatusCacheTTL i ReadCacheTTL: 0 = wartość domyślna (5 s), wartość ujemna wyłącza cache.
+ StatusCacheTTL, ReadCacheTTL time.Duration
 }
-type Service struct { cfg Config }
+type Service struct {
+ cfg Config
+ ssh sshPool
+ reads readCache
+ flights flightGroup
+ statusMu sync.Mutex
+ status Status
+ statusAt time.Time
+}
 type Port struct {
  Index int `json:"index"`
  Name string `json:"name"`
@@ -54,6 +65,7 @@ func newSNMPClient(c Config) (*gosnmp.GoSNMP, error) {
  g.Port=uint16(port(c.SNMPPort,161))
  g.Timeout=c.Timeout
  g.Retries=1
+ g.MaxRepetitions=32
  version:=strings.ToLower(strings.TrimSpace(c.SNMPVersion))
  if version=="" || version=="2" || version=="2c" {
   if c.SNMPCommunity=="" { return nil, fmt.Errorf("brak SWITCH_SNMP_COMMUNITY dla SNMPv2c") }
@@ -138,7 +150,8 @@ func (s *Service) DeviceIdentity() (Identity, error) {
 	return out, nil
 }
 
-func (s *Service) Status() Status {
+// readStatus odpytuje switch przez SNMP bez użycia cache (patrz Status w perf.go).
+func (s *Service) readStatus() Status {
  version:=strings.ToLower(strings.TrimSpace(s.cfg.SNMPVersion))
  if version=="" { version="2c" }
  if version=="v3" { version="3" }
@@ -175,9 +188,16 @@ func (s *Service) Status() Status {
  return o
 }
 
+// walk używa GETBULK (SNMPv2c/v3), który pobiera wiele wierszy tabeli w jednym
+// zapytaniu zamiast jednego GETNEXT na wiersz. Dla SNMPv1 zostaje zwykły Walk.
+func walk(g *gosnmp.GoSNMP,oid string,fn gosnmp.WalkFunc)error {
+ if g.Version==gosnmp.Version1 { return g.Walk(oid,fn) }
+ return g.BulkWalk(oid,fn)
+}
+
 func walkText(g *gosnmp.GoSNMP,oid string)(map[int]string,error) {
  m:=map[int]string{}
- e:=g.Walk(oid,func(p gosnmp.SnmpPDU)error {
+ e:=walk(g,oid,func(p gosnmp.SnmpPDU)error {
   a:=strings.Split(p.Name,".")
   i,x:=strconv.Atoi(a[len(a)-1]); if x!=nil{return nil}
   switch v:=p.Value.(type) { case []byte:m[i]=strings.TrimSpace(string(v)); case string:m[i]=strings.TrimSpace(v); default:m[i]=fmt.Sprint(v) }
@@ -187,7 +207,7 @@ func walkText(g *gosnmp.GoSNMP,oid string)(map[int]string,error) {
 }
 func walkNum(g *gosnmp.GoSNMP,oid string)(map[int]uint32,error) {
  m:=map[int]uint32{}
- e:=g.Walk(oid,func(p gosnmp.SnmpPDU)error {
+ e:=walk(g,oid,func(p gosnmp.SnmpPDU)error {
   a:=strings.Split(p.Name,".")
   i,x:=strconv.Atoi(a[len(a)-1]); if x!=nil{return nil}
   switch v:=p.Value.(type) { case uint:m[i]=uint32(v); case uint32:m[i]=v; case int:if v>0{m[i]=uint32(v)}; case int64:if v>0{m[i]=uint32(v)}; case uint64:m[i]=uint32(v) }
@@ -197,7 +217,7 @@ func walkNum(g *gosnmp.GoSNMP,oid string)(map[int]uint32,error) {
 }
 func walkCounter(g *gosnmp.GoSNMP,oid string)(map[int]uint64,error) {
  m:=map[int]uint64{}
- e:=g.Walk(oid,func(p gosnmp.SnmpPDU)error {
+ e:=walk(g,oid,func(p gosnmp.SnmpPDU)error {
   a:=strings.Split(p.Name,".")
   i,x:=strconv.Atoi(a[len(a)-1]); if x!=nil{return nil}
   var n uint64
@@ -246,23 +266,70 @@ func (s *Service) dialSSH() (*ssh.Client, error) {
 
 func (s *Service) runConfig(cmds []string)(string,error) {
  if s.cfg.Host==""||s.cfg.SSHUser==""||s.cfg.SSHPassword=="" {return "",fmt.Errorf("brak konfiguracji SSH w .env")}
+ // Każda próba zmiany (także nieudana) unieważnia cache, aby kolejne odczyty
+ // pokazały rzeczywisty stan switcha.
+ defer s.InvalidateCache()
+ started:=time.Now()
  c,e:=s.dialSSH()
  if e!=nil{return "",e}
  defer c.Close()
  ss,e:=c.NewSession();if e!=nil{return "",e};defer ss.Close()
  in,e:=ss.StdinPipe();if e!=nil{return "",e}
- var out strings.Builder
+ var out safeBuffer
  ss.Stdout=&out;ss.Stderr=&out
  if e=ss.Shell();e!=nil{return "",e}
- for _,x:=range cmds {if _,e=fmt.Fprintln(in,x);e!=nil{return out.String(),e}}
+ script:=configScript(cmds)
+ for _,x:=range script {if _,e=fmt.Fprintln(in,x);e!=nil{return out.String(),e}}
  _=in.Close()
  done:=make(chan error,1);go func(){done<-ss.Wait()}()
  select {
- case e=<-done: if e!=nil{return out.String(),fmt.Errorf("CLI: %w; %s",e,out.String())}
- case <-time.After(8*time.Second): _=ss.Close();return out.String(),fmt.Errorf("timeout CLI")
+ case e=<-done:
+  // Część implementacji SSH zgłasza zamknięcie sesji przez "exit" jako błąd
+  // bez kodu wyjścia; liczy się wtedy treść odpowiedzi CLI.
+  if e!=nil{if _,ok:=e.(*ssh.ExitMissingError);!ok{logTiming("ssh-config",configLabel(cmds),started,e);return out.String(),fmt.Errorf("CLI: %w; %s",e,out.String())}}
+ case <-time.After(15*time.Second): _=ss.Close();logTiming("ssh-config",configLabel(cmds),started,fmt.Errorf("timeout"));return out.String(),fmt.Errorf("timeout CLI (15 s) — switch nie zamknął sesji; sprawdź wynik odczytem zwrotnym")
  }
- return out.String(),nil
+ result:=out.String()
+ if msg:=cliError(result);msg!=""{logTiming("ssh-config",configLabel(cmds),started,fmt.Errorf("%s",msg));return result,fmt.Errorf("switch odrzucił polecenie: %s",msg)}
+ logTiming("ssh-config",configLabel(cmds),started,nil)
+ return result,nil
 }
+
+// configLabel opisuje zmianę w logach bez treści poleceń (mogą zawierać hasła).
+func configLabel(cmds []string)string{return fmt.Sprintf("%d poleceń",len(cmds))}
+
+// configScript wyłącza stronicowanie (--More--) i kończy sesję poleceniem exit,
+// dzięki czemu panel nie czeka na timeout po wykonaniu zmian.
+func configScript(cmds []string)[]string {
+ script:=make([]string,0,len(cmds)+3)
+ script=append(script,"terminal length 0")
+ script=append(script,cmds...)
+ last:=""
+ if len(cmds)>0{last=strings.TrimSpace(cmds[len(cmds)-1])}
+ if strings.HasPrefix(last,"configure")||(last!="end"&&inConfigMode(cmds)){script=append(script,"end")}
+ return append(script,"exit")
+}
+
+// inConfigMode sprawdza, czy po liście poleceń sesja może pozostać w trybie konfiguracji.
+func inConfigMode(cmds []string)bool {
+ inside:=false
+ for _,c:=range cmds{c=strings.TrimSpace(c);if strings.HasPrefix(c,"configure"){inside=true};if c=="end"{inside=false}}
+ return inside
+}
+
+// cliError zwraca pierwszy komunikat błędu AlliedWare Plus (linie zaczynające się od "%").
+func cliError(out string)string {
+ for _,line:=range strings.Split(out,"\n"){
+  l:=strings.TrimSpace(line)
+  if strings.HasPrefix(l,"% ")&&!strings.HasPrefix(strings.ToLower(l),"% warning"){return l}
+ }
+ return ""
+}
+
+// safeBuffer jest bezpiecznym wątkowo buforem dla stdout i stderr sesji SSH.
+type safeBuffer struct{mu sync.Mutex;b strings.Builder}
+func (w *safeBuffer) Write(p []byte)(int,error){w.mu.Lock();defer w.mu.Unlock();return w.b.Write(p)}
+func (w *safeBuffer) String()string{w.mu.Lock();defer w.mu.Unlock();return w.b.String()}
 
 func (s *Service) ConfigurePort(name,action string)(string,error) {
  if !validPort(name){return "",fmt.Errorf("nieprawidłowy port")}
@@ -298,10 +365,28 @@ func (s *Service) RunReadOnly(cmd string)(string,error) {
  ok:=false;for _,v:=range allowed{if cmd==v{ok=true;break}};if strings.HasPrefix(cmd,"show vlan "){id,err:=strconv.Atoi(strings.TrimPrefix(cmd,"show vlan "));if err==nil&&id>=1&&id<=4094{ok=true}}
  if !ok{return "",fmt.Errorf("polecenie niedozwolone")}
  if s.cfg.Host==""||s.cfg.SSHUser==""||s.cfg.SSHPassword==""{return "",fmt.Errorf("brak SWITCH_HOST lub danych SSH w .env")}
- c,e:=s.dialSSH()
- if e!=nil{return "",e};defer c.Close()
- ss,e:=c.NewSession();if e!=nil{return "",e};defer ss.Close()
- b,e:=ss.Output(cmd);return string(b),e
+ if out,ok:=s.reads.get(cmd,s.readTTL());ok{return out,nil}
+ v,err:=s.flights.do("cmd:"+cmd,func()(any,error){
+  gen:=s.reads.gen()
+  out,err:=s.readFromSwitch(cmd)
+  if err==nil{s.reads.put(cmd,out,gen)}
+  return out,err
+ })
+ return v.(string),err
+}
+
+// RunReadOnlyFresh działa jak RunReadOnly, ale zawsze pyta switch
+// (konsola diagnostyczna, w której użytkownik oczekuje bieżącego wyniku).
+func (s *Service) RunReadOnlyFresh(cmd string)(string,error) {
+ s.reads.mu.Lock();delete(s.reads.entries,cmd);s.reads.mu.Unlock()
+ return s.RunReadOnly(cmd)
+}
+
+func (s *Service) readFromSwitch(cmd string)(string,error) {
+ started:=time.Now()
+ out,err:=s.ssh.output(s.dialSSH,cmd)
+ logTiming("ssh",cmd,started,err)
+ return out,err
 }
 
 func (s *Service) ConfigureSSHUser(username,password string,privilege int,remove bool)(string,error){

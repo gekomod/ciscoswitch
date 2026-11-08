@@ -224,7 +224,7 @@ apiMux.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.M
  apiMux.HandleFunc("/api/save",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};v,e:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.SaveConfig()});write(w,v,e)})
  apiMux.HandleFunc("/api/system",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.SystemInfo())})
  apiMux.Handle("/api/port/switchport", switchportDetailsHandler(svc.RunReadOnly))
- apiMux.HandleFunc("/api/command",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,4096);var q struct{Command string `json:"command"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=svc.RunReadOnly(strings.TrimSpace(q.Command));write(w,v,e)})
+ apiMux.HandleFunc("/api/command",func(w http.ResponseWriter,r *http.Request){if r.Method!="POST"{http.Error(w,"method not allowed",405);return};r.Body=http.MaxBytesReader(w,r.Body,4096);var q struct{Command string `json:"command"`};if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return};v,e:=svc.RunReadOnlyFresh(strings.TrimSpace(q.Command));write(w,v,e)})
  m.Handle("/api/",panelUsers.middleware(apiMux))
  m.Handle("/",panelUsers.middleware(apiMux))
  m.HandleFunc("/login",panelLoginPageHandler)

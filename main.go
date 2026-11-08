@@ -32,8 +32,11 @@ func main() {
   SNMPV3AuthPassword: os.Getenv("SWITCH_SNMP_V3_AUTH_PASSWORD"),
   SNMPV3PrivacyPassword: os.Getenv("SWITCH_SNMP_V3_PRIV_PASSWORD"),
   Timeout: 4*time.Second,
+  StatusCacheTTL: cacheTTL("STATUS_CACHE_TTL"),
+  ReadCacheTTL: cacheTTL("READ_CACHE_TTL"),
  }
  svc := device.New(cfg)
+ defer svc.Close()
  addr := env("LISTEN_ADDR","127.0.0.1:8090")
  mux := http.NewServeMux()
  server.Register(mux,svc)
@@ -283,4 +286,21 @@ func auditLog(next http.Handler, path string) http.Handler {
   closeErr:=file.Close()
   if encErr!=nil{log.Printf("audit write failed: %v",encErr)} else if closeErr!=nil{log.Printf("audit close failed: %v",closeErr)}
  })
+}
+
+// cacheTTL czyta czas życia cache z .env: pusty = domyślne 5 s, "0" lub "off" wyłącza cache.
+func cacheTTL(name string) time.Duration {
+	raw := strings.ToLower(strings.TrimSpace(os.Getenv(name)))
+	switch raw {
+	case "":
+		return 0
+	case "0", "off", "false":
+		return -1
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d < 0 || d > 5*time.Minute {
+		log.Printf("Nieprawidłowe %s=%q; używam wartości domyślnej 5s", name, raw)
+		return 0
+	}
+	return d
 }

@@ -861,7 +861,7 @@ func analyzeVLANAndPortSecurity(config,switchport string) []securityAuditFinding
  findings:=make([]securityAuditFinding,0)
  declared:=map[int]bool{}
  referenced:=map[int]bool{}
- type ifaceConfig struct{name,mode,native,allowed,access string}
+ type ifaceConfig struct{name,mode,native,allowed,access string;edgeport,lacp bool}
  interfaces:=make([]ifaceConfig,0)
  var current *ifaceConfig
  for _,line:=range strings.Split(config,"\n"){
@@ -873,6 +873,8 @@ func analyzeVLANAndPortSecurity(config,switchport string) []securityAuditFinding
   if current!=nil {
    fields:=strings.Fields(lower)
    if len(fields)>=2&&fields[0]=="switchport"&&fields[1]=="mode"&&len(fields)>=3{current.mode=fields[2]}
+   if len(fields)>=2&&fields[0]=="spanning-tree"&&fields[1]=="edgeport"{current.edgeport=true}
+   if len(fields)>=2&&(fields[0]=="channel-group"||fields[0]=="static-channel-group"){current.lacp=true}
    if len(fields)>=4&&fields[0]=="switchport"&&fields[1]=="access"&&fields[2]=="vlan"{current.access=fields[3]}
    if len(fields)>=5&&fields[0]=="switchport"&&fields[1]=="trunk"&&fields[2]=="native"&&fields[3]=="vlan"{current.native=fields[4]}
    if len(fields)>=5&&fields[0]=="switchport"&&fields[1]=="trunk"&&fields[2]=="allowed"&&fields[3]=="vlan"{
@@ -885,6 +887,8 @@ func analyzeVLANAndPortSecurity(config,switchport string) []securityAuditFinding
   }
  }
  for _,p:=range interfaces{
+  if p.edgeport&&p.mode=="trunk"{findings=append(findings,securityAuditFinding{"warning","edgeport-on-trunk","EdgePort jest skonfigurowany na porcie trunk",p.name+": spanning-tree edgeport oraz switchport mode trunk.","Zweryfikuj rolę portu i topologię. EdgePort jest przeznaczony dla urządzeń końcowych; nie włączaj go na łączach między przełącznikami bez potwierdzenia projektu STP."})}
+  if p.edgeport&&p.lacp{findings=append(findings,securityAuditFinding{"warning","edgeport-on-lacp-member","EdgePort jest skonfigurowany na członku agregacji",p.name+": spanning-tree edgeport oraz channel-group.","Zweryfikuj agregację i sąsiedni switch. Nie traktuj członka LACP jako portu końcowego."})}
   if n,e:=strconv.Atoi(p.access);e==nil&&n>=1&&n<=4094{referenced[n]=true}
   for n:=range parseAuditVLANSet(p.allowed){referenced[n]=true}
   if p.mode=="trunk"&&p.native!=""&&p.allowed!=""{

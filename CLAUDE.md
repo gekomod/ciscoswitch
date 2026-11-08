@@ -14,6 +14,8 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 
 ## Frontend (`web/`)
 - `loading.js` — przechwytuje `fetch` do `/api/` po kliknięciu: pasek postępu, przycisk zajęty, komunikaty. Ładowany przed `app.js`.
+- `faceplate.js` — front switcha na przeglądzie; korzysta z `latestPorts`, zdarzenia `ports:updated` (wysyłanego w `load()`), `openPortDialog`, `openPortDiagnostics`, `activatePage`.
+- Menu: grupy Przegląd, Porty, Przełączanie, Sieć, System, Narzędzia (makieta: artefakt „Panel AT-GS948MX”).
 - `services.js` + `internal/device/services.go` + `internal/server/services_routes.go` — moduł usług (SSH zablokowane, SNMP/DHCP wymagają potwierdzenia).
 - Domyślne stany usług AW+ nie są pewne; stan „nieustalony” jest celowy. Potwierdzić na switchu formaty `show http`, `show telnet`, `show lldp`.
 

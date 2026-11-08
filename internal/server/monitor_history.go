@@ -242,6 +242,9 @@ func StartMonitorCollector(ctx context.Context, svc *device.Service, path string
      }
     }
     previousPorts=current
+   } else {
+    // Do not compare counters or link state across an SNMP outage.
+    previousPorts=map[string]device.Port{}
    }
    reachable:=status.Reachable
    previousReachable=&reachable

@@ -908,3 +908,24 @@ func TestDiagnosticsHistoryReturnsAcknowledgementMetadata(t *testing.T) {
  rec:=httptest.NewRecorder();handler.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/diagnostics/history",nil))
  if rec.Code!=http.StatusOK||!strings.Contains(rec.Body.String(),"\"acknowledged\":true")||!strings.Contains(rec.Body.String(),"operator1"){t.Fatalf("acknowledgement not returned: status=%d body=%s",rec.Code,rec.Body.String())}
 }
+
+
+func TestDiagnosticsAvailabilitySeparatesUnknownGapsFromDowntime(t *testing.T) {
+ now:=time.Now().UTC().Truncate(time.Second)
+ samples:=[]diagnosticsSample{
+  {CapturedAt:now.Add(-4*time.Minute),Checks:map[string]bool{"runningConfig":true}},
+  {CapturedAt:now.Add(-3*time.Minute),Checks:map[string]bool{"runningConfig":false}},
+  {CapturedAt:now.Add(-2*time.Minute),Checks:map[string]bool{"runningConfig":false}},
+  {CapturedAt:now,Checks:map[string]bool{"runningConfig":true}},
+ }
+ start:=now.Add(-5*time.Minute)
+ metric:=diagnosticsAvailabilityMetric("CLI",samples,start,now,2*time.Minute,func(s diagnosticsSample)(bool,bool){return s.Checks!=nil,s.Checks["runningConfig"]})
+ if metric.OutageCount!=1 {t.Fatalf("outage count=%d want 1: %+v",metric.OutageCount,metric)}
+ if metric.OutageSeconds<60||metric.OutageSeconds>121 {t.Fatalf("outage duration=%d want about 120s",metric.OutageSeconds)}
+ if metric.UnknownSeconds<60 {t.Fatalf("expected unobserved time to remain unknown: %+v",metric)}
+}
+func TestDiagnosticsAvailabilityEndpointRejectsUnsupportedWindow(t *testing.T) {
+ h:=diagnosticsAvailabilityHandler(newDiagnosticsStore(filepath.Join(t.TempDir(),"history.json"),10))
+ rec:=httptest.NewRecorder();h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/diagnostics/availability?window=30d",nil))
+ if rec.Code!=http.StatusBadRequest {t.Fatalf("status=%d want 400",rec.Code)}
+}

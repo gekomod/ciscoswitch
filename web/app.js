@@ -1354,3 +1354,30 @@ $('panel-users-rows')?.addEventListener('click',async event=>{
 async function loadSessionIdentity(){const el=$('session-identity');if(!el)return;try{const d=await api('/api/session');const labels={viewer:'Podgląd',operator:'Operator',admin:'Administrator'};el.textContent=(d.username||'Konto')+' · '+(labels[d.role]||d.role||'');el.title='Zalogowano jako '+(d.username||'konto')+' · rola: '+(d.role||'nieznana');document.body.dataset.role=d.role||'';const panel=document.getElementById('panel-users'),nav=document.getElementById('panel-users-nav');if(panel)panel.hidden=d.role!=='admin';if(nav)nav.hidden=d.role!=='admin';if(d.role==='admin')loadPanelUsers();}catch(_e){el.textContent='Sesja';}}
 loadSessionIdentity();
 $('logout').onclick=async()=>{try{await fetch('/api/logout',{method:'POST',credentials:'same-origin'});}finally{location.href='/login';}};
+
+
+// Failure diagnostics center: manual, read-only collection with persisted comparisons.
+function renderDiagnosticsCenter(data){
+ const alerts=$('diagnostics-alerts'),transitions=$('diagnostics-transitions'),samples=$('diagnostics-samples'),meta=$('diagnostics-meta');
+ if(!alerts||!transitions||!samples||!meta)return;
+ const list=Array.isArray(data.samples)?data.samples:[];
+ const latest=list[list.length-1];
+ meta.textContent='Próbek w historii: '+(data.sampleCount??list.length)+' · Ostatni odczyt: '+(latest?new Date(latest.capturedAt).toLocaleString():'brak')+' · '+(data.hasEnoughHistory?'porównanie aktywne':'za mało historii do wykrywania zmian');
+ const severityLabel={critical:'KRYTYCZNY',warning:'OSTRZEŻENIE',info:'INFORMACJA'};
+ alerts.innerHTML=(data.alerts||[]).length?(data.alerts||[]).map(a=>'<article class="diagnostic-alert severity-'+esc(a.severity)+'"><span>'+esc(severityLabel[a.severity]||a.severity)+'</span><div><b>'+esc(a.title)+'</b><small>'+esc(a.evidence)+'</small></div></article>').join(''):'<div class="empty">Brak rozpoznanych bieżących alarmów. To nie jest certyfikat poprawności całej sieci.</div>';
+ transitions.innerHTML=(data.transitions||[]).length?(data.transitions||[]).slice().reverse().map(t=>'<article class="diagnostic-transition"><span class="severity-dot severity-'+esc(t.severity)+'"></span><div><b>'+esc(t.subject)+'</b><small>'+esc(t.from)+' → '+esc(t.to)+'</small></div><time>'+esc(new Date(t.at).toLocaleString())+'</time></article>').join(''):'<div class="empty">'+esc(data.note||'Brak zmian między porównywalnymi próbkami.')+'</div>';
+ samples.innerHTML=list.length?list.slice().reverse().slice(0,8).map(s=>'<article class="diagnostic-sample"><b>'+esc(new Date(s.capturedAt).toLocaleString())+'</b><small>Kontrole: '+Object.entries(s.checks||{}).filter(([,v])=>v).map(([k])=>({runningConfig:'konfiguracja',switchport:'switchport',lldp:'LLDP',lacp:'LACP'}[k]||k)).join(' · ')+' </small><small>LACP: '+(s.aggregations||[]).length+' · uplinki: '+(s.uplinks||[]).length+' · sąsiedzi: '+(s.neighbors||[]).length+'</small></article>').join(''):'<div class="empty">Brak zapisanych próbek.</div>';
+}
+async function refreshDiagnosticsCenter(){
+ const meta=$('diagnostics-meta');if(meta)meta.textContent='Odczyt historii diagnostycznej…';
+ try{const data=await api('/api/diagnostics/history?limit=100');renderDiagnosticsCenter(data);}
+ catch(e){if(meta)meta.textContent='Nie udało się odczytać historii: '+e.message;}
+}
+async function collectDiagnosticsCenter(){
+ const button=$('collect-diagnostics');if(!button)return;
+ button.disabled=true;button.textContent='Zbieranie…';
+ try{const result=await api('/api/diagnostics/collect',{});await refreshDiagnosticsCenter();if($('diagnostics-meta'))$('diagnostics-meta').textContent='Próbka zapisana: '+new Date(result.sample.capturedAt).toLocaleString()+' · '+Object.values(result.sample.checks||{}).filter(Boolean).length+' / 4 kontroli dostępnych.';}
+ catch(e){if($('diagnostics-meta'))$('diagnostics-meta').textContent='Nie udało się zebrać próbki: '+e.message;}
+ finally{button.disabled=false;button.textContent='Zbierz próbkę';}
+}
+if($('collect-diagnostics')){$('collect-diagnostics').addEventListener('click',collectDiagnosticsCenter);refreshDiagnosticsCenter();}

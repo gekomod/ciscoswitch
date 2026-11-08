@@ -627,3 +627,45 @@ interface port1.0.2
  codes:=map[string]bool{};for _,f:=range findings{codes[f.Code]=true}
  if !codes["edgeport-on-trunk"]||!codes["edgeport-on-lacp-member"]{t.Fatalf("expected topology-aware EdgePort findings, got %+v",findings)}
 }
+
+func TestTopologyMapParsersBuildPortsAggregationsAndLLDP(t *testing.T) {
+ config:=`vlan 10
+interface port1.0.1
+ switchport mode trunk
+ switchport trunk native vlan 10
+ channel-group 1 mode active
+interface port1.0.2
+ switchport mode access
+ switchport access vlan 20
+ spanning-tree edgeport
+`
+ sw:=`Interface name: port1.0.1
+Switchport mode: trunk
+Default Vlan: 10
+Configured Vlans: 10 20
+Interface name: port1.0.2
+Switchport mode: access
+Default Vlan: 20
+Configured Vlans: 20
+`
+ ports,lags,vlans:=parseTopologyConfig(config,sw)
+ if len(ports)!=2||len(lags)!=1||len(vlans)!=1{t.Fatalf("unexpected topology parse: ports=%+v lags=%+v vlans=%+v",ports,lags,vlans)}
+ if lags[0].Name!="Po1"||lags[0].Members[0]!="port1.0.1"{t.Fatalf("unexpected LAG: %+v",lags)}
+ if ports[1].Mode!="access"||!ports[1].EdgePort{t.Fatalf("unexpected access port: %+v",ports[1])}
+}
+func TestTopologyLLDPAndLACPParsersIgnoreHeaders(t *testing.T) {
+ links:=parseTopologyLLDP("Local Interface Neighbor System\nport1.0.1 SW-CORE Ethernet1/1\n")
+ if len(links)!=1||links[0].Neighbor!="SW-CORE Ethernet1/1"{t.Fatalf("unexpected LLDP links: %+v",links)}
+ groups:=parseTopologyLACP("Aggregator po1\nPartner LAG: SW-CORE\nIndividual: 2 - Ready: 1\nLink: port1.0.1 synchronized\n")
+ if len(groups)!=1||groups[0].Partner!="SW-CORE"||groups[0].Ready!="Gotowy"||len(groups[0].Members)!=1{t.Fatalf("unexpected LACP groups: %+v",groups)}
+}
+func TestTopologyMapHandlerOnlyReadsAndRequiresConfig(t *testing.T) {
+ calls:=[]string{}
+ h:=topologyMapHandler(func(command string)(string,error){calls=append(calls,command);switch command{case "show running-config":return "vlan 10\ninterface port1.0.1\n switchport mode access\n switchport access vlan 10\n",nil;case "show interface switchport":return "Interface name: port1.0.1\nSwitchport mode: access\nDefault Vlan: 10\nConfigured Vlans: 10\n",nil;case "show lldp neighbors":return "Local Interface Neighbor\n",nil;case "show etherchannel detail":return "",fmt.Errorf("unsupported")};return "",fmt.Errorf("unexpected command")})
+ rec:=httptest.NewRecorder();h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/topology/map",nil))
+ if rec.Code!=200||len(calls)!=4{t.Fatalf("status=%d calls=%v body=%s",rec.Code,calls,rec.Body.String())}
+ if !strings.Contains(rec.Body.String(),"\"available\":true")||!strings.Contains(rec.Body.String(),"\"switchport\":true"){t.Fatalf("missing topology metadata: %s",rec.Body.String())}
+ fail:=topologyMapHandler(func(string)(string,error){return "",fmt.Errorf("offline")})
+ bad:=httptest.NewRecorder();fail.ServeHTTP(bad,httptest.NewRequest(http.MethodGet,"/api/topology/map",nil))
+ if bad.Code!=http.StatusBadGateway{t.Fatalf("expected bad gateway, got %d",bad.Code)}
+}

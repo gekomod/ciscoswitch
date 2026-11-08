@@ -5,6 +5,7 @@ import (
  "net/http/httptest"
  "path/filepath"
  "strings"
+ "time"
  "testing"
 )
 
@@ -17,7 +18,7 @@ func TestPanelMiddlewareRequiresLoginAndBlocksViewerWrites(t *testing.T) {
  if unauth.Code!=http.StatusUnauthorized { t.Fatalf("unauthenticated request status=%d",unauth.Code) }
 
  store.mu.Lock()
- store.sessions["viewer-token"]=panelIdentity{UserID:"viewer-id",Username:"viewer",Role:"viewer"}
+ store.sessions["viewer-token"]=panelSession{Identity:panelIdentity{UserID:"viewer-id",Username:"viewer",Role:"viewer"},ExpiresAt:time.Now().Add(time.Hour)}
  store.users["viewer-id"]=panelUser{ID:"viewer-id",Username:"viewer",Role:"viewer",Active:true}
  store.mu.Unlock()
  write:=httptest.NewRecorder()

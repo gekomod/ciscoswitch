@@ -631,3 +631,19 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .availability-bar-column span{font-size:8px;color:var(--muted);white-space:nowrap}
 #export-availability{white-space:nowrap}
 @media(max-width:640px){.availability-chart{gap:2px}.availability-bar-column small{font-size:7px}.availability-bar-column span{font-size:7px}.availability-chart-wrap{padding:9px}}
+
+.events-center{margin:18px 0;padding:18px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.event-filters{display:flex;align-items:flex-end;gap:9px;flex-wrap:wrap}
+.event-filters label{display:grid;gap:5px;color:var(--muted);font-size:11px}
+.event-filters select{min-width:120px}
+.events-timeline{display:grid;gap:8px;margin-top:12px}
+.network-event{display:grid;grid-template-columns:90px 105px minmax(0,1fr) auto;align-items:start;gap:10px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2)}
+.event-kind,.severity-tag{display:inline-flex;align-items:center;justify-content:center;padding:5px 7px;border-radius:6px;background:var(--surface);font-size:9px;font-weight:800;letter-spacing:.04em}
+.severity-tag{background:transparent;color:var(--muted)}
+.network-event-body{min-width:0}
+.network-event-body b,.network-event-body strong,.network-event-body small{display:block;overflow-wrap:anywhere}
+.network-event-body b{font-size:12px}
+.network-event-body strong{margin-top:3px;font-size:10px;color:var(--muted)}
+.network-event-body small{margin-top:5px;font-size:10px;line-height:1.5;color:var(--muted)}
+.network-event time{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap}
+@media(max-width:760px){.event-filters{width:100%;align-items:stretch}.event-filters label{flex:1;min-width:110px}.event-filters .btn{width:100%}.network-event{grid-template-columns:1fr auto;gap:7px}.network-event .event-kind{grid-column:1}.network-event .severity-tag{grid-column:2;grid-row:1}.network-event-body{grid-column:1/-1}.network-event time{grid-column:1/-1;text-align:left}}

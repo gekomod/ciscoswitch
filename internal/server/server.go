@@ -1055,7 +1055,7 @@ func topologyMapHandler(read func(string)(string,error))http.Handler{
   }
   for i:=range ports { ports[i].Protected=isProtectedPort(ports[i].Port) }
   lldpLower:=strings.ToLower(lldp)
-  lldpSupported:=lldpErr==nil&&!strings.Contains(lldpLower,"invalid command")&&!strings.Contains(lldpLower,"unknown command")&&!strings.Contains(lldpLower,"unrecognized")&&!strings.Contains(lldpLower,"not supported")
+  lldpSupported:=lldpErr==nil&&strings.TrimSpace(lldp)!=""&&!strings.Contains(lldpLower,"invalid command")&&!strings.Contains(lldpLower,"invalid input")&&!strings.Contains(lldpLower,"unknown command")&&!strings.Contains(lldpLower,"unrecognized")&&!strings.Contains(lldpLower,"not supported")
   checks:=map[string]bool{"runningConfig":true,"switchport":swErr==nil&&strings.Contains(sw,"Interface name"),"lldp":lldpSupported&&len(links)>0,"lacp":lacpErr==nil&&len(liveLags)>0}
   risks:=analyzeTopologyRisks(ports,links,lags,lldpSupported)
   configuredGroups:=map[string]bool{};for _,lag:=range lags{configuredGroups[strings.ToLower(lag.Name)]=true}

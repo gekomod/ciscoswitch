@@ -744,6 +744,20 @@ func TestTopologyChangeRisksFailInformativelyWhenTopologyCannotBeRead(t *testing
  if len(risks)!=1||risks[0].Code!="topology-check-unavailable"{t.Fatalf("expected conservative unavailable warning, got %+v",risks)}
 }
 
+
+func TestPortRepairApplyRequestJSONDecodesEmbeddedFields(t *testing.T) {
+ var request struct {
+  device.PortRepairRequest
+  AcknowledgeConnectivityRisk bool `json:"acknowledgeConnectivityRisk"`
+ }
+ payload := `{"port":"port1.0.7","mode":"access","accessVlan":20,"allowed":"","native":1,"description":"BIURO","updateAccessVLAN":true,"updateTrunk":false,"updateDescription":true,"acknowledgeConnectivityRisk":true}`
+ if err := json.Unmarshal([]byte(payload), &request); err != nil { t.Fatal(err) }
+ q := request.PortRepairRequest
+ if q.Port != "port1.0.7" || q.Mode != "access" || q.AccessVLAN != 20 || q.Description != "BIURO" || !q.UpdateAccessVLAN || !q.UpdateDescription || !request.AcknowledgeConnectivityRisk {
+  t.Fatalf("embedded request fields were not decoded: %+v ack=%v", q, request.AcknowledgeConnectivityRisk)
+ }
+}
+
 func TestRequireTopologyRiskAcknowledgementBlocksUnconfirmedAndAllowsConfirmed(t *testing.T) {
  fixture:=func(command string)(string,error){
   switch command {

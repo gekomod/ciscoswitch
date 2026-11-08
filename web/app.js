@@ -1405,6 +1405,9 @@ function renderNetworkEvents(data){
  const labels={alarm:'ALARM',lacp:'LACP',lldp:'LLDP',availability:'KONTROLA CLI'};
  const severity={critical:'KRYTYCZNY',warning:'OSTRZEŻENIE',info:'INFORMACJA'};
  const rows=Array.isArray(data.events)?data.events:[];
+ const correlations=Array.isArray(data.correlations)?data.correlations:[];
+ const correlationRoot=$('events-correlations');
+ if(correlationRoot)correlationRoot.innerHTML=correlations.length?correlations.map(x=>'<article class="event-correlation severity-'+esc(x.severity)+'"><div><b>'+esc(x.title)+'</b><small>'+esc(x.summary)+'</small><span>'+esc(x.categories.join(' · ').toUpperCase())+' · '+esc(x.eventCount)+' zdarzenia · '+esc(new Date(x.start).toLocaleTimeString())+'–'+esc(new Date(x.end).toLocaleTimeString())+'</span></div></article>').join(''):'<div class="empty compact">Brak wykrytych korelacji w pięciominutowym oknie. Korelacja nie oznacza potwierdzonej przyczyny.</div>';
  meta.textContent='Zdarzenia: '+(data.total??rows.length)+' · okres: '+data.window+' · od najnowszych';
  root.innerHTML=rows.length?rows.map(e=>'<article class="network-event severity-'+esc(e.severity)+'"><span class="event-kind">'+esc(labels[e.type]||e.type)+'</span><span class="severity-tag">'+esc(severity[e.severity]||e.severity)+'</span><div class="network-event-body"><b>'+esc(e.title)+'</b><strong>'+esc(e.subject)+'</strong><small>'+esc(e.description)+'</small>'+(e.acknowledged?'<div class="diagnostic-acknowledged">Potwierdził: '+esc(e.acknowledgement?.username||'operator')+' · '+esc(new Date(e.acknowledgement?.acknowledgedAt||e.at).toLocaleString())+(e.acknowledgement?.comment?'<small>'+esc(e.acknowledgement.comment)+'</small>':'')+'</div>':'')+'</div><time>'+esc(new Date(e.at).toLocaleString())+'</time></article>').join(''):'<div class="empty">Brak zdarzeń w wybranym okresie i kategorii.</div>';
 }

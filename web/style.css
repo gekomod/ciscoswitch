@@ -663,3 +663,5 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 
 .role-permissions-note{display:grid;gap:7px;margin:16px 0;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);color:var(--muted);font-size:11px}.role-permissions-note>b{color:var(--text);font-size:12px;margin-bottom:2px}.role-permissions-note strong{color:var(--text);font-weight:700}
 :root[data-theme="light"] .role-permissions-note{background:#f5f8fb;border-color:#dce4ed;color:#64748b}:root[data-theme="light"] .role-permissions-note>b,:root[data-theme="light"] .role-permissions-note strong{color:#26364b}
+
+.event-row span{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.event-repeat{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:999px;padding:2px 7px;font-size:11px;font-style:normal;font-weight:700;color:var(--muted)}

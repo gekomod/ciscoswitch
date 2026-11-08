@@ -646,9 +646,10 @@ function renderMap(){
   const renderPort=p=>{
    const state=['up','down'].includes(p.oper)?p.oper:'unknown';
    const label=(p.name||String(p.index)).replace(/^port1\.0\./,'');
-   const speed=p.speed||'Prędkość nieznana';
+   const speed=p.speed||'';
+   const speedLabel=(()=>{const value=String(speed).toLowerCase();if(/10000|10g/.test(value))return '10G';if(/2500|2\.5g/.test(value))return '2.5G';if(/1000|1g/.test(value))return '1G';if(/100|100m/.test(value))return '100M';if(/10|10m/.test(value))return '10M';return speed?'—':'—';})();
    const admin=p.admin==='up'?'Włączony':p.admin==='down'?'Wyłączony':'Nieznany';
-   return '<button type="button" class="map-port '+(state==='up'?'is-up':state==='down'?'is-down':'is-unknown')+'" data-map-port="'+esc(p.name)+'" aria-label="'+esc(p.name)+', link '+esc(state==='up'?'Połączony':state==='down'?'Brak linku':'Nieznany')+', administracyjnie '+esc(admin)+', '+esc(speed)+'" title="'+esc(p.name)+' · '+(state==='up'?'Połączony':state==='down'?'Brak linku':'Stan nieznany')+' · port administracyjnie '+esc(admin)+' · '+esc(speed)+'"><b>'+esc(label)+'</b><small>'+esc(speed.replace(' Mb/s','M'))+'</small></button>';
+   return '<button type="button" class="map-port '+(state==='up'?'is-up':state==='down'?'is-down':'is-unknown')+'" data-map-port="'+esc(p.name)+'" aria-label="'+esc(p.name)+', link '+esc(state==='up'?'Połączony':state==='down'?'Brak linku':'Nieznany')+', administracyjnie '+esc(admin)+', '+esc(speed||'prędkość nieznana')+'" title="'+esc(p.name)+' · '+(state==='up'?'Połączony':state==='down'?'Brak linku':'Stan nieznany')+' · port administracyjnie '+esc(admin)+' · '+esc(speed||'Prędkość nieznana')+'"><b>'+esc(label)+'</b><small>'+speedLabel+'</small></button>';
   };
   el.innerHTML=banks.map(bank=>{
    const ports=visible.filter(p=>bank.test(numberOf(p))).sort((a,b)=>numberOf(a)-numberOf(b));

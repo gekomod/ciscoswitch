@@ -164,7 +164,7 @@ $('load-port-profile').onclick=()=>{
  $('bulk-mode').value=p.mode;$('bulk-profile').value='';
  $('bulk-mode').onchange();
  $('bulk-access-vlan').value=p.accessVlan||1;$('bulk-allowed').value=p.allowed||'';$('bulk-native').value=p.native||1;
- $('bulk-speed').value=p.speed||'auto';$('bulk-duplex').value=p.duplex||'auto';$('bulk-description').value=p.description||'';
+ $('bulk-speed').value=p.speed||'auto';$('bulk-duplex').value=p.duplex||'auto';$('bulk-description').value=p.portDescription||'';
  $('saved-profile-name').value=p.name;$('saved-profile-description').value=p.description||'';
  $('bulk-output').textContent='Wczytano profil „'+p.name+'” do formularza. Sprawdź porty docelowe i podgląd zmian przed zastosowaniem.';
 };
@@ -175,6 +175,7 @@ $('save-port-profile').onclick=async()=>{
   ...(selected?{id:selected.id}:{}),
   name:$('saved-profile-name').value.trim(),
   description:$('saved-profile-description').value.trim(),
+  portDescription:$('bulk-description').value.trim(),
   mode,
   accessVlan:Number($('bulk-access-vlan').value),
   allowed:$('bulk-allowed').value.trim(),

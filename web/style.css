@@ -520,3 +520,8 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .compliance-repair .btn{white-space:nowrap}
 :root[data-theme="light"] .compliance-repair{background:#fff;border-color:#dce4ed}
 @media(max-width:720px){.compliance-repair{padding:12px}.repair-heading{flex-direction:column}.compliance-repair .table-wrap{overflow-x:auto}.compliance-repair table{min-width:620px}}
+
+.repair-actions{display:flex;flex-wrap:wrap;gap:6px;min-width:180px}
+.repair-actions .btn{font-size:10px;padding:7px 9px}
+.repair-patch-btn:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:720px){.repair-actions{min-width:0;flex-direction:column}}

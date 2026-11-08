@@ -365,12 +365,16 @@ function renderPortNetworkContext(){
    const mode=(switchport.match(/TRYB:\s*([^\n]+)/i)||[])[1]||'nieznany';
    const native=(switchport.match(/DEFAULT \/ NATIVE VLAN:\s*([^\n]+)/i)||[])[1]||'brak danych';
    const allowed=(switchport.match(/DOZWOLONE VLAN:\s*([^\n]+)/i)||[])[1]||'brak danych';
+   'INGRESS FILTER: '+(switchport.ingressFilter||'Niedostępny'),
+   'TYP RAMEK: '+(switchport.acceptableFrameTypes||'Niedostępny')
    showFriendlyResult(id,'Port '+port+' · tryb '+mode+' · VLAN domyślny '+native+' · wpisy VLAN '+vlanLines.length,'Konfiguracja VLAN portu');
    continue;
   }
   if(key==='mac'){
-   const macs=[...new Set((output.match(/\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b/ig)||[]).map(v=>v.toUpperCase()))];
-   showFriendlyResult(id,macs.length?'Wykryto '+macs.length+' urządzeń na tym porcie.':'Brak urządzeń w tablicy adresów.',label);continue;
+   const portLines=portContextLines(output,port);
+   const macs=[...new Set((portLines.join(' ').match(/\\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\\b/ig)||[]).map(v=>v.toUpperCase()))];
+   const summary=macs.length?'Wykryte adresy MAC ('+macs.length+'): '+macs.slice(0,8).join(', ')+(macs.length>8?' · pozostałe: '+(macs.length-8):''):'Brak adresów MAC przypisanych do tego portu w tablicy FDB.';
+   showFriendlyResult(id,summary,label);continue;
   }
   const names=portContextLines(output,port).filter(Boolean);
   showFriendlyResult(id,names.length?'Wykryto '+names.length+' sąsiadów LLDP na tym porcie.':'Nie wykryto sąsiada LLDP.',label);

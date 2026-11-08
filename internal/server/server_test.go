@@ -417,9 +417,9 @@ func TestBulkPortPreviewUsesSingleSwitchReadAndReturnsEveryPort(t *testing.T) {
  calls := 0
  raw := "Interface name : port1.0.1\nSwitchport mode : access\nDefault Vlan : 10\nConfigured Vlans : 10\n\nInterface name : port1.0.2\nSwitchport mode : trunk\nDefault Vlan : 1\nConfigured Vlans : 1 10 20\n"
  h := bulkPortPreviewHandler(func(command string)(string,error) {
-  calls++
-  if command != "show interface switchport" { t.Fatalf("unexpected command %q",command) }
-  return raw,nil
+  if command == "show interface switchport" { calls++; return raw,nil }
+  if command == "show running-config" || command == "show lldp neighbors" { return "",fmt.Errorf("not available in unit fixture") }
+  t.Fatalf("unexpected command %q",command); return "",nil
  })
  body := strings.NewReader(`{"ports":["port1.0.1","port1.0.2"],"mode":"trunk","accessVlan":10,"allowed":"1,10,20","native":1,"speed":"auto","duplex":"auto","description":""}`)
  rec := httptest.NewRecorder()
@@ -447,7 +447,7 @@ func TestBulkPortPreviewBlocksProtectedPortsBeforeSwitchRead(t *testing.T) {
 
 func TestBulkPortPreviewFailsClosedWhenAnyPortCannotBeParsed(t *testing.T) {
  calls:=0
- h:=bulkPortPreviewHandler(func(string)(string,error){calls++;return "Interface name : port1.0.1\nSwitchport mode : access\nDefault Vlan : 10\nConfigured Vlans : 10\n",nil})
+ h:=bulkPortPreviewHandler(func(command string)(string,error){if command=="show interface switchport"{calls++;return "Interface name : port1.0.1\nSwitchport mode : access\nDefault Vlan : 10\nConfigured Vlans : 10\n",nil};if command=="show running-config"||command=="show lldp neighbors"{return "",fmt.Errorf("not available in unit fixture")};return "",fmt.Errorf("unexpected command %q",command)})
  body:=strings.NewReader(`{"ports":["port1.0.1","port1.0.2"],"mode":"access","accessVlan":10,"speed":"auto","duplex":"auto"}`)
  rec:=httptest.NewRecorder()
  h.ServeHTTP(rec,httptest.NewRequest(http.MethodPost,"/api/ports/preview/bulk",body))

@@ -365,7 +365,9 @@ function renderPortNetworkContext(){
    const mode=(switchport.match(/TRYB:\s*([^\n]+)/i)||[])[1]||'nieznany';
    const native=(switchport.match(/DEFAULT \/ NATIVE VLAN:\s*([^\n]+)/i)||[])[1]||'brak danych';
    const allowed=(switchport.match(/DOZWOLONE VLAN:\s*([^\n]+)/i)||[])[1]||'brak danych';
-   showFriendlyResult(id,'Port '+port+' · tryb '+mode+' · VLAN domyślny '+native+' · wpisy VLAN '+vlanLines.length,'Konfiguracja VLAN portu');
+    const ingress=(switchport.match(/INGRESS FILTER:\\s*([^\\n]+)/i)||[])[1]||'Niedostępny';
+    const frames=(switchport.match(/TYP RAMEK:\\s*([^\\n]+)/i)||[])[1]||'Niedostępny';
+    showFriendlyResult(id,'Port '+port+' · tryb '+mode+' · VLAN domyślny '+native+' · dozwolone: '+allowed+' · ingress filter: '+ingress+' · typ ramek: '+frames+' · wpisy VLAN w tabeli: '+vlanLines.length,'Konfiguracja VLAN portu');
    continue;
   }
   if(key==='mac'){

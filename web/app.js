@@ -139,6 +139,72 @@ $('bulk-mode').onchange=()=>{
  $('bulk-native').disabled=!trunk;
 };
 
+let savedPortProfiles=[];
+function renderSavedPortProfiles(){
+ const select=$('saved-port-profile'),selected=select.value;
+ select.innerHTML='<option value="">Wybierz zapisany profil…</option>'+savedPortProfiles.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' · '+esc(p.mode.toUpperCase())+'</option>').join('');
+ if(savedPortProfiles.some(p=>p.id===selected))select.value=selected;
+}
+async function refreshSavedPortProfiles(){
+ const status=$('saved-profile-status'),button=$('refresh-port-profiles');
+ if(button)button.disabled=true;
+ if(status)status.textContent='Pobieranie biblioteki profili…';
+ try{
+  const data=await api('/api/port-profiles');
+  savedPortProfiles=Array.isArray(data.profiles)?data.profiles:[];
+  renderSavedPortProfiles();
+  if(status)status.textContent='Zapisane profile: '+savedPortProfiles.length+' / 100. Dane przechowywane lokalnie na serwerze panelu.';
+ }catch(e){if(status)status.textContent='Nie udało się pobrać profili: '+e.message;}
+ finally{if(button)button.disabled=false;}
+}
+function selectedSavedPortProfile(){return savedPortProfiles.find(p=>p.id===$('saved-port-profile').value)||null;}
+$('refresh-port-profiles').onclick=refreshSavedPortProfiles;
+$('load-port-profile').onclick=()=>{
+ const p=selectedSavedPortProfile();if(!p){alert('Wybierz zapisany profil.');return;}
+ $('bulk-mode').value=p.mode;$('bulk-profile').value='';
+ $('bulk-mode').onchange();
+ $('bulk-access-vlan').value=p.accessVlan||1;$('bulk-allowed').value=p.allowed||'';$('bulk-native').value=p.native||1;
+ $('bulk-speed').value=p.speed||'auto';$('bulk-duplex').value=p.duplex||'auto';$('bulk-description').value=p.description||'';
+ $('saved-profile-name').value=p.name;$('saved-profile-description').value=p.description||'';
+ $('bulk-output').textContent='Wczytano profil „'+p.name+'” do formularza. Sprawdź porty docelowe i podgląd zmian przed zastosowaniem.';
+};
+$('save-port-profile').onclick=async()=>{
+ const button=$('save-port-profile'),selected=selectedSavedPortProfile();
+ const mode=$('bulk-mode').value;
+ const profile={
+  ...(selected?{id:selected.id}:{}),
+  name:$('saved-profile-name').value.trim(),
+  description:$('saved-profile-description').value.trim(),
+  mode,
+  accessVlan:Number($('bulk-access-vlan').value),
+  allowed:$('bulk-allowed').value.trim(),
+  native:Number($('bulk-native').value),
+  speed:$('bulk-speed').value,
+  duplex:$('bulk-duplex').value
+ };
+ if(!profile.name){alert('Podaj nazwę profilu.');return;}
+ button.disabled=true;
+ try{
+  const result=await api('/api/port-profiles',profile);
+  savedPortProfiles=Array.isArray(result.profiles)?result.profiles:[];
+  renderSavedPortProfiles();$('saved-port-profile').value=result.profile.id;
+  $('saved-profile-status').textContent='Profil „'+result.profile.name+'” został zapisany na serwerze panelu.';
+ }catch(e){$('saved-profile-status').textContent='Nie zapisano profilu: '+e.message;}
+ finally{button.disabled=false;}
+};
+$('delete-port-profile').onclick=async()=>{
+ const p=selectedSavedPortProfile();if(!p){alert('Wybierz profil do usunięcia.');return;}
+ if(!confirm('Usunąć zapisany profil „'+p.name+'”? Nie zmieni to konfiguracji switcha.'))return;
+ const button=$('delete-port-profile');button.disabled=true;
+ try{
+  const result=await api('/api/port-profiles?id='+encodeURIComponent(p.id),undefined,'DELETE');
+  savedPortProfiles=Array.isArray(result.profiles)?result.profiles:[];
+  renderSavedPortProfiles();$('saved-profile-status').textContent='Profil „'+p.name+'” został usunięty. Konfiguracja switcha pozostała bez zmian.';
+ }catch(e){$('saved-profile-status').textContent='Nie udało się usunąć profilu: '+e.message;}
+ finally{button.disabled=false;}
+};
+refreshSavedPortProfiles();
+
 
 function runPortAudit(){
  const rows=[];

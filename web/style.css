@@ -561,3 +561,10 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .topology-risk p{margin:8px 0 5px;font-size:11px;line-height:1.5;color:var(--text)}
 .topology-risk small{display:block;color:var(--muted);font-size:10px;line-height:1.5}
 .topology-warning-text{color:var(--danger)!important;font-weight:700}
+
+
+.topology-impact{display:grid;gap:5px;margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel, var(--surface))}
+.topology-impact>b,.topology-impact>span{font-size:11px;line-height:1.45}
+.topology-impact>b{font-size:11px;font-weight:750}
+.topology-impact>span{color:var(--text)}
+.topology-impact small{color:var(--muted);font-size:10px;line-height:1.45}

@@ -1400,6 +1400,20 @@ async function refreshAvailability(){
  }catch(e){cards.innerHTML='<div class="empty">Nie udało się pobrać dostępności: '+esc(e.message)+'</div>';}
 }
 
+function renderNetworkEvents(data){
+ const root=$('events-timeline'),meta=$('events-meta');if(!root||!meta)return;
+ const labels={alarm:'ALARM',lacp:'LACP',lldp:'LLDP',availability:'KONTROLA CLI'};
+ const severity={critical:'KRYTYCZNY',warning:'OSTRZEŻENIE',info:'INFORMACJA'};
+ const rows=Array.isArray(data.events)?data.events:[];
+ meta.textContent='Zdarzenia: '+(data.total??rows.length)+' · okres: '+data.window+' · od najnowszych';
+ root.innerHTML=rows.length?rows.map(e=>'<article class="network-event severity-'+esc(e.severity)+'"><span class="event-kind">'+esc(labels[e.type]||e.type)+'</span><span class="severity-tag">'+esc(severity[e.severity]||e.severity)+'</span><div class="network-event-body"><b>'+esc(e.title)+'</b><strong>'+esc(e.subject)+'</strong><small>'+esc(e.description)+'</small>'+(e.acknowledged?'<div class="diagnostic-acknowledged">Potwierdził: '+esc(e.acknowledgement?.username||'operator')+' · '+esc(new Date(e.acknowledgement?.acknowledgedAt||e.at).toLocaleString())+(e.acknowledgement?.comment?'<small>'+esc(e.acknowledgement.comment)+'</small>':'')+'</div>':'')+'</div><time>'+esc(new Date(e.at).toLocaleString())+'</time></article>').join(''):'<div class="empty">Brak zdarzeń w wybranym okresie i kategorii.</div>';
+}
+async function refreshNetworkEvents(){
+ const root=$('events-timeline');if(!root)return;
+ const window=$('events-window')?.value||'24h',type=$('events-type')?.value||'all';
+ try{const data=await api('/api/events?window='+encodeURIComponent(window)+'&type='+encodeURIComponent(type)+'&limit=200');renderNetworkEvents(data);}
+ catch(e){root.innerHTML='<div class="empty">Nie udało się pobrać zdarzeń: '+esc(e.message)+'</div>';}
+}
 async function refreshDiagnosticsCenter(){
  const meta=$('diagnostics-meta');if(meta)meta.textContent='Odczyt historii diagnostycznej…';
  try{const windowMinutes=Number($('diagnostics-window')?.value||60);const data=await api('/api/diagnostics/history?limit=100&windowMinutes='+windowMinutes);renderDiagnosticsCenter(data);}
@@ -1412,7 +1426,8 @@ async function collectDiagnosticsCenter(){
  catch(e){if($('diagnostics-meta'))$('diagnostics-meta').textContent='Odczyt próbki nie powiódł się: '+e.message+' (jeśli próbka została zapisana, historia odświeży się ponownie).';await refreshDiagnosticsCenter();await refreshAvailability();}
  finally{button.disabled=false;button.textContent='Zbierz próbkę';}
 }
-if($('collect-diagnostics')){$('collect-diagnostics').addEventListener('click',collectDiagnosticsCenter);$('refresh-diagnostics')?.addEventListener('click',refreshDiagnosticsCenter);$('diagnostics-window')?.addEventListener('change',refreshDiagnosticsCenter);refreshDiagnosticsCenter();setInterval(()=>{if(!document.hidden){refreshDiagnosticsCenter();refreshAvailability();}},30000);$('availability-window')?.addEventListener('change',refreshAvailability);refreshAvailability();$('export-availability')?.addEventListener('click',()=>{const window=$('availability-window')?.value||'24h';location.href='/api/diagnostics/availability.csv?window='+window;});}
+$('refresh-events')?.addEventListener('click',refreshNetworkEvents);$('events-window')?.addEventListener('change',refreshNetworkEvents);$('events-type')?.addEventListener('change',refreshNetworkEvents);refreshNetworkEvents();
+if($('collect-diagnostics')){$('collect-diagnostics').addEventListener('click',collectDiagnosticsCenter);$('refresh-diagnostics')?.addEventListener('click',refreshDiagnosticsCenter);$('diagnostics-window')?.addEventListener('change',refreshDiagnosticsCenter);refreshDiagnosticsCenter();setInterval(()=>{if(!document.hidden){refreshDiagnosticsCenter();refreshAvailability();refreshNetworkEvents();}},30000);$('availability-window')?.addEventListener('change',refreshAvailability);refreshAvailability();$('export-availability')?.addEventListener('click',()=>{const window=$('availability-window')?.value||'24h';location.href='/api/diagnostics/availability.csv?window='+window;});}
 
 async function acknowledgeDiagnosticsAlert(id,button){
  const input=$('diagnostics-alerts')?.querySelector('[data-ack-comment="'+id+'"]');

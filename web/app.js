@@ -981,6 +981,8 @@ async function refreshSystem(){const button=$('refresh-system');button.disabled=
   $('sys-snmp-objectid').textContent=identity?.objectId||'Brak danych SNMP';
   $('sys-snmp-description').textContent=identity?.description||capabilityResult.error?.message||'Brak danych SNMP';
   $('sys-discovered-ports').textContent=Number.isFinite(capabilities?.interfacesObserved)?String(capabilities.interfacesObserved):'Brak danych SNMP';
+  const speedSummary=capabilities?.interfaceSpeeds||{};
+  $('sys-interface-speeds').textContent=Object.keys(speedSummary).length?Object.entries(speedSummary).sort((a,b)=>a[0].localeCompare(b[0],undefined,{numeric:true})).map(([speed,count])=>`${speed}: ${count}`).join(' · '):'Brak danych SNMP';
  const versionText=String(d.version||'');
  const versionMatch=versionText.match(/\b\d+(?:\.\d+){1,3}(?:[-+._A-Za-z0-9]*)?\b/);
  $('sys-version').textContent=versionMatch?versionMatch[0]:'Informacja niedostępna';

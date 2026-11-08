@@ -382,10 +382,20 @@ func TestAuditHistoryRejectsLargeFile(t *testing.T) {
 
 func TestEdgePortChangeRejectsProtectedPortBeforeBackupOrSSH(t *testing.T) {
  t.Setenv("PROTECTED_PORTS", "port1.0.49")
+ t.Setenv("PANEL_ADMIN_USER", "testadmin")
+ t.Setenv("PANEL_ADMIN_PASSWORD", "test-panel-password-123")
+ t.Setenv("PANEL_USERS_PATH", filepath.Join(t.TempDir(), "panel-users.json"))
  mux := http.NewServeMux()
  Register(mux, device.New(device.Config{}))
+ login := httptest.NewRecorder()
+ loginReq := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(`{"username":"testadmin","password":"test-panel-password-123"}`))
+ mux.ServeHTTP(login, loginReq)
+ if login.Code != http.StatusOK { t.Fatalf("login status=%d body=%s", login.Code, login.Body.String()) }
+ cookies := login.Result().Cookies()
+ if len(cookies)==0 { t.Fatal("authenticated session cookie missing") }
  req := httptest.NewRequest(http.MethodPost, "/api/edgeport", strings.NewReader(`{"port":"port1.0.49","enabled":true}`))
  req.Header.Set("Content-Type", "application/json")
+ req.AddCookie(cookies[0])
  rec := httptest.NewRecorder()
  mux.ServeHTTP(rec, req)
  if rec.Code != http.StatusBadRequest { t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String()) }
@@ -560,14 +570,22 @@ interface port1.0.1
 }
 func TestSecurityAuditHandlerReadOnlyAndFailsClosed(t *testing.T) {
  calls:=0
- h:=securityAuditHandler(func(command string)(string,error){calls++;if command!="show running-config"{t.Fatalf("unexpected command %q",command)};return "snmp-server community public ro\n",nil})
+ h:=securityAuditHandler(func(command string)(string,error){
+  calls++
+  switch command {
+  case "show running-config": return "snmp-server community public ro\n",nil
+  case "show interface switchport": return "Interface name: port1.0.1\nSwitchport mode: access\nDefault Vlan: 1\nConfigured Vlans: 1\n",nil
+  default: t.Fatalf("unexpected command %q",command); return "",nil
+  }
+ })
  rec:=httptest.NewRecorder();h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/security-audit",nil))
- if rec.Code!=http.StatusOK||calls!=1{t.Fatalf("status=%d calls=%d body=%s",rec.Code,calls,rec.Body.String())}
+ if rec.Code!=http.StatusOK||calls!=2{t.Fatalf("status=%d calls=%d body=%s",rec.Code,calls,rec.Body.String())}
  if rec.Header().Get("Cache-Control")!="no-store"{t.Fatal("expected no-store")}
+ if !strings.Contains(rec.Body.String(),"\"switchport\":true"){t.Fatalf("expected switchport check to be included: %s",rec.Body.String())}
  calls=0
- fail:=securityAuditHandler(func(string)(string,error){calls++;return "",fmt.Errorf("offline")})
+ fail:=securityAuditHandler(func(command string)(string,error){calls++;if command!="show running-config"{t.Fatalf("unexpected command %q",command)};return "",fmt.Errorf("offline")})
  bad:=httptest.NewRecorder();fail.ServeHTTP(bad,httptest.NewRequest(http.MethodGet,"/api/security-audit",nil))
- if bad.Code!=http.StatusBadGateway||calls!=1{t.Fatalf("failed read must abort audit: status=%d calls=%d",bad.Code,calls)}
+ if bad.Code!=http.StatusBadGateway||calls!=1{t.Fatalf("failed required read must abort audit: status=%d calls=%d",bad.Code,calls)}
 }
 
 func TestAnalyzeVLANAndPortSecurity(t *testing.T) {

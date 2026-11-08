@@ -365,8 +365,6 @@ function renderPortNetworkContext(){
    const mode=(switchport.match(/TRYB:\s*([^\n]+)/i)||[])[1]||'nieznany';
    const native=(switchport.match(/DEFAULT \/ NATIVE VLAN:\s*([^\n]+)/i)||[])[1]||'brak danych';
    const allowed=(switchport.match(/DOZWOLONE VLAN:\s*([^\n]+)/i)||[])[1]||'brak danych';
-   'INGRESS FILTER: '+(switchport.ingressFilter||'Niedostępny'),
-   'TYP RAMEK: '+(switchport.acceptableFrameTypes||'Niedostępny')
    showFriendlyResult(id,'Port '+port+' · tryb '+mode+' · VLAN domyślny '+native+' · wpisy VLAN '+vlanLines.length,'Konfiguracja VLAN portu');
    continue;
   }
@@ -396,6 +394,8 @@ async function loadPortNetworkContext(){
    'TRYB: '+(switchport.mode||'nieznany'),
    'DEFAULT / NATIVE VLAN: '+(switchport.defaultVlan||'brak danych'),
    'DOZWOLONE VLAN: '+((switchport.configuredVlans||[]).join(', ')||'brak danych')
+   'INGRESS FILTER: '+(switchport.ingressFilter||'Niedostępny'),
+   'TYP RAMEK: '+(switchport.acceptableFrameTypes||'Niedostępny')
   ];
   const ctx={vlan:{output:vlanLines.join('\\n')+'\\n\\n--- show vlan all ---\\n'+(vlans.output||'')},mac:{output:mac.output||''},lldp:{output:lldp.output||''}};
   portNetworkContext.set(port,ctx);renderPortNetworkContext();

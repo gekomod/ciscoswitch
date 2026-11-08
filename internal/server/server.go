@@ -35,8 +35,9 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/api/security-audit", securityAuditHandler(svc.RunReadOnly))
  m.Handle("/api/topology/map", topologyMapHandler(svc.RunReadOnly))
  diagnosticsPath:=os.Getenv("DIAGNOSTICS_HISTORY_PATH");if diagnosticsPath==""{diagnosticsPath=filepath.Join("data","diagnostics-history.json")}
- m.Handle("/api/diagnostics/collect",diagnosticsCollectHandler(svc.RunReadOnly,diagnosticsPath))
- m.Handle("/api/diagnostics/history",diagnosticsHistoryHandler(diagnosticsPath))
+ diagnosticsStore:=newDiagnosticsStore(diagnosticsPath,500)
+ m.Handle("/api/diagnostics/collect",diagnosticsCollectHandler(svc.RunReadOnly,diagnosticsStore))
+ m.Handle("/api/diagnostics/history",diagnosticsHistoryHandler(diagnosticsStore))
  m.Handle("/api/monitor/history", monitorHistoryHandler(filepath.Join("data", "monitor-history.jsonl")))
  m.Handle("/api/monitor/stream", monitorStreamHandler())
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
@@ -1258,8 +1259,7 @@ func diagnosticsTransitions(samples []diagnosticsSample)[]diagnosticsTransition{
  }
  return out
 }
-func diagnosticsCollectHandler(read func(string)(string,error),path string)http.Handler{
- store:=newDiagnosticsStore(path,500)
+func diagnosticsCollectHandler(read func(string)(string,error),store *diagnosticsStore)http.Handler{
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
   sample:=collectDiagnosticsSample(read)
@@ -1269,8 +1269,7 @@ func diagnosticsCollectHandler(read func(string)(string,error),path string)http.
   _=json.NewEncoder(w).Encode(map[string]any{"sample":sample,"alerts":diagnosticsCurrentAlerts(sample),"saved":true,"retention":500})
  })
 }
-func diagnosticsHistoryHandler(path string)http.Handler{
- store:=newDiagnosticsStore(path,500)
+func diagnosticsHistoryHandler(store *diagnosticsStore)http.Handler{
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodGet{http.Error(w,"method not allowed",405);return}
   limit:=100;if raw:=r.URL.Query().Get("limit");raw!=""{n,err:=strconv.Atoi(raw);if err!=nil||n<1||n>500{http.Error(w,"limit musi mieścić się w zakresie 1–500",400);return};limit=n}

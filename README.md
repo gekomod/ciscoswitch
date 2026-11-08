@@ -64,6 +64,8 @@ AUDIT_LOG_PATH=data/audit.jsonl
 PORT_PROFILES_PATH=data/port-profiles.json
 DIAGNOSTICS_HISTORY_PATH=data/diagnostics-history.json
 DIAGNOSTICS_INTERVAL=60s
+MONITOR_INTERVAL=30s
+MONITOR_HISTORY_PATH=data/monitor-history.jsonl
 ```
 
 ## Błąd SSH: niezgodny klucz hosta
@@ -134,15 +136,15 @@ W szczegółach wybranego portu przycisk „Odczytaj VLAN / MAC / LLDP” pobier
 
 
 ### Centrum alarmów
-Panel agreguje zapisane zdarzenia monitoringu w jednym widoku, pokazuje liczniki według poziomu i umożliwia filtrowanie historii. Zdarzenia powstają z odczytów SNMP wykonywanych podczas działania panelu; zamknięta przeglądarka nie prowadzi samodzielnego pollingu.
+Panel agreguje zapisane zdarzenia monitoringu w jednym widoku, pokazuje liczniki według poziomu i umożliwia filtrowanie historii. Zdarzenia dostępności SNMP, zmiany linku portów i przyrosty liczników błędów zbiera niezależny sampler po stronie serwera — również wtedy, gdy żadna przeglądarka nie jest otwarta.
 
 ## Monitoring na żywo
 
-Dashboard odczytuje stan przełącznika przez `/api/status` co 15 sekund i parametry systemowe co 60 sekund, gdy karta panelu jest widoczna. Historia zdarzeń, zmian stanu portów, liczników błędów i próbek ruchu jest przechowywana lokalnie w `data/monitor-history.jsonl`.
+Dashboard odczytuje stan przełącznika przez `/api/status` co 15 sekund i parametry systemowe co 60 sekund, gdy karta panelu jest widoczna. Dodatkowo proces Go zbiera dostępność SNMP, zmiany stanu linków i przyrosty liczników błędów niezależnie od przeglądarki. Interwał ustawia `MONITOR_INTERVAL` (domyślnie `30s`, minimum `10s`, `0` wyłącza kolektor); ścieżkę historii ustawia `MONITOR_HISTORY_PATH` (domyślnie `data/monitor-history.jsonl`). Historia jest lokalna, z ograniczeniem rozmiaru pliku i uprawnieniami 0600. Próbki RX/TX nadal powstają podczas odczytów dashboardu, ponieważ wyliczają tempo transferu z różnicy liczników między kolejnymi pomiarami.
 
 Endpoint `GET /api/monitor/stream` udostępnia uwierzytelniony strumień Server-Sent Events (SSE). Zdarzenia zapisane przez aktywne sesje panelu są rozsyłane do pozostałych otwartych sesji bez przeładowywania strony. Wolni odbiorcy nie blokują monitoringu; po rozłączeniu przeglądarka automatycznie nawiązuje połączenie ponownie. Strumień używa wyłącznie metadanych zdarzeń, bez surowego wyjścia CLI, konfiguracji ani sekretów.
 
-**Ważne:** nie jest to niezależny daemon monitorujący switch. Odczyty SNMP i wykrywanie zmian są wykonywane podczas działania otwartej sesji panelu. Jeśli wszystkie przeglądarki zostaną zamknięte, zbieranie nowych zdarzeń ustaje. Serwer wysyła heartbeat co 20 sekund, aby utrzymać połączenie SSE przez proxy.
+**Zakres i ograniczenia:** kolektor serwerowy wykrywa zmiany pomiędzy próbkami; krótkie zaniki krótsze niż interwał mogą pozostać niewykryte. Utrata całej łączności SNMP jest raportowana jako brak osiągalności, a nie jako awaria konkretnego portu. Wykresy tempa RX/TX są nadal uzupełniane przez aktywny dashboard. Serwer wysyła heartbeat SSE co 20 sekund, aby utrzymać połączenie przez proxy.
 
 ### Audyt bezpieczeństwa konfiguracji
 

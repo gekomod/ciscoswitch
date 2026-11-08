@@ -702,3 +702,27 @@ func TestTopologyRiskDoesNotAssumeUplinkFromPortNumberOrMissingLLDP(t *testing.T
  risks:=analyzeTopologyRisks(ports,nil,nil,false)
  if len(risks)!=1||risks[0].Code!="uplink-role-unknown" { t.Fatalf("unexpected conservative risks: %+v",risks) }
 }
+
+func TestTopologyMapHandlerExposesProtectedPortsAndUplinkRisk(t *testing.T) {
+ t.Setenv("PROTECTED_PORTS","port1.0.48")
+ h:=topologyMapHandler(func(command string)(string,error){
+  switch command {
+  case "show running-config":
+   return "interface port1.0.48\n description UPLINK-CORE\n switchport mode trunk\n",nil
+  case "show interface switchport":
+   return "Interface name: port1.0.48\nSwitchport mode: trunk\nDefault Vlan: 1\nConfigured Vlans: 1\n",nil
+  case "show lldp neighbors":
+   return "Local Interface Neighbor System\n",nil
+  case "show etherchannel detail":
+   return "",fmt.Errorf("unsupported")
+  }
+  return "",fmt.Errorf("unexpected command")
+ })
+ rec:=httptest.NewRecorder()
+ h.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/topology/map",nil))
+ body:=rec.Body.String()
+ if rec.Code!=http.StatusOK { t.Fatalf("status=%d body=%s",rec.Code,body) }
+ for _,want:=range []string{"\"protected\":true","single-explicit-uplink","uplink-no-lldp","protected-port"} {
+  if !strings.Contains(body,want) { t.Errorf("expected %q in response: %s",want,body) }
+ }
+}

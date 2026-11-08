@@ -480,3 +480,39 @@ func TestBulkSwitchportDetailsHandlerRejectsIncompleteReadback(t *testing.T) {
  if rec.Code!=http.StatusConflict{t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String())}
  if calls!=1{t.Fatalf("switch reads=%d want 1",calls)}
 }
+
+func TestPortProfilesHandlerCRUDAndPersistsLocally(t *testing.T) {
+ path:=filepath.Join(t.TempDir(),"profiles","port-profiles.json")
+ h:=portProfilesHandler(path)
+ request:=func(method,body string)*httptest.ResponseRecorder{rec:=httptest.NewRecorder();req:=httptest.NewRequest(method,"/api/port-profiles",strings.NewReader(body));h.ServeHTTP(rec,req);return rec}
+ get:=request(http.MethodGet,"")
+ if get.Code!=http.StatusOK {t.Fatalf("GET status=%d body=%s",get.Code,get.Body.String())}
+ var initial struct{Profiles []portProfile `json:"profiles"`}
+ if err:=json.Unmarshal(get.Body.Bytes(),&initial);err!=nil{t.Fatal(err)}
+ if len(initial.Profiles)!=0{t.Fatalf("expected empty profile list, got %d",len(initial.Profiles))}
+ created:=request(http.MethodPost,`{"name":"AP biuro","description":"Punkty dostępowe","mode":"trunk","native":10,"allowed":"10,20,30","speed":"auto","duplex":"auto"}`)
+ if created.Code!=http.StatusOK{t.Fatalf("POST status=%d body=%s",created.Code,created.Body.String())}
+ var result struct{Profile portProfile `json:"profile"`;Profiles []portProfile `json:"profiles"`}
+ if err:=json.Unmarshal(created.Body.Bytes(),&result);err!=nil{t.Fatal(err)}
+ if !validPortProfileID(result.Profile.ID)||len(result.Profiles)!=1||result.Profile.Mode!="trunk"{t.Fatalf("unexpected created profile: %+v",result)}
+ updated:=request(http.MethodPost,`{"id":"`+result.Profile.ID+`","name":"AP biuro 2","mode":"access","accessVlan":30,"speed":"auto","duplex":"auto"}`)
+ if updated.Code!=http.StatusOK{t.Fatalf("update status=%d body=%s",updated.Code,updated.Body.String())}
+ if err:=json.Unmarshal(updated.Body.Bytes(),&result);err!=nil{t.Fatal(err)}
+ if result.Profile.Name!="AP biuro 2"||result.Profile.Mode!="access"{t.Fatalf("profile was not updated: %+v",result.Profile)}
+ if _,err:=os.Stat(path);err!=nil{t.Fatalf("profile file not persisted: %v",err)}
+ del:=httptest.NewRecorder();h.ServeHTTP(del,httptest.NewRequest(http.MethodDelete,"/api/port-profiles?id="+result.Profile.ID,nil))
+ if del.Code!=http.StatusOK{t.Fatalf("DELETE status=%d body=%s",del.Code,del.Body.String())}
+ final:=request(http.MethodGet,"");if err:=json.Unmarshal(final.Body.Bytes(),&result);err!=nil{t.Fatal(err)}
+ if len(result.Profiles)!=0{t.Fatalf("expected no profiles after delete, got %d",len(result.Profiles))}
+}
+
+func TestPortProfilesHandlerRejectsInvalidProfilesAndIDs(t *testing.T) {
+ h:=portProfilesHandler(filepath.Join(t.TempDir(),"profiles.json"))
+ for _,body:=range []string{
+  `{"name":"Bad trunk","mode":"trunk","native":10,"allowed":"20","speed":"auto","duplex":"auto"}`,
+  `{"name":"Bad mode","mode":"dynamic","accessVlan":10,"speed":"auto","duplex":"auto"}`,
+  `{"name":"Invalid speed","mode":"access","accessVlan":10,"speed":"9999","duplex":"auto"}`,
+ }{rec:=httptest.NewRecorder();h.ServeHTTP(rec,httptest.NewRequest(http.MethodPost,"/api/port-profiles",strings.NewReader(body)));if rec.Code!=http.StatusBadRequest{t.Fatalf("expected validation failure, status=%d body=%s",rec.Code,rec.Body.String())}}
+ rec:=httptest.NewRecorder();h.ServeHTTP(rec,httptest.NewRequest(http.MethodDelete,"/api/port-profiles?id=../../users.json",nil))
+ if rec.Code!=http.StatusBadRequest{t.Fatalf("expected invalid ID rejection, status=%d",rec.Code)}
+}

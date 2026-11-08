@@ -1,6 +1,7 @@
 package server
 
 import (
+ "context"
  "encoding/json"
  "errors"
  "fmt"
@@ -893,4 +894,17 @@ func TestDiagnosticsAcknowledgeRejectsStaleAlert(t *testing.T) {
  req:=httptest.NewRequest(http.MethodPost,"/api/diagnostics/acknowledge",strings.NewReader(`{"id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`))
  rec:=httptest.NewRecorder();handler.ServeHTTP(rec,req)
  if rec.Code!=http.StatusConflict{t.Fatalf("status=%d want 409",rec.Code)}
+}
+
+func TestDiagnosticsHistoryReturnsAcknowledgementMetadata(t *testing.T) {
+ path:=filepath.Join(t.TempDir(),"history.json")
+ store:=newDiagnosticsStore(path,10)
+ sample:=diagnosticsSample{CapturedAt:time.Now().UTC(),Checks:map[string]bool{"lacp":true},Aggregations:[]topologyAggregation{{Name:"Po1",Ready:"Niegotowy"}}}
+ if err:=store.append(sample);err!=nil{t.Fatal(err)}
+ alert:=diagnosticsCurrentAlerts(sample)[0]
+ ackStore:=&diagnosticsAckStore{path:path+".acks.json"}
+ if err:=ackStore.save(diagnosticsAcknowledgement{ID:diagnosticsAlertID(alert.Code,alert.Evidence,alert.At),Code:alert.Code,Evidence:alert.Evidence,At:alert.At,AcknowledgedAt:time.Now().UTC(),Username:"operator1",Comment:"Zgłoszone do serwisu"});err!=nil{t.Fatal(err)}
+ handler:=diagnosticsHistoryHandler(store)
+ rec:=httptest.NewRecorder();handler.ServeHTTP(rec,httptest.NewRequest(http.MethodGet,"/api/diagnostics/history",nil))
+ if rec.Code!=http.StatusOK||!strings.Contains(rec.Body.String(),"\"acknowledged\":true")||!strings.Contains(rec.Body.String(),"operator1"){t.Fatalf("acknowledgement not returned: status=%d body=%s",rec.Code,rec.Body.String())}
 }

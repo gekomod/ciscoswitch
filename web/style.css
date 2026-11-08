@@ -647,3 +647,16 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .network-event-body small{margin-top:5px;font-size:10px;line-height:1.5;color:var(--muted)}
 .network-event time{font-size:10px;color:var(--muted);text-align:right;white-space:nowrap}
 @media(max-width:760px){.event-filters{width:100%;align-items:stretch}.event-filters label{flex:1;min-width:110px}.event-filters .btn{width:100%}.network-event{grid-template-columns:1fr auto;gap:7px}.network-event .event-kind{grid-column:1}.network-event .severity-tag{grid-column:2;grid-row:1}.network-event-body{grid-column:1/-1}.network-event time{grid-column:1/-1;text-align:left}}
+
+.events-correlations-wrap{margin:14px 0 12px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2)}
+.events-correlations-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:9px}
+.events-correlations-head b{font-size:11px}
+.events-correlations-head small{font-size:9px;color:var(--muted)}
+.events-correlations-wrap #events-correlations{display:grid;gap:7px}
+.event-correlation{padding:10px 11px;border:1px solid var(--border);border-radius:8px;background:var(--surface)}
+.event-correlation b,.event-correlation small,.event-correlation span{display:block}
+.event-correlation b{font-size:11px}
+.event-correlation small{margin-top:4px;color:var(--muted);font-size:10px;line-height:1.45}
+.event-correlation span{margin-top:6px;color:var(--muted);font-size:9px}
+.empty.compact{padding:8px;font-size:10px}
+@media(max-width:640px){.events-correlations-head{align-items:flex-start;flex-direction:column}}

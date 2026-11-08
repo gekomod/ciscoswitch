@@ -660,3 +660,6 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 .event-correlation span{margin-top:6px;color:var(--muted);font-size:9px}
 .empty.compact{padding:8px;font-size:10px}
 @media(max-width:640px){.events-correlations-head{align-items:flex-start;flex-direction:column}}
+
+.role-permissions-note{display:grid;gap:7px;margin:16px 0;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);color:var(--muted);font-size:11px}.role-permissions-note>b{color:var(--text);font-size:12px;margin-bottom:2px}.role-permissions-note strong{color:var(--text);font-weight:700}
+:root[data-theme="light"] .role-permissions-note{background:#f5f8fb;border-color:#dce4ed;color:#64748b}:root[data-theme="light"] .role-permissions-note>b,:root[data-theme="light"] .role-permissions-note strong{color:#26364b}

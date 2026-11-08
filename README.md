@@ -170,3 +170,8 @@ Panel dostępności pokazuje wykres godzinowy dla 24 godzin oraz dzienny dla 7 d
 ### Centrum zdarzeń sieciowych
 
 Endpoint `GET /api/events?window=24h&type=all&limit=200` udostępnia wspólną oś czasu alarmów, zmian LACP, sąsiadów LLDP i wyników kontroli zarządzających. Okna: 24h, 7d i 30d; kategorie: all, alarm, lacp, lldp i availability; limit 1–500. Zdarzenia są wyliczane z historii próbek i sortowane od najnowszych, bez dopisywania duplikatów przy odświeżaniu. Zmiany LLDP obejmują wykrycie, zniknięcie i zmianę sąsiada. Oś czasu alarmów pokazuje potwierdzenie, operatora i komentarz. Nieudana kontrola CLI jest opisana jako brak odczytu zarządzającego, a nie jako potwierdzone wyłączenie switcha lub przerwanie ruchu.
+
+
+### Korelacja zdarzeń
+
+Endpoint `GET /api/events` w widoku kategorii `all` zwraca również pole `correlations`. Grupowanie obejmuje zdarzenia różnych kategorii występujące w jednym pięciominutowym oknie, jeśli przynajmniej jedno ma poziom ostrzeżenia lub krytyczny. Panel pokazuje kategorie, liczbę zdarzeń i zakres czasu. Jest to wskazówka diagnostyczna oparta na zbieżności czasowej — nie dowód wspólnej przyczyny ani automatyczna diagnoza awarii.

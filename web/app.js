@@ -372,7 +372,7 @@ function renderPortNetworkContext(){
   }
   if(key==='mac'){
    const portLines=portContextLines(output,port);
-   const macs=[...new Set((portLines.join(' ').match(/\\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\\b/ig)||[]).map(v=>v.toUpperCase()))];
+   const macs=[...new Set((portLines.join(' ').match(/\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b/ig)||[]).map(v=>v.toUpperCase()))];
    const summary=macs.length?'Wykryte adresy MAC ('+macs.length+'): '+macs.slice(0,8).join(', ')+(macs.length>8?' · pozostałe: '+(macs.length-8):''):'Brak adresów MAC przypisanych do tego portu w tablicy FDB.';
    showFriendlyResult(id,summary,label);continue;
   }

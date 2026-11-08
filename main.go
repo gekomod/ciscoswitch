@@ -60,6 +60,15 @@ diagnosticsPath:=env("DIAGNOSTICS_HISTORY_PATH",filepath.Join("data","diagnostic
  }
  collectorCtx,cancelCollector:=context.WithCancel(context.Background())
  server.StartDiagnosticsCollector(collectorCtx,svc.RunReadOnly,diagnosticsPath,diagnosticsInterval)
+ monitorInterval:=30*time.Second
+ if raw:=strings.TrimSpace(os.Getenv("MONITOR_INTERVAL"));raw!=""{
+  if raw=="0"{monitorInterval=0}else if parsed,parseErr:=time.ParseDuration(raw);parseErr!=nil||parsed<10*time.Second{
+   log.Printf("Nieprawidłowy MONITOR_INTERVAL=%q; używam 30s (minimum 10s, 0 wyłącza sampler)",raw)
+  }else{monitorInterval=parsed}
+ }
+ monitorPath:=env("MONITOR_HISTORY_PATH",filepath.Join("data","monitor-history.jsonl"))
+ server.StartMonitorCollector(collectorCtx,svc,monitorPath,monitorInterval)
+ if monitorInterval>0{log.Printf("Switch monitor collector enabled (interval=%s, history=%s)",monitorInterval,monitorPath)}else{log.Printf("Switch monitor collector disabled")}
  if diagnosticsInterval>0{log.Printf("Switch diagnostics sampler enabled (interval=%s, history=%s)",diagnosticsInterval,diagnosticsPath)}else{log.Printf("Switch diagnostics sampler disabled")}
  err := httpServer.ListenAndServe()
  cancelCollector()

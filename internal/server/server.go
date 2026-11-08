@@ -1298,11 +1298,17 @@ func diagnosticsHistoryHandler(store *diagnosticsStore)http.Handler{
  return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   if r.Method!=http.MethodGet{http.Error(w,"method not allowed",405);return}
   limit:=100;if raw:=r.URL.Query().Get("limit");raw!=""{n,err:=strconv.Atoi(raw);if err!=nil||n<1||n>500{http.Error(w,"limit musi mieścić się w zakresie 1–500",400);return};limit=n}
-  items,err:=store.list();if err!=nil{http.Error(w,"nie udało się odczytać historii diagnostycznej",http.StatusInternalServerError);return}
-  if len(items)>limit{items=items[len(items)-limit:]}
-  alerts:=[]diagnosticsAlert{};transitions:=[]diagnosticsTransition{}
-  if len(items)>0{alerts=diagnosticsCurrentAlerts(items[len(items)-1]);transitions=diagnosticsTransitions(items)}
+  windowMinutes:=60;if raw:=r.URL.Query().Get("windowMinutes");raw!=""{n,err:=strconv.Atoi(raw);if err!=nil||n<5||n>1440{http.Error(w,"windowMinutes musi mieścić się w zakresie 5–1440",400);return};windowMinutes=n}
+  all,err:=store.list();if err!=nil{http.Error(w,"nie udało się odczytać historii diagnostycznej",http.StatusInternalServerError);return}
+  transitions:=diagnosticsTransitions(all)
+  cutoff:=time.Now().UTC().Add(-time.Duration(windowMinutes)*time.Minute)
+  windowTransitions:=make([]diagnosticsTransition,0)
+  counts:=map[string]int{}
+  for _,tr:=range transitions{if !tr.At.Before(cutoff){windowTransitions=append(windowTransitions,tr);if tr.Type=="lacp-ready"||tr.Type=="lacp-member-lost"||tr.Type=="lacp-member-restored"{counts[tr.Type+"|"+tr.Subject]++}}}
+  alerts:=[]diagnosticsAlert{};if len(all)>0{alerts=diagnosticsCurrentAlerts(all[len(all)-1])}
+  for key,count:=range counts{if count>=3{parts:=strings.SplitN(key,"|",2);alerts=append(alerts,diagnosticsAlert{"warning","lacp-flapping","Powtarzające się zmiany stanu LACP",parts[1]+": "+strconv.Itoa(count)+" zmian w ostatnich "+strconv.Itoa(windowMinutes)+" minutach. Sprawdź okablowanie, porty i partnera LACP.",all[len(all)-1].CapturedAt})}}
+  items:=all;if len(items)>limit{items=items[len(items)-limit:]}
   w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
-  _=json.NewEncoder(w).Encode(map[string]any{"samples":items,"alerts":alerts,"transitions":transitions,"sampleCount":len(items),"hasEnoughHistory":len(items)>=2,"note":func()string{if len(items)<2{return "Zebrano mniej niż dwie próbki. Nie można jeszcze ocenić zmian ani flappingu."};return "Zmiany są porównywane tylko między kolejnymi próbkami, w których odpowiedni odczyt był dostępny. Brak danych nie jest traktowany jako powrót do normy."}()})
+  _=json.NewEncoder(w).Encode(map[string]any{"samples":items,"alerts":alerts,"transitions":windowTransitions,"sampleCount":len(all),"hasEnoughHistory":len(all)>=2,"windowMinutes":windowMinutes,"flappingThreshold":3,"collectionMode":"scheduled","note":func()string{if len(all)<2{return "Zebrano mniej niż dwie próbki. Nie można jeszcze ocenić zmian ani flappingu."};return "Zmiany są porównywane między kolejnymi próbkami z dostępnym odczytem. Brak danych nie jest traktowany jako powrót do normy. Flapping wymaga co najmniej trzech zmian w wybranym oknie."}()})
  })
 }

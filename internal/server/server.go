@@ -729,7 +729,7 @@ func bulkPortPreviewHandler(read func(string) (string,error)) http.Handler {
   }
   w.Header().Set("Content-Type","application/json")
   w.Header().Set("Cache-Control","no-store")
-  _ = json.NewEncoder(w).Encode(map[string]any{"previews":previews,"applies":false,"readOperations":1})
+  _ = json.NewEncoder(w).Encode(map[string]any{"previews":previews,"applies":false,"readOperations":3,"switchportReadOperations":1,"topologyReadOperations":2})
  })
 }
 

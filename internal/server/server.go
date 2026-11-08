@@ -34,6 +34,9 @@ func Register(m *http.ServeMux,svc *device.Service){
  m.Handle("/api/audit", auditHistoryHandler(os.Getenv("AUDIT_LOG_PATH")))
  m.Handle("/api/security-audit", securityAuditHandler(svc.RunReadOnly))
  m.Handle("/api/topology/map", topologyMapHandler(svc.RunReadOnly))
+ diagnosticsPath:=os.Getenv("DIAGNOSTICS_HISTORY_PATH");if diagnosticsPath==""{diagnosticsPath=filepath.Join("data","diagnostics-history.json")}
+ m.Handle("/api/diagnostics/collect",diagnosticsCollectHandler(svc.RunReadOnly,diagnosticsPath))
+ m.Handle("/api/diagnostics/history",diagnosticsHistoryHandler(diagnosticsPath))
  m.Handle("/api/monitor/history", monitorHistoryHandler(filepath.Join("data", "monitor-history.jsonl")))
  m.Handle("/api/monitor/stream", monitorStreamHandler())
  m.HandleFunc("/api/status",func(w http.ResponseWriter,r *http.Request){if r.Method!="GET"{http.Error(w,"method not allowed",405);return};w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(svc.Status())})
@@ -1153,5 +1156,129 @@ func topologyMapHandler(read func(string)(string,error))http.Handler{
   w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
   impacts:=buildTopologyImpacts(ports,links,lags,risks)
   _=json.NewEncoder(w).Encode(map[string]any{"available":true,"readOnly":true,"ports":ports,"links":links,"aggregations":lags,"vlans":vlans,"risks":risks,"impacts":impacts,"checks":checks,"note":"Ryzyka są wskazówkami opartymi wyłącznie na rozpoznanych opisach i danych CLI. Potencjalny wpływ na porty i VLAN-y jest wyliczany tylko z rozpoznanych członków LACP, konfiguracji switchport i LLDP; nie potwierdza przerwania ruchu ani pełnej ścieżki end-to-end. Brak LLDP nie oznacza braku fizycznego łącza."})
+ })
+}
+
+
+// diagnosticsSample stores only normalized topology metadata; never CLI output or credentials.
+type diagnosticsSample struct {
+ CapturedAt time.Time `json:"capturedAt"`
+ Checks map[string]bool `json:"checks"`
+ Aggregations []topologyAggregation `json:"aggregations"`
+ Uplinks []string `json:"uplinks"`
+ Neighbors []topologyLink `json:"neighbors"`
+}
+type diagnosticsStore struct { mu sync.Mutex; path string; retention int }
+func newDiagnosticsStore(path string, retention int)*diagnosticsStore{if retention<2||retention>5000{retention=500};return &diagnosticsStore{path:path,retention:retention}}
+func (s *diagnosticsStore) readLocked()([]diagnosticsSample,error){
+ raw,err:=os.ReadFile(s.path);if os.IsNotExist(err){return []diagnosticsSample{},nil};if err!=nil{return nil,err}
+ var items []diagnosticsSample;if len(raw)==0{return []diagnosticsSample{},nil}
+ if err=json.Unmarshal(raw,&items);err!=nil{return nil,fmt.Errorf("history file is invalid: %w",err)}
+ return items,nil
+}
+func (s *diagnosticsStore) list()([]diagnosticsSample,error){s.mu.Lock();defer s.mu.Unlock();return s.readLocked()}
+func (s *diagnosticsStore) append(sample diagnosticsSample)error{
+ s.mu.Lock();defer s.mu.Unlock()
+ items,err:=s.readLocked();if err!=nil{return err}
+ items=append(items,sample);if len(items)>s.retention{items=append([]diagnosticsSample(nil),items[len(items)-s.retention:]...)}
+ raw,err:=json.MarshalIndent(items,"","  ");if err!=nil{return err}
+ dir:=filepath.Dir(s.path);if err=os.MkdirAll(dir,0700);err!=nil{return err};if err=os.Chmod(dir,0700);err!=nil{return err}
+ tmp,err:=os.CreateTemp(dir,".diagnostics-*.tmp");if err!=nil{return err}
+ tmpName:=tmp.Name();ok:=false
+ defer func(){_ = tmp.Close();if !ok{_ = os.Remove(tmpName)}}()
+ if err=tmp.Chmod(0600);err!=nil{return err}
+ if _,err=tmp.Write(raw);err!=nil{return err}
+ if err=tmp.Sync();err!=nil{return err}
+ if err=tmp.Close();err!=nil{return err}
+ if err=os.Rename(tmpName,s.path);err!=nil{return err}
+ if err=os.Chmod(s.path,0600);err!=nil{return err}
+ ok=true
+ return nil
+}
+func collectDiagnosticsSample(read func(string)(string,error)) diagnosticsSample {
+ sample:=diagnosticsSample{CapturedAt:time.Now().UTC(),Checks:map[string]bool{},Aggregations:[]topologyAggregation{},Uplinks:[]string{},Neighbors:[]topologyLink{}}
+ config,configErr:=read("show running-config");sample.Checks["runningConfig"]=configErr==nil
+ sw,swErr:=read("show interface switchport");sample.Checks["switchport"]=swErr==nil&&strings.Contains(sw,"Interface name")
+ lldp,lldpErr:=read("show lldp neighbors");sample.Checks["lldp"]=lldpErr==nil&&strings.TrimSpace(lldp)!=""
+ lacp,lacpErr:=read("show etherchannel detail");sample.Checks["lacp"]=lacpErr==nil&&strings.TrimSpace(lacp)!=""
+ ports,groups,_:=parseTopologyConfig(config,sw)
+ for _,p:=range ports{if p.Role=="Uplink / switch"{sample.Uplinks=append(sample.Uplinks,p.Port)}}
+ sort.Strings(sample.Uplinks)
+ if sample.Checks["lldp"]{sample.Neighbors=parseTopologyLLDP(lldp)}
+ if sample.Checks["runningConfig"]{
+  liveGroups:=[]topologyAggregation{};if sample.Checks["lacp"]{liveGroups=parseTopologyLACP(lacp)}
+  for i:=range groups{
+   for _,live:=range liveGroups{if !strings.EqualFold(groups[i].Name,live.Name){continue}
+    groups[i].Live=true;groups[i].Ready=live.Ready;groups[i].Partner=live.Partner;groups[i].LiveMembers=append([]string(nil),live.Members...)
+    configured:=map[string]bool{};for _,p:=range groups[i].Members{configured[strings.ToLower(p)]=true}
+    active:=map[string]bool{};for _,p:=range live.Members{active[strings.ToLower(p)]=true}
+    if len(active)>0{if len(active)!=len(configured){groups[i].MemberMismatch=true}else{for p:=range configured{if !active[p]{groups[i].MemberMismatch=true;break}}}}
+   }}
+  sample.Aggregations=groups
+ }
+ if sample.Checks["lacp"]{
+  known:=map[string]bool{};for _,g:=range sample.Aggregations{known[strings.ToLower(g.Name)]=true}
+  for _,live:=range parseTopologyLACP(lacp){if !known[strings.ToLower(live.Name)]{live.Live=true;sample.Aggregations=append(sample.Aggregations,live)}}
+ }
+ return sample
+}
+type diagnosticsAlert struct { Severity string `json:"severity"`; Code string `json:"code"`; Title string `json:"title"`; Evidence string `json:"evidence"`; At time.Time `json:"at"` }
+type diagnosticsTransition struct { Type string `json:"type"`; Subject string `json:"subject"`; From string `json:"from"`; To string `json:"to"`; At time.Time `json:"at"`; Severity string `json:"severity"` }
+func diagnosticsCurrentAlerts(s diagnosticsSample)[]diagnosticsAlert{
+ out:=[]diagnosticsAlert{}
+ if s.Checks["lacp"]{
+  for _,g:=range s.Aggregations{
+   if g.Ready=="Niegotowy"{out=append(out,diagnosticsAlert{"critical","lacp-not-ready","Agregacja LACP nie jest gotowa",g.Name+" zgłasza Ready=0.",s.CapturedAt})}
+   if g.MemberMismatch{out=append(out,diagnosticsAlert{"warning","lacp-member-mismatch","Niespójność członków LACP",g.Name+": skonfigurowane ["+strings.Join(g.Members,", ")+"] · aktywne ["+strings.Join(g.LiveMembers,", ")+"].",s.CapturedAt})}
+   if !g.Live&&len(g.Members)>0{out=append(out,diagnosticsAlert{"warning","lacp-no-operational-data","Brak operacyjnego odczytu agregacji",g.Name+" jest skonfigurowana, ale nie ma rozpoznanego stanu operacyjnego.",s.CapturedAt})}
+  }
+ }
+ if s.Checks["runningConfig"]&&len(s.Uplinks)==1{out=append(out,diagnosticsAlert{"info","single-explicit-uplink","Jeden jawnie opisany uplink",s.Uplinks[0]+" jest jedynym portem rozpoznanym po opisie jako uplink/switch. To ryzyko topologii, nie alarm awarii.",s.CapturedAt})}
+ return out
+}
+func diagnosticsTransitions(samples []diagnosticsSample)[]diagnosticsTransition{
+ if len(samples)<2{return []diagnosticsTransition{}}
+ prev,cur:=samples[len(samples)-2],samples[len(samples)-1]
+ out:=[]diagnosticsTransition{}
+ if prev.Checks["lacp"]&&cur.Checks["lacp"]{
+  old:=map[string]topologyAggregation{};for _,g:=range prev.Aggregations{old[strings.ToLower(g.Name)]=g}
+  for _,g:=range cur.Aggregations{p,ok:=old[strings.ToLower(g.Name)];if !ok{continue}
+   if p.Ready!=g.Ready&&p.Ready!=""&&g.Ready!=""{sev:="warning";if g.Ready=="Niegotowy"{sev="critical"};out=append(out,diagnosticsTransition{"lacp-ready",g.Name,p.Ready,g.Ready,cur.CapturedAt,sev})}
+   if p.Live&&g.Live{
+    before:=map[string]bool{};after:=map[string]bool{};for _,v:=range p.LiveMembers{before[strings.ToLower(v)]=true};for _,v:=range g.LiveMembers{after[strings.ToLower(v)]=true}
+    for v:=range before{if !after[v]{out=append(out,diagnosticsTransition{"lacp-member-lost",g.Name+" / "+v,"aktywny","brak w odczycie",cur.CapturedAt,"critical"})}}
+    for v:=range after{if !before[v]{out=append(out,diagnosticsTransition{"lacp-member-restored",g.Name+" / "+v,"brak w odczycie","aktywny",cur.CapturedAt,"info"})}}
+   }
+  }
+ }
+ if prev.Checks["lldp"]&&cur.Checks["lldp"]{
+  old:=map[string]string{};now:=map[string]string{}
+  for _,n:=range prev.Neighbors{old[strings.ToLower(n.LocalPort)]=n.Neighbor};for _,n:=range cur.Neighbors{now[strings.ToLower(n.LocalPort)]=n.Neighbor}
+  for port,neighbor:=range old{if next,ok:=now[port];ok&&next!=neighbor{out=append(out,diagnosticsTransition{"lldp-neighbor-change",port,neighbor,next,cur.CapturedAt,"info"})}}
+ }
+ return out
+}
+func diagnosticsCollectHandler(read func(string)(string,error),path string)http.Handler{
+ store:=newDiagnosticsStore(path,500)
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  if r.Method!=http.MethodPost{http.Error(w,"method not allowed",405);return}
+  sample:=collectDiagnosticsSample(read)
+  if !sample.Checks["runningConfig"]&&!sample.Checks["lacp"]&&!sample.Checks["lldp"]{http.Error(w,"nie udało się zebrać żadnych danych diagnostycznych",http.StatusBadGateway);return}
+  if err:=store.append(sample);err!=nil{http.Error(w,"nie udało się zapisać historii diagnostycznej",http.StatusInternalServerError);return}
+  w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
+  _=json.NewEncoder(w).Encode(map[string]any{"sample":sample,"alerts":diagnosticsCurrentAlerts(sample),"saved":true,"retention":500})
+ })
+}
+func diagnosticsHistoryHandler(path string)http.Handler{
+ store:=newDiagnosticsStore(path,500)
+ return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  if r.Method!=http.MethodGet{http.Error(w,"method not allowed",405);return}
+  limit:=100;if raw:=r.URL.Query().Get("limit");raw!=""{n,err:=strconv.Atoi(raw);if err!=nil||n<1||n>500{http.Error(w,"limit musi mieścić się w zakresie 1–500",400);return};limit=n}
+  items,err:=store.list();if err!=nil{http.Error(w,"nie udało się odczytać historii diagnostycznej",http.StatusInternalServerError);return}
+  if len(items)>limit{items=items[len(items)-limit:]}
+  alerts:=[]diagnosticsAlert{};transitions:=[]diagnosticsTransition{}
+  if len(items)>0{alerts=diagnosticsCurrentAlerts(items[len(items)-1]);transitions=diagnosticsTransitions(items)}
+  w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
+  _=json.NewEncoder(w).Encode(map[string]any{"samples":items,"alerts":alerts,"transitions":transitions,"sampleCount":len(items),"hasEnoughHistory":len(items)>=2,"note":func()string{if len(items)<2{return "Zebrano mniej niż dwie próbki. Nie można jeszcze ocenić zmian ani flappingu."};return "Zmiany są porównywane tylko między kolejnymi próbkami, w których odpowiedni odczyt był dostępny. Brak danych nie jest traktowany jako powrót do normy."}()})
  })
 }

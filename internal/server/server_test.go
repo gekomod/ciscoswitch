@@ -981,7 +981,7 @@ func TestDiagnosticsAvailabilityClosesOutageAtLastKnownSampleBeforeGap(t *testin
 }
 
 
-func TestDiagnosticsEventsIncludeLLDPAddRemoveAndControlReadTransitions(t *testing.T) {
+func TestDiagnosticsEventsIncludeLLDPTransitionsWithoutInventingControlStateChanges(t *testing.T) {
  now:=time.Now().UTC()
  store:=newDiagnosticsStore(filepath.Join(t.TempDir(),"history.json"),20)
  samples:=[]diagnosticsSample{
@@ -997,7 +997,8 @@ func TestDiagnosticsEventsIncludeLLDPAddRemoveAndControlReadTransitions(t *testi
  if err:=json.Unmarshal(rec.Body.Bytes(),&result);err!=nil{t.Fatal(err)}
  found:=map[string]bool{}
  for _,event:=range result.Events{found[event.Type+":"+event.Title]=true}
- for _,want:=range []string{"lldp:Zniknął sąsiad LLDP","lldp:Wykryto sąsiada LLDP","availability:Nieudany odczyt zarządzający","availability:Odczyt zarządzający przywrócony"}{if !found[want]{t.Errorf("missing event %q; got %+v",want,result.Events)}}
+ for _,want:=range []string{"lldp:Zniknął sąsiad LLDP","lldp:Wykryto sąsiada LLDP"}{if !found[want]{t.Errorf("missing event %q; got %+v",want,result.Events)}}
+ if found["availability:Nieudany odczyt zarządzający"]||found["availability:Odczyt zarządzający przywrócony"]{t.Fatalf("missing control-read data must not be emitted as an infrastructure transition: %+v",result.Events)}
  for i:=1;i<len(result.Events);i++{if result.Events[i].At.After(result.Events[i-1].At){t.Fatal("events are not sorted newest first")}}
 }
 func TestDiagnosticsEventsValidateFiltersAndLimit(t *testing.T) {

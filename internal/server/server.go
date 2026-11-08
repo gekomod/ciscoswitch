@@ -949,6 +949,51 @@ type topologyLink struct { LocalPort string `json:"localPort"`; Neighbor string 
 type topologyAggregation struct { Name string `json:"name"`; Members []string `json:"members"`; LiveMembers []string `json:"liveMembers,omitempty"`; Live bool `json:"live"`; MemberMismatch bool `json:"memberMismatch"`; Partner string `json:"partner,omitempty"`; Ready string `json:"ready,omitempty"` }
 type topologyRisk struct { Severity string `json:"severity"`; Code string `json:"code"`; Title string `json:"title"`; Evidence string `json:"evidence"`; Recommendation string `json:"recommendation"` }
 
+type topologyImpact struct {
+ Code string `json:"code"`
+ Subject string `json:"subject"`
+ ConfiguredPorts []string `json:"configuredPorts,omitempty"`
+ LivePorts []string `json:"livePorts,omitempty"`
+ VLANs []int `json:"vlans,omitempty"`
+ Neighbors []string `json:"neighbors,omitempty"`
+ VLANEvidenceAvailable bool `json:"vlanEvidenceAvailable"`
+ Note string `json:"note"`
+}
+
+func buildTopologyImpacts(ports []topologyPort, links []topologyLink, aggregations []topologyAggregation, risks []topologyRisk) []topologyImpact {
+ portByName:=make(map[string]topologyPort,len(ports))
+ for _,p:=range ports { portByName[strings.ToLower(p.Port)]=p }
+ neighborsByPort:=make(map[string][]string)
+ for _,link:=range links { key:=strings.ToLower(link.LocalPort);neighborsByPort[key]=append(neighborsByPort[key],link.Neighbor) }
+ impacts:=make([]topologyImpact,0)
+ add:=func(code,subject string,configured,live []string){
+  vlanSet:=map[int]bool{};vlanEvidence:=false;neighborSet:=map[string]bool{}
+  for _,name:=range append(append([]string(nil),configured...),live...){
+   p,ok:=portByName[strings.ToLower(name)];if !ok{continue}
+   if len(p.VLANs)>0||p.NativeVLAN>0{vlanEvidence=true}
+   for _,v:=range p.VLANs{if v>0{vlanSet[v]=true}}
+   if p.NativeVLAN>0{vlanSet[p.NativeVLAN]=true}
+   for _,n:=range neighborsByPort[strings.ToLower(name)]{neighborSet[n]=true}
+  }
+  vlans:=make([]int,0,len(vlanSet));for v:=range vlanSet{vlans=append(vlans,v)};sort.Ints(vlans)
+  neighborList:=make([]string,0,len(neighborSet));for n:=range neighborSet{neighborList=append(neighborList,n)};sort.Strings(neighborList)
+  impacts=append(impacts,topologyImpact{Code:code,Subject:subject,ConfiguredPorts:append([]string(nil),configured...),LivePorts:append([]string(nil),live...),VLANs:vlans,Neighbors:neighborList,VLANEvidenceAvailable:vlanEvidence,Note:"To potencjalny zakres wpływu wynikający z rozpoznanej konfiguracji i odczytów. Nie potwierdza przerwania ruchu ani pełnej ścieżki end-to-end."})
+ }
+ for _,risk:=range risks{
+  switch risk.Code{
+  case "lag-single-member","lag-member-mismatch","lag-not-ready":
+   for _,lag:=range aggregations{
+    if strings.HasPrefix(strings.ToLower(risk.Evidence),strings.ToLower(lag.Name)){
+     add(risk.Code,lag.Name,lag.Members,lag.LiveMembers);break
+    }
+   }
+  case "single-explicit-uplink":
+   for _,p:=range ports{if p.Role=="Uplink / switch"{add(risk.Code,p.Port,[]string{p.Port},nil);break}}
+  }
+ }
+ return impacts
+}
+
 func analyzeTopologyRisks(ports []topologyPort, links []topologyLink, aggregations []topologyAggregation, lldpAvailable bool) []topologyRisk {
  risks:=make([]topologyRisk,0)
  explicitUplinks:=make([]topologyPort,0)
@@ -1106,6 +1151,7 @@ func topologyMapHandler(read func(string)(string,error))http.Handler{
   configuredGroups:=map[string]bool{};for _,lag:=range lags{configuredGroups[strings.ToLower(lag.Name)]=true}
   for _,live:=range liveLags{if !configuredGroups[strings.ToLower(live.Name)]{risks=append(risks,topologyRisk{"info","lacp-live-unconfigured","Agregacja LACP bez rozpoznanej deklaracji konfiguracji",live.Name+" jest widoczna w odczycie operacyjnym, ale nie została rozpoznana w running-config.","Zweryfikuj format konfiguracji i stan agregacji. Parser może nie rozpoznawać wszystkich wariantów składni firmware."})}}
   w.Header().Set("Content-Type","application/json; charset=utf-8");w.Header().Set("Cache-Control","no-store")
-  _=json.NewEncoder(w).Encode(map[string]any{"available":true,"readOnly":true,"ports":ports,"links":links,"aggregations":lags,"vlans":vlans,"risks":risks,"checks":checks,"note":"Ryzyka są wskazówkami opartymi wyłącznie na rozpoznanych opisach i danych CLI. Pojedynczy opisany uplink jest kandydatem na SPOF, nie dowodem braku redundancji. Brak LLDP nie oznacza braku fizycznego łącza. LACP i VLAN-y zależą od rozpoznanego formatu odpowiedzi urządzenia."})
+  impacts:=buildTopologyImpacts(ports,links,lags,risks)
+  _=json.NewEncoder(w).Encode(map[string]any{"available":true,"readOnly":true,"ports":ports,"links":links,"aggregations":lags,"vlans":vlans,"risks":risks,"impacts":impacts,"checks":checks,"note":"Ryzyka są wskazówkami opartymi wyłącznie na rozpoznanych opisach i danych CLI. Potencjalny wpływ na porty i VLAN-y jest wyliczany tylko z rozpoznanych członków LACP, konfiguracji switchport i LLDP; nie potwierdza przerwania ruchu ani pełnej ścieżki end-to-end. Brak LLDP nie oznacza braku fizycznego łącza."})
  })
 }

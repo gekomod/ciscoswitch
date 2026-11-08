@@ -469,3 +469,18 @@ main #config-diff{display:block!important;white-space:normal!important;font:inhe
 :root[data-theme="light"] .port-state-grid>div{background:#f5f8fb;border-color:#dce4ed}
 :root[data-theme="light"] .port-state-grid b{color:#24364b}
 @media(max-width:760px){.port-state-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* Saved interface profile library */
+.saved-profile-manager{margin:18px 0;padding:16px;border:1px solid var(--line);border-radius:13px;background:var(--surface-2)}
+.saved-profile-heading,.saved-profile-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.saved-profile-heading{margin-bottom:14px}
+.saved-profile-heading b,.saved-profile-heading small{display:block}
+.saved-profile-heading b{font-size:13px}
+.saved-profile-heading small{font-size:11px;color:var(--muted);margin-top:4px}
+.saved-profile-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;margin-top:12px}
+.saved-profile-controls label{min-width:0}
+.saved-profile-controls .form-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.saved-profile-manager>.note{margin-top:12px}
+:root[data-theme="light"] .saved-profile-manager{background:#f5f8fb;border-color:#dce4ed}
+@media(max-width:760px){.saved-profile-controls{grid-template-columns:1fr}.saved-profile-controls .form-actions>*{flex:1}.saved-profile-heading{align-items:flex-start}}

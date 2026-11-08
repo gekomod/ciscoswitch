@@ -137,7 +137,7 @@ m.HandleFunc("/api/port",func(w http.ResponseWriter,r *http.Request){if r.Method
   if json.NewDecoder(r.Body).Decode(&q)!=nil{http.Error(w,"invalid JSON",400);return}
   if isProtectedPort(q.Port){write(w,"",fmt.Errorf("port %s jest chroniony przez PROTECTED_PORTS",q.Port));return}
   if _,_,err:=validatePortRepair(svc.RunReadOnly,q);err!=nil{write(w,"",err);return}
-  output,err:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){return svc.ConfigurePortRepair(q)})
+  output,err:=runWithPreChangeBackup(backupDir,svc.RunReadOnly,func()(string,error){if _,_,checkErr:=validatePortRepair(svc.RunReadOnly,q);checkErr!=nil{return "",checkErr};return svc.ConfigurePortRepair(q)})
   write(w,output,err)
  })
  m.HandleFunc("/api/ports/settings/bulk",func(w http.ResponseWriter,r *http.Request){

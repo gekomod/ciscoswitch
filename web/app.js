@@ -1378,12 +1378,13 @@ function renderAvailabilityMetric(metric){
 }
 function renderAvailabilityChart(points,window){
  const chart=$('availability-chart');if(!chart)return;
- const labels=window==='7d'?['7 dni temu','6 dni temu','5 dni temu','4 dni temu','3 dni temu','2 dni temu','Wczoraj']:Array.from({length:24},(_,i)=>String(i).padStart(2,'0')+':00');
  chart.innerHTML=(points||[]).map((p,i)=>{
   const value=p.availabilityPercent===null||p.availabilityPercent===undefined?null:Number(p.availabilityPercent);
   const height=value===null?0:Math.max(2,Math.min(100,value));
-  const title=value===null?'Brak wystarczających danych':value.toFixed(2)+'% dostępności';
-  const label=window==='7d'?labels[i]:(i%3===0?labels[i]:'');
+  const date=new Date(p.at);
+  const label=window==='7d'?date.toLocaleDateString(undefined,{day:'2-digit',month:'2-digit'}):(i%3===0?date.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}):'');
+  const observed=Math.max(0,Number(p.observedSeconds||0)),unknown=Math.max(0,Number(p.unknownSeconds||0));
+  const title=(value===null?'Brak wystarczających danych':value.toFixed(2)+'% dostępności')+' · pomiar '+Math.round(observed/60)+' min · brak danych '+Math.round(unknown/60)+' min';
   return '<div class="availability-bar-column" title="'+esc(title)+'"><div class="availability-bar-track"><div class="availability-bar '+(value===null?'unknown':'')+'" style="height:'+height+'%"></div></div><small>'+esc(label)+'</small><span>'+(value===null?'—':value.toFixed(0)+'%')+'</span></div>';
  }).join('');
  const caption=$('availability-chart-caption');if(caption)caption.textContent=window==='7d'?'Ostatnie 7 dni · podział dzienny':'Ostatnie 24 godziny · podział godzinowy';

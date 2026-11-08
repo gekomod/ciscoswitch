@@ -82,6 +82,7 @@ func Register(m *http.ServeMux,svc *device.Service){
   "current":map[string]any{"port":current.Port,"mode":current.Mode,"defaultVlan":current.DefaultVLAN,"configuredVlans":current.ConfiguredVLANs},
  })
  m.Handle("/api/",panelUsers.middleware(apiMux))
+ m.Handle("/",panelUsers.middleware(apiMux))
  m.HandleFunc("/login",panelLoginPageHandler)
 })
 m.HandleFunc("/api/vlan/preview",func(w http.ResponseWriter,r *http.Request){

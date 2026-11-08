@@ -490,11 +490,11 @@ func TestPortProfilesHandlerCRUDAndPersistsLocally(t *testing.T) {
  var initial struct{Profiles []portProfile `json:"profiles"`}
  if err:=json.Unmarshal(get.Body.Bytes(),&initial);err!=nil{t.Fatal(err)}
  if len(initial.Profiles)!=0{t.Fatalf("expected empty profile list, got %d",len(initial.Profiles))}
- created:=request(http.MethodPost,`{"name":"AP biuro","description":"Punkty dostępowe","mode":"trunk","native":10,"allowed":"10,20,30","speed":"auto","duplex":"auto"}`)
+ created:=request(http.MethodPost,`{"name":"AP biuro","description":"Punkty dostępowe","portDescription":"AP BIURO","mode":"trunk","native":10,"allowed":"10,20,30","speed":"auto","duplex":"auto"}`)
  if created.Code!=http.StatusOK{t.Fatalf("POST status=%d body=%s",created.Code,created.Body.String())}
  var result struct{Profile portProfile `json:"profile"`;Profiles []portProfile `json:"profiles"`}
  if err:=json.Unmarshal(created.Body.Bytes(),&result);err!=nil{t.Fatal(err)}
- if !validPortProfileID(result.Profile.ID)||len(result.Profiles)!=1||result.Profile.Mode!="trunk"{t.Fatalf("unexpected created profile: %+v",result)}
+ if !validPortProfileID(result.Profile.ID)||len(result.Profiles)!=1||result.Profile.Mode!="trunk"||result.Profile.PortDescription!="AP BIURO"{t.Fatalf("unexpected created profile: %+v",result)}
  updated:=request(http.MethodPost,`{"id":"`+result.Profile.ID+`","name":"AP biuro 2","mode":"access","accessVlan":30,"speed":"auto","duplex":"auto"}`)
  if updated.Code!=http.StatusOK{t.Fatalf("update status=%d body=%s",updated.Code,updated.Body.String())}
  if err:=json.Unmarshal(updated.Body.Bytes(),&result);err!=nil{t.Fatal(err)}

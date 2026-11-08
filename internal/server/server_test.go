@@ -1,7 +1,6 @@
 package server
 
 import (
- "context"
  "encoding/json"
  "errors"
  "fmt"
@@ -881,7 +880,7 @@ func TestDiagnosticsAcknowledgeHandlerPersistsOperatorAndComment(t *testing.T) {
  id:=diagnosticsAlertID(alert.Code,alert.Evidence,alert.At)
  handler:=diagnosticsAcknowledgeHandler(store,path+".acks.json")
  req:=httptest.NewRequest(http.MethodPost,"/api/diagnostics/acknowledge",strings.NewReader(`{"id":"`+id+`","comment":"Sprawdzam przewód uplink"}`))
- req=req.WithContext(context.WithValue(req.Context(),identityContextKey{},panelIdentity{Username:"technik",Role:"operator"}))
+ req.SetBasicAuth("technik","test-password")
  rec:=httptest.NewRecorder();handler.ServeHTTP(rec,req)
  if rec.Code!=http.StatusOK{t.Fatalf("status=%d body=%s",rec.Code,rec.Body.String())}
  var result struct{Saved bool `json:"saved"`;Acknowledgement diagnosticsAcknowledgement `json:"acknowledgement"`}

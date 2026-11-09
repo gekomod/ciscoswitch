@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -165,27 +166,25 @@ var portRE = regexp.MustCompile(`^port1\.0\.([1-9]|[1-4][0-9]|5[0-2])$`)
 // ParseMirrors czyta sesje mirroringu z running-config:
 // "interface portX" z wierszem "mirror interface portY direction Z".
 func ParseMirrors(running string) []MirrorSession {
-	var out []MirrorSession
-	current := ""
-	for _, line := range strings.Split(running, "\n") {
-		l := strings.TrimRight(line, "\r")
-		t := strings.TrimSpace(l)
-		if strings.HasPrefix(l, "interface ") {
-			current = strings.TrimSpace(strings.TrimPrefix(l, "interface "))
-			continue
-		}
-		if t == "!" {
-			current = ""
-			continue
-		}
-		f := strings.Fields(t)
-		if current != "" && len(f) >= 3 && f[0] == "mirror" && f[1] == "interface" {
+	out := []MirrorSession{}
+	blocks := InterfaceBlocks(running)
+	names := make([]string, 0, len(blocks))
+	for n := range blocks {
+		names = append(names, n)
+	}
+	sort.Slice(names, func(i, j int) bool { return naturalLess(names[i], names[j]) })
+	for _, dest := range names {
+		for _, c := range blocks[dest] {
+			f := strings.Fields(c)
+			if len(f) < 3 || f[0] != "mirror" || f[1] != "interface" {
+				continue
+			}
 			dir := "both"
 			if len(f) >= 5 && f[3] == "direction" {
 				dir = f[4]
 			}
-			for _, src := range strings.Split(f[2], ",") {
-				out = append(out, MirrorSession{Destination: current, Source: src, Direction: dir})
+			for _, src := range ExpandInterfaces(f[2]) {
+				out = append(out, MirrorSession{Destination: dest, Source: src, Direction: dir})
 			}
 		}
 	}
@@ -197,11 +196,7 @@ func (s *Service) Mirrors() ([]MirrorSession, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := ParseMirrors(running)
-	if m == nil {
-		m = []MirrorSession{}
-	}
-	return m, nil
+	return ParseMirrors(running), nil
 }
 
 // BuildMirrorCommands tworzy lub usuwa sesję mirroringu ruchu z source na destination.

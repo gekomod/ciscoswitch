@@ -162,6 +162,7 @@ func analyzeTopologyRisks(ports []topologyPort, links []topologyLink, aggregatio
 	return risks
 }
 func parseTopologyConfig(config, switchport string) ([]topologyPort, []topologyAggregation, []int) {
+	config = device.NormalizeInterfaceRanges(config)
 	ports := map[string]*topologyPort{}
 	lags := map[string]*topologyAggregation{}
 	vlans := map[int]bool{}

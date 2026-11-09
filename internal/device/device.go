@@ -976,6 +976,7 @@ type vlanPortConfig struct {
 // interface mode is compatible. It never silently converts access ports to trunk
 // or trunk ports to access.
 func BuildVLANPortMembershipCommands(runningConfig string, ports []string, vlan int, membership string) ([]string, error) {
+	runningConfig = NormalizeInterfaceRanges(runningConfig)
 	if vlan < 1 || vlan > 4094 {
 		return nil, fmt.Errorf("VLAN ID musi być z zakresu 1–4094")
 	}

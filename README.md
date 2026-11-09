@@ -39,6 +39,12 @@ Przegląd pokazuje front AT-GS948MX: 48 portów miedzianych (górny rząd niepar
 - **Czas i NTP** (System): zegar (`show clock`), strefa i serwery NTP z running-config, dodawanie i usuwanie serwerów (`ntp server`), strefa czasowa w pełnych godzinach (`clock timezone NAZWA plus|minus N`). Czasu letniego panel jeszcze nie ustawia.
 - **Mirroring portów** (Porty): sesje z running-config (`mirror interface ... direction ...` w bloku portu docelowego), tworzenie i zatrzymywanie. Port chroniony nie może być portem docelowym; port nie może być jednocześnie źródłem i celem.
 
+## Ochrona ruchu
+
+Sekcja „Ochrona ruchu” (grupa Przełączanie): wykrywanie pętli na całym switchu (`loop-protection loop-detect`) i reakcja na pętlę na portach (`loop-protection action ...`), storm control dla broadcastu, multicastu i nieznanego unicastu (`storm-control TYP level N`) oraz IGMP snooping per VLAN (`ip igmp snooping` w `interface vlanN`). Porty podaje się jako zakresy, np. `1-24,49`; porty chronione są odrzucane. Składnia dla AW+ 5.4.6 jest niepotwierdzona; odrzucone polecenie pokazuje komunikat switcha. QoS jeszcze nie jest obsługiwany.
+
+Panel rozwija zakresy portów zapisane przez AW+ w running-config (`interface port1.0.1-1.0.24`) przed analizą, dzięki czemu topologia, audyt bezpieczeństwa, mirroring i zmiany VLAN widzą konfigurację każdego portu.
+
 ## Pliki i firmware
 
 Sekcja „Pliki i firmware” (grupa System) pokazuje zawartość pamięci flash (`dir`) i ustawienia startu (`show boot`). Pozwala wybrać firmware uruchamiany przy następnym starcie (`boot system`), firmware zapasowy (`boot system backup`), plik konfiguracji startowej (`boot config-file`) oraz zapisać running-config do nowego pliku (`copy running-config flash:/nazwa.cfg`). Akcje działają tylko na plikach, które istnieją we flash (sprawdzane na świeżym odczycie), nazwy nowych plików są ograniczone do bezpiecznych znaków, a istniejące pliki nie są nadpisywane. Zmiany działają po restarcie; panel nie restartuje switcha. Gdy formatu `dir` nie da się rozpoznać, panel pokazuje surową odpowiedź. Wgrywanie nowego firmware nie jest jeszcze obsługiwane.

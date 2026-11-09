@@ -895,3 +895,12 @@ html,body{width:100%;min-width:320px;overflow-x:hidden}
 :root[data-theme="light"] .svc-enabled .svc-state{border-color:#16865f55;background:#16865f12}
 :root[data-theme="light"] .svc-switch[aria-checked="true"]{background:#16865f26;border-color:#16865f88}
 :root[data-theme="light"] .files-used{color:var(--green)}
+
+/* Ochrona ruchu */
+.trf-lead{margin:-4px 0 10px}
+.trf-global{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:10px}
+.trf-global .btn{min-height:36px;background:var(--surface-3);border-color:var(--line)}
+.svc-state.trf-on{color:var(--green);border-color:#48d6a055;background:#48d6a014}
+#traffic-protection .mon-form{margin-top:12px}
+#traffic-protection .mon-list{margin-top:4px}
+#storm-level{width:110px}

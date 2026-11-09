@@ -40,3 +40,17 @@ func TestTopologyLACPFromRealOutput(t *testing.T) {
 		t.Fatalf("unexpected %+v", groups)
 	}
 }
+
+func TestTopologySeesRangedPorts(t *testing.T) {
+	config := "interface port1.0.1-1.0.2\n switchport mode access\n switchport access vlan 20\n!\n"
+	ports, _, _ := parseTopologyConfig(config, "")
+	found := 0
+	for _, p := range ports {
+		if (p.Port == "port1.0.1" || p.Port == "port1.0.2") && len(p.VLANs) == 1 && p.VLANs[0] == 20 {
+			found++
+		}
+	}
+	if found != 2 {
+		t.Fatalf("ranged ports missing from topology: %+v", ports)
+	}
+}

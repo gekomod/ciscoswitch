@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"gs948mx-manager/internal/device"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -60,6 +61,7 @@ func parseAuditVLANSet(raw string) map[int]bool {
 	return out
 }
 func analyzeVLANAndPortSecurity(config, switchport string) []securityAuditFinding {
+	config = device.NormalizeInterfaceRanges(config)
 	findings := make([]securityAuditFinding, 0)
 	declared := map[int]bool{}
 	referenced := map[int]bool{}

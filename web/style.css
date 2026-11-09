@@ -867,3 +867,31 @@ html,body{width:100%;min-width:320px;overflow-x:hidden}
 .mon-form{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
 .mon-details{margin-top:10px}
 .mon-details summary{cursor:pointer;color:var(--muted);font-size:12px}
+
+/* Nowe sekcje: pola formularzy w stylu reszty panelu (.form-grid) + jasny motyw */
+.files-save input,.files-save select,.mon-filters input,.mon-filters select,.mon-form input,.mon-form select{background:#0d1723;color:#e0e9f3;border:1px solid #304257;border-radius:10px;padding:11px 12px;font-size:11px;outline:none;min-height:40px;box-sizing:border-box}
+.files-save input:focus,.files-save select:focus,.mon-filters input:focus,.mon-filters select:focus,.mon-form input:focus,.mon-form select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #65a9ff1c}
+.files-save input::placeholder,.mon-filters input::placeholder{color:#6f8299}
+.files-save label,.mon-filters label,.mon-form label{color:#a6b6c9;font-size:10px;font-weight:650}
+.mon-form label{min-width:170px}
+.files-save-row select{min-width:120px}
+.files-save-row .btn,.mon-form .btn{min-height:40px}
+:root[data-theme="light"] .files-save input,:root[data-theme="light"] .files-save select,:root[data-theme="light"] .mon-filters input,:root[data-theme="light"] .mon-filters select,:root[data-theme="light"] .mon-form input,:root[data-theme="light"] .mon-form select{background:#fff;color:#24364b;border-color:#cbd7e3}
+:root[data-theme="light"] .files-save input:focus,:root[data-theme="light"] .files-save select:focus,:root[data-theme="light"] .mon-filters input:focus,:root[data-theme="light"] .mon-filters select:focus,:root[data-theme="light"] .mon-form input:focus,:root[data-theme="light"] .mon-form select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #2878d01f}
+:root[data-theme="light"] .files-save label,:root[data-theme="light"] .mon-filters label,:root[data-theme="light"] .mon-form label{color:#637287}
+
+/* Jasny motyw dla elementów z kolorami dobranymi pod ciemny */
+.btn.is-loading::after{border-color:var(--line);border-top-color:var(--accent)}
+:root[data-theme="light"] .svc-unsaved{background:#fff7e6;border-color:#ecd3a1;color:#7a5410}
+:root[data-theme="light"] .fp-device,:root[data-theme="light"] .files-raw{background:var(--surface-2);border-color:var(--line)}
+:root[data-theme="light"] .fp-port{background:var(--surface-3);border-color:var(--line)}
+:root[data-theme="light"] .fp-g{background:#16865f1a;border-color:var(--green)}
+:root[data-theme="light"] .fp-x{background:#2878d01a;border-color:var(--accent)}
+:root[data-theme="light"] .fp-f{background:#a56a121a;border-color:var(--amber)}
+:root[data-theme="light"] .fp-off{background:transparent;border-color:var(--subtle)}
+:root[data-theme="light"] .fp-err{border-color:var(--surface-2)}
+:root[data-theme="light"] .fp-port.is-selected{box-shadow:0 0 0 2px var(--surface-2),0 0 0 4px var(--text)}
+:root[data-theme="light"] .fp-k-down{background:var(--line)}
+:root[data-theme="light"] .svc-enabled .svc-state{border-color:#16865f55;background:#16865f12}
+:root[data-theme="light"] .svc-switch[aria-checked="true"]{background:#16865f26;border-color:#16865f88}
+:root[data-theme="light"] .files-used{color:var(--green)}

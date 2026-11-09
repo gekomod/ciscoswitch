@@ -31,7 +31,7 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 - Wspólne połączenie SSH dla odczytów (ponowne łączenie po zerwaniu / 45 s bezczynności).
 - Cache SNMP i `show` (STATUS_CACHE_TTL / READ_CACHE_TTL, domyślnie 5 s), łączenie równoległych zapytań;
   cache czyszczony po każdej zmianie konfiguracji.
-- `runConfig`: `terminal length 0` + `exit`, wykrywanie błędów CLI (`% ...`, bez `% Warning`).
+- `runConfig`: `enable` (AW+ loguje do trybu awplus>) + `terminal length 0` + `exit`, wykrywanie błędów CLI (`% ...`, bez `% Warning`).
 - `PERF_LOG=1` loguje czas każdego zapytania (`[perf] ...`).
 
 ## Parsery a prawdziwe wyjścia AW+

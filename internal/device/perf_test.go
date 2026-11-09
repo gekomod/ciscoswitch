@@ -17,7 +17,7 @@ import (
 
 func TestConfigScriptAddsPagingAndExit(t *testing.T) {
 	got := configScript([]string{"configure terminal", "interface port1.0.5", "no shutdown", "end"})
-	want := []string{"terminal length 0", "configure terminal", "interface port1.0.5", "no shutdown", "end", "exit"}
+	want := []string{"enable", "terminal length 0", "configure terminal", "interface port1.0.5", "no shutdown", "end", "exit"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v want %v", got, want)
 	}
@@ -25,8 +25,11 @@ func TestConfigScriptAddsPagingAndExit(t *testing.T) {
 	if got[len(got)-2] != "end" || got[len(got)-1] != "exit" {
 		t.Fatalf("missing end/exit: %v", got)
 	}
+	if got := configScript([]string{"enable", "configure terminal", "end"}); got[0] != "enable" || got[1] != "terminal length 0" {
+		t.Fatalf("enable must not be duplicated: %v", got)
+	}
 	got = configScript([]string{"copy running-config startup-config"})
-	want = []string{"terminal length 0", "copy running-config startup-config", "exit"}
+	want = []string{"enable", "terminal length 0", "copy running-config startup-config", "exit"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v want %v", got, want)
 	}
@@ -221,7 +224,7 @@ func TestConfigChangeFinishesQuicklyAndInvalidatesCache(t *testing.T) {
 	for len(f.lines) > 0 {
 		sent = append(sent, <-f.lines)
 	}
-	if sent[0] != "terminal length 0" || sent[len(sent)-1] != "exit" {
+	if sent[0] != "enable" || sent[1] != "terminal length 0" || sent[len(sent)-1] != "exit" {
 		t.Fatalf("unexpected script %v", sent)
 	}
 	before := f.execs

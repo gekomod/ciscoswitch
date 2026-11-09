@@ -448,8 +448,14 @@ func configLabel(cmds []string) string { return fmt.Sprintf("%d poleceń", len(c
 // configScript wyłącza stronicowanie (--More--) i kończy sesję poleceniem exit,
 // dzięki czemu panel nie czeka na timeout po wykonaniu zmian.
 func configScript(cmds []string) []string {
-	script := make([]string, 0, len(cmds)+3)
-	script = append(script, "terminal length 0")
+	script := make([]string, 0, len(cmds)+4)
+	// AlliedWare Plus po zalogowaniu jest w trybie użytkownika (awplus>);
+	// configure terminal, copy i boot wymagają trybu uprzywilejowanego (awplus#).
+	// W trybie uprzywilejowanym enable niczego nie zmienia.
+	if len(cmds) > 0 && strings.TrimSpace(cmds[0]) == "enable" {
+		cmds = cmds[1:]
+	}
+	script = append(script, "enable", "terminal length 0")
 	script = append(script, cmds...)
 	last := ""
 	if len(cmds) > 0 {

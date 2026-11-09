@@ -20,7 +20,8 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 - `monitoring.js` + `internal/device/monitoring.go` + `internal/server/monitoring_routes.go` — logi, czas/NTP, mirroring (stan z running-config). Do potwierdzenia: format `show log`, składnia `clock timezone` i `mirror interface` na 5.4.6; brak czasu letniego.
 - `traffic.js` + `internal/device/traffic.go` + `internal/server/traffic_routes.go` — pętle, storm control, IGMP. Brak QoS.
 - `NormalizeInterfaceRanges` (traffic.go): AW+ zwija porty w zakresy `interface port1.0.1-1.0.24`; każdy nowy parser running-config musi użyć tej funkcji albo `InterfaceBlocks`.
-- Plan dalszych modułów: 3b) QoS, 4) bezpieczeństwo (port security, ACL, DHCP snooping) z dodatkowymi blokadami.
+- `security.js` + `internal/device/security.go` + `internal/server/security_routes.go` — port security, DHCP snooping, ACL; blokady w `securityPortsAllowed` i w Build*/Configure* (zaufane porty, ostatnia reguła ACL).
+- Do zrobienia: QoS; czas letni; wgrywanie firmware; potwierdzenie składni wszystkich modułów na prawdziwym AW+ 5.4.6.
 - `services.js` + `internal/device/services.go` + `internal/server/services_routes.go` — moduł usług (SSH zablokowane, SNMP/DHCP wymagają potwierdzenia).
 - Domyślne stany usług AW+ nie są pewne; stan „nieustalony” jest celowy. Potwierdzić na switchu formaty `show http`, `show telnet`, `show lldp`.
 

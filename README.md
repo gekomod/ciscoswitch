@@ -39,6 +39,16 @@ Przegląd pokazuje front AT-GS948MX: 48 portów miedzianych (górny rząd niepar
 - **Czas i NTP** (System): zegar (`show clock`), strefa i serwery NTP z running-config, dodawanie i usuwanie serwerów (`ntp server`), strefa czasowa w pełnych godzinach (`clock timezone NAZWA plus|minus N`). Czasu letniego panel jeszcze nie ustawia.
 - **Mirroring portów** (Porty): sesje z running-config (`mirror interface ... direction ...` w bloku portu docelowego), tworzenie i zatrzymywanie. Port chroniony nie może być portem docelowym; port nie może być jednocześnie źródłem i celem.
 
+## Bezpieczeństwo sieci
+
+Sekcja „Bezpieczeństwo sieci” (grupa System):
+
+- **Port security**: limit adresów MAC na porcie (`switchport port-security maximum N`) i reakcja na przekroczenie (protect, restrict, shutdown).
+- **DHCP snooping**: globalnie (`service dhcp-snooping`), per VLAN (`ip dhcp snooping` w `interface vlanN`) i zaufane porty (`ip dhcp snooping trust`). Panel nie włączy snoopingu w VLAN-ie, dopóki żaden port nie jest zaufany, i nie usunie ostatnich zaufanych portów, gdy snooping działa.
+- **ACL**: podgląd list numerowanych i nazwanych z przypisaniem do portów, dodawanie i usuwanie reguł IP w ACL 3000–3699 (`access-list N permit|deny ip ŹRÓDŁO CEL`), przypisywanie istniejących ACL do portów (`access-group`). Nie można usunąć ostatniej reguły ACL przypisanego do portów.
+
+Porty z `PROTECTED_PORTS`: nie można na nich włączyć port security, przypisać ACL ani zdjąć zaufania DHCP; zdjęcie ACL i dodanie zaufania DHCP są dozwolone. Składnia dla AW+ 5.4.6 jest niepotwierdzona.
+
 ## Ochrona ruchu
 
 Sekcja „Ochrona ruchu” (grupa Przełączanie): wykrywanie pętli na całym switchu (`loop-protection loop-detect`) i reakcja na pętlę na portach (`loop-protection action ...`), storm control dla broadcastu, multicastu i nieznanego unicastu (`storm-control TYP level N`) oraz IGMP snooping per VLAN (`ip igmp snooping` w `interface vlanN`). Porty podaje się jako zakresy, np. `1-24,49`; porty chronione są odrzucane. Składnia dla AW+ 5.4.6 jest niepotwierdzona; odrzucone polecenie pokazuje komunikat switcha. QoS jeszcze nie jest obsługiwany.

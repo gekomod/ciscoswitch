@@ -115,3 +115,16 @@ func TestMirrorCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestSummerTime(t *testing.T) {
+	c, err := BuildSummerTimeCommands("CEST", false)
+	if err != nil || c[1] != "clock summer-time CEST recurring 5 Sun Mar 02:00 5 Sun Oct 03:00 60" {
+		t.Fatalf("%v %v", c, err)
+	}
+	if c, _ := BuildSummerTimeCommands("", true); c[1] != "no clock summer-time" {
+		t.Fatal(c)
+	}
+	if _, err := BuildSummerTimeCommands("CEST;x", false); err == nil {
+		t.Fatal("bad name")
+	}
+}

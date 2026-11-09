@@ -36,8 +36,12 @@ Przegląd pokazuje front AT-GS948MX: 48 portów miedzianych (górny rząd niepar
 ## Monitorowanie
 
 - **Logi switcha** (Narzędzia): cały bufor `show log` z filtrem ważności i wyszukiwaniem, najnowsze na górze. Linie w nieznanym formacie są pokazywane w całości.
-- **Czas i NTP** (System): zegar (`show clock`), strefa i serwery NTP z running-config, dodawanie i usuwanie serwerów (`ntp server`), strefa czasowa w pełnych godzinach (`clock timezone NAZWA plus|minus N`). Czasu letniego panel jeszcze nie ustawia.
+- **Czas i NTP** (System): zegar (`show clock`), strefa i serwery NTP z running-config, dodawanie i usuwanie serwerów (`ntp server`), strefa czasowa w pełnych godzinach (`clock timezone NAZWA plus|minus N`). Czas letni według reguły UE (`clock summer-time CEST recurring 5 Sun Mar 02:00 5 Sun Oct 03:00 60`) ustawiany jednym przyciskiem.
 - **Mirroring portów** (Porty): sesje z running-config (`mirror interface ... direction ...` w bloku portu docelowego), tworzenie i zatrzymywanie. Port chroniony nie może być portem docelowym; port nie może być jednocześnie źródłem i celem.
+
+## Raport zgodności
+
+Narzędzia → Raport zgodności wykonuje na switchu wszystkie polecenia odczytu używane przez panel i sprawdza, czy parsery rozumieją odpowiedzi (SNMP i nazwy portów, uprawnienia odczytu running-config, pliki, boot, logi, czas, switchport, usługi, LLDP, STP). Niczego nie zmienia. Wynik można skopiować jako tekst; raport nie zawiera running-config, haseł ani community, a adresy IP i MAC w próbkach są ukryte.
 
 ## Bezpieczeństwo sieci
 

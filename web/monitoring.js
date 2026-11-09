@@ -99,6 +99,8 @@
       const name = $id('tz-name').value.trim(), offset = Number($id('tz-offset').value);
       change({ action: 'timezone', name, offset }, 'Ustawić strefę ' + name + ' (UTC' + (offset >= 0 ? '+' : '') + offset + ')?');
     });
+    $id('summer-eu').addEventListener('click', () => change({ action: 'summer-eu', name: 'CEST' }, 'Ustawić czas letni według reguły UE (CEST, +1 h od ostatniej niedzieli marca do ostatniej niedzieli października)?'));
+    $id('summer-remove').addEventListener('click', () => change({ action: 'summer-remove' }, 'Usunąć ustawienie czasu letniego?'));
     btn.addEventListener('click', refresh);
   })();
 

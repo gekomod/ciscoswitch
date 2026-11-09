@@ -55,6 +55,10 @@ func registerMonitoringRoutes(apiMux *http.ServeMux, svc *device.Service, backup
 					return svc.ConfigureNTP(q.Host, true)
 				case "timezone":
 					return svc.ConfigureTimezone(q.Name, q.Offset)
+				case "summer-eu":
+					return svc.ConfigureSummerTime(q.Name, false)
+				case "summer-remove":
+					return svc.ConfigureSummerTime("", true)
 				}
 				return "", fmt.Errorf("nieznana akcja %q", q.Action)
 			})
@@ -62,6 +66,14 @@ func registerMonitoringRoutes(apiMux *http.ServeMux, svc *device.Service, backup
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
+	})
+
+	apiMux.HandleFunc("/api/compat", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		writeJSON(w, svc.Compatibility(), nil)
 	})
 
 	apiMux.HandleFunc("/api/mirror", func(w http.ResponseWriter, r *http.Request) {

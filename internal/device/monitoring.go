@@ -153,6 +153,27 @@ func BuildTimezoneCommands(name string, offset int) ([]string, error) {
 	return []string{"configure terminal", "clock timezone " + name + " " + dir + " " + strconv.Itoa(offset), "end"}, nil
 }
 
+// BuildSummerTimeCommands ustawia czas letni według reguły UE (ostatnia niedziela
+// marca 02:00 do ostatniej niedzieli października 03:00, +60 min) albo go usuwa.
+func BuildSummerTimeCommands(name string, remove bool) ([]string, error) {
+	if remove {
+		return []string{"configure terminal", "no clock summer-time", "end"}, nil
+	}
+	name = strings.TrimSpace(name)
+	if !tzNameRE.MatchString(name) {
+		return nil, fmt.Errorf("skrót czasu letniego to 2–6 liter, np. CEST")
+	}
+	return []string{"configure terminal", "clock summer-time " + name + " recurring 5 Sun Mar 02:00 5 Sun Oct 03:00 60", "end"}, nil
+}
+
+func (s *Service) ConfigureSummerTime(name string, remove bool) (string, error) {
+	cmds, err := BuildSummerTimeCommands(name, remove)
+	if err != nil {
+		return "", err
+	}
+	return s.runConfig(cmds)
+}
+
 // ---------- Mirroring ----------
 
 type MirrorSession struct {

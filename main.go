@@ -418,6 +418,11 @@ func (w *statusWriter) WriteHeader(code int) {
 	}
 	w.ResponseWriter.WriteHeader(code)
 }
+
+// Unwrap pozwala http.ResponseController wydłużyć limity czasu dla długich operacji
+// (wgrywanie firmware).
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 func (w *statusWriter) Write(p []byte) (int, error) {
 	if w.status == 0 {
 		w.status = http.StatusOK

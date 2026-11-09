@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // FlashFile to pozycja z polecenia "dir" (pamięć flash switcha).
@@ -167,4 +168,74 @@ func (s *Service) FileAction(action, name string) (string, error) {
 		return "", err
 	}
 	return s.runConfig(cmds)
+}
+
+// ---------- Wgrywanie firmware ----------
+
+var dirFreeRE = regexp.MustCompile(`(?i)([\d.]+)\s*([KMG]?)B?\s+of\s+[\d.]+\s*[KMG]?B?\s+bytes\s+free`)
+
+// ParseDirFree odczytuje wolne miejsce z końca "dir" ("1.9M of 63.0M bytes free").
+// Zwraca -1, gdy formatu nie da się rozpoznać.
+func ParseDirFree(raw string) int64 {
+	m := dirFreeRE.FindStringSubmatch(raw)
+	if m == nil {
+		return -1
+	}
+	v, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		return -1
+	}
+	mult := map[string]float64{"": 1, "K": 1 << 10, "M": 1 << 20, "G": 1 << 30}[strings.ToUpper(m[2])]
+	return int64(v * mult)
+}
+
+var firmwareNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.rel$`)
+
+// ValidFirmwareName sprawdza nazwę pliku firmware (tylko bezpieczne znaki, rozszerzenie .rel).
+func ValidFirmwareName(name string) bool { return firmwareNameRE.MatchString(name) }
+
+// FirmwarePrecheck sprawdza przed kopiowaniem: nazwa, brak pliku o tej nazwie,
+// wolne miejsce (z 1 MB zapasu). Zwraca ostrzeżenie, gdy miejsca nie da się ustalić.
+func FirmwarePrecheck(name string, size int64, dirRaw string) (warning string, err error) {
+	if !ValidFirmwareName(name) {
+		return "", fmt.Errorf("nazwa firmware może zawierać tylko litery, cyfry, kropkę, myślnik i podkreślenie i musi kończyć się na .rel")
+	}
+	for _, f := range ParseDir(dirRaw) {
+		if strings.EqualFold(f.Base, name) {
+			return "", fmt.Errorf("plik %s już jest we flash", name)
+		}
+	}
+	free := ParseDirFree(dirRaw)
+	if free < 0 {
+		return "nie udało się odczytać wolnego miejsca we flash; kopiowanie może się nie udać, jeśli miejsca zabraknie", nil
+	}
+	if free < size+(1<<20) {
+		return "", fmt.Errorf("za mało miejsca we flash: wolne %.1f MB, potrzeba %.1f MB; usuń stary firmware z poziomu CLI switcha", float64(free)/(1<<20), float64(size+(1<<20))/(1<<20))
+	}
+	return "", nil
+}
+
+// CopyFirmwareFromURL każe switchowi pobrać plik z adresu HTTP do flash,
+// a potem sprawdza, czy plik ma oczekiwany rozmiar.
+func (s *Service) CopyFirmwareFromURL(url, name string, size int64, timeout time.Duration) (string, error) {
+	if !ValidFirmwareName(name) || !strings.HasPrefix(url, "http://") || strings.ContainsAny(url, " \t\r\n;") {
+		return "", fmt.Errorf("nieprawidłowe dane kopiowania")
+	}
+	out, err := s.runConfigTimeout([]string{"copy " + url + " flash:/" + name}, timeout)
+	if err != nil {
+		return out, err
+	}
+	dir, derr := s.RunReadOnlyFresh("dir")
+	if derr != nil {
+		return out, fmt.Errorf("kopiowanie zakończone, ale nie udało się sprawdzić flash: %w", derr)
+	}
+	for _, f := range ParseDir(dir) {
+		if strings.EqualFold(f.Base, name) {
+			if f.Size != size {
+				return out, fmt.Errorf("plik %s we flash ma %d B zamiast %d B; nie ustawiaj go jako firmware startowego", name, f.Size, size)
+			}
+			return out, nil
+		}
+	}
+	return out, fmt.Errorf("po kopiowaniu nie ma pliku %s we flash; odpowiedź switcha: %s", name, strings.TrimSpace(out))
 }

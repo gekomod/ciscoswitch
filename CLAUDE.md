@@ -22,7 +22,8 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 - `NormalizeInterfaceRanges` (traffic.go): AW+ zwija porty w zakresy `interface port1.0.1-1.0.24`; każdy nowy parser running-config musi użyć tej funkcji albo `InterfaceBlocks`.
 - `security.js` + `internal/device/security.go` + `internal/server/security_routes.go` — port security, DHCP snooping, ACL; blokady w `securityPortsAllowed` i w Build*/Configure* (zaufane porty, ostatnia reguła ACL).
 - Raport zgodności: `internal/device/compat.go`, `web/compat.js`, `/api/compat`. Pierwszy krok przy problemach na prawdziwym switchu: poprosić użytkownika o ten raport.
-- Do zrobienia: QoS; wgrywanie firmware; potwierdzenie składni wszystkich modułów na prawdziwym AW+ 5.4.6.
+- Firmware: `internal/server/firmware.go` (upload, serveOnce z tokenem, zadanie w tle), `CopyFirmwareFromURL` w files.go; składnia `copy http://... flash:/x.rel` niepotwierdzona na 5.4.6.
+- Do zrobienia: QoS; potwierdzenie składni wszystkich modułów na prawdziwym AW+ 5.4.6.
 - `services.js` + `internal/device/services.go` + `internal/server/services_routes.go` — moduł usług (SSH zablokowane, SNMP/DHCP wymagają potwierdzenia).
 - Domyślne stany usług AW+ nie są pewne; stan „nieustalony” jest celowy. Potwierdzić na switchu formaty `show http`, `show telnet`, `show lldp`.
 

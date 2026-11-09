@@ -4,7 +4,10 @@ import (
 	"bufio"
 	"crypto/ed25519"
 	"crypto/rand"
+	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"reflect"
 	"strings"
 	"sync"
@@ -96,6 +99,8 @@ type fakeSwitch struct {
 	conns       int32
 	execs       int32
 	lines       chan string
+	copiedMu    sync.Mutex
+	copied      map[string]int64 // pliki "pobrane" przez switch poleceniem copy http
 }
 
 func startFakeSwitch(t *testing.T) *fakeSwitch {
@@ -112,7 +117,7 @@ func startFakeSwitch(t *testing.T) *fakeSwitch {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { ln.Close() })
-	f := &fakeSwitch{addr: ln.Addr().String(), fingerprint: ssh.FingerprintSHA256(signer.PublicKey()), lines: make(chan string, 64)}
+	f := &fakeSwitch{addr: ln.Addr().String(), fingerprint: ssh.FingerprintSHA256(signer.PublicKey()), lines: make(chan string, 64), copied: map[string]int64{}}
 	go func() {
 		for {
 			nc, err := ln.Accept()
@@ -145,6 +150,18 @@ func (f *fakeSwitch) serve(nc net.Conn, cfg *ssh.ServerConfig) {
 					atomic.AddInt32(&f.execs, 1)
 					cmd := string(req.Payload[4:])
 					req.Reply(true, nil)
+					if cmd == "dir" {
+						f.copiedMu.Lock()
+						var b strings.Builder
+						for n, sz := range f.copied {
+							fmt.Fprintf(&b, "%9d -rw- Nov  8 2026 10:00:00  flash:/%s\n", sz, n)
+						}
+						f.copiedMu.Unlock()
+						b.WriteString("\n40.0M of 63.0M bytes free\n")
+						ch.Write([]byte(b.String()))
+						ch.SendRequest("exit-status", false, ssh.Marshal(struct{ C uint32 }{0}))
+						return
+					}
 					if cmd == "show hang" {
 						select {} // switch zawieszony: nigdy nie odpowiada
 					}
@@ -157,6 +174,20 @@ func (f *fakeSwitch) serve(nc net.Conn, cfg *ssh.ServerConfig) {
 					for sc.Scan() {
 						line := strings.TrimSpace(sc.Text())
 						f.lines <- line
+						if strings.HasPrefix(line, "copy http://") {
+							parts := strings.Fields(line)
+							if resp, err := http.Get(parts[1]); err == nil {
+								n, _ := io.Copy(io.Discard, resp.Body)
+								resp.Body.Close()
+								if resp.StatusCode == 200 {
+									f.copiedMu.Lock()
+									f.copied[strings.TrimPrefix(parts[2], "flash:/")] = n
+									f.copiedMu.Unlock()
+								} else {
+									ch.Write([]byte("% Failed to copy: HTTP " + resp.Status + "\n"))
+								}
+							}
+						}
 						if line == "vlan 4000" {
 							ch.Write([]byte("% Invalid input detected at '^' marker.\n"))
 						}

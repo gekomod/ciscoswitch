@@ -382,6 +382,12 @@ func (s *Service) dialSSH() (*ssh.Client, error) {
 }
 
 func (s *Service) runConfig(cmds []string) (string, error) {
+	return s.runConfigTimeout(cmds, 15*time.Second)
+}
+
+// runConfigTimeout działa jak runConfig, z własnym limitem czasu sesji
+// (np. kopiowanie firmware trwa minuty).
+func (s *Service) runConfigTimeout(cmds []string, timeout time.Duration) (string, error) {
 	if s.cfg.Host == "" || s.cfg.SSHUser == "" || s.cfg.SSHPassword == "" {
 		return "", fmt.Errorf("brak konfiguracji SSH w .env")
 	}
@@ -428,10 +434,10 @@ func (s *Service) runConfig(cmds []string) (string, error) {
 				return out.String(), fmt.Errorf("CLI: %w; %s", e, out.String())
 			}
 		}
-	case <-time.After(15 * time.Second):
+	case <-time.After(timeout):
 		_ = ss.Close()
 		logTiming("ssh-config", configLabel(cmds), started, fmt.Errorf("timeout"))
-		return out.String(), fmt.Errorf("timeout CLI (15 s) — switch nie zamknął sesji; sprawdź wynik odczytem zwrotnym")
+		return out.String(), fmt.Errorf("timeout CLI (%s) — switch nie zamknął sesji; sprawdź wynik odczytem zwrotnym", timeout)
 	}
 	result := out.String()
 	if msg := cliError(result); msg != "" {

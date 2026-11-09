@@ -845,3 +845,25 @@ html,body{width:100%;min-width:320px;overflow-x:hidden}
 .files-save-row input{flex:1;min-width:0}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .table-scroll{overflow-x:auto}
+
+/* Monitorowanie: logi, czas i NTP, mirroring */
+.mon-filters{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+.mon-filters label,.mon-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.mon-filters input{min-width:240px}
+.mon-table{width:100%;border-collapse:collapse;font-size:12px}
+.mon-table th{text-align:left;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+.mon-table td{padding:8px 10px;border-bottom:1px solid var(--line-soft);vertical-align:top;overflow-wrap:anywhere}
+.mon-nowrap{white-space:nowrap;color:var(--muted)}
+.log-sev{font-size:11px;font-weight:600;color:var(--muted)}
+.log-l0 .log-sev,.log-l1 .log-sev,.log-l2 .log-sev,.log-l3 .log-sev{color:var(--red)}
+.log-l4 .log-sev{color:var(--amber)}
+.log-l5 .log-sev{color:var(--accent)}
+.mon-note{color:var(--muted);font-size:12px;margin:8px 0 0}
+.mon-error{color:var(--red);font-size:12px;margin:0}
+.mon-list{list-style:none;margin:0;padding:0;border:1px solid var(--line-soft);border-radius:12px;overflow:hidden}
+.mon-list li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--line-soft)}
+.mon-list li:last-child{border-bottom:0}
+.mon-list .btn{min-height:36px;font-size:12px;background:var(--surface-3);border-color:var(--line)}
+.mon-form{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.mon-details{margin-top:10px}
+.mon-details summary{cursor:pointer;color:var(--muted);font-size:12px}

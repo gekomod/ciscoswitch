@@ -33,6 +33,12 @@ Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948
 
 Przegląd pokazuje front AT-GS948MX: 48 portów miedzianych (górny rząd nieparzyste, dolny parzyste) i 4 SFP, w kolorach według stanu (1 Gb/s, 10 Gb/s, 10/100 Mb/s, brak łącza, wyłączony). Czerwona kropka oznacza przyrost błędów w ostatnich 5 minutach. Kliknięcie portu otwiera szczegóły (tryb, VLAN-y, prędkość, MTU, liczniki) i akcje panelu: ustawienia portu, ruch i historia, topologia, włączenie lub wyłączenie (porty z `PROTECTED_PORTS` są zablokowane).
 
+## Monitorowanie
+
+- **Logi switcha** (Narzędzia): cały bufor `show log` z filtrem ważności i wyszukiwaniem, najnowsze na górze. Linie w nieznanym formacie są pokazywane w całości.
+- **Czas i NTP** (System): zegar (`show clock`), strefa i serwery NTP z running-config, dodawanie i usuwanie serwerów (`ntp server`), strefa czasowa w pełnych godzinach (`clock timezone NAZWA plus|minus N`). Czasu letniego panel jeszcze nie ustawia.
+- **Mirroring portów** (Porty): sesje z running-config (`mirror interface ... direction ...` w bloku portu docelowego), tworzenie i zatrzymywanie. Port chroniony nie może być portem docelowym; port nie może być jednocześnie źródłem i celem.
+
 ## Pliki i firmware
 
 Sekcja „Pliki i firmware” (grupa System) pokazuje zawartość pamięci flash (`dir`) i ustawienia startu (`show boot`). Pozwala wybrać firmware uruchamiany przy następnym starcie (`boot system`), firmware zapasowy (`boot system backup`), plik konfiguracji startowej (`boot config-file`) oraz zapisać running-config do nowego pliku (`copy running-config flash:/nazwa.cfg`). Akcje działają tylko na plikach, które istnieją we flash (sprawdzane na świeżym odczycie), nazwy nowych plików są ograniczone do bezpiecznych znaków, a istniejące pliki nie są nadpisywane. Zmiany działają po restarcie; panel nie restartuje switcha. Gdy formatu `dir` nie da się rozpoznać, panel pokazuje surową odpowiedź. Wgrywanie nowego firmware nie jest jeszcze obsługiwane.

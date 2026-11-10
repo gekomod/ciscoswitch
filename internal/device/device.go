@@ -52,6 +52,7 @@ type Port struct {
 	OutDiscards  uint64 `json:"outDiscards"`
 	InUcastPkts  uint64 `json:"inUcastPkts"`
 	OutUcastPkts uint64 `json:"outUcastPkts"`
+	Description  string `json:"description,omitempty"` // IF-MIB ifAlias (opis portu)
 }
 type Status struct {
 	Host        string `json:"host"`
@@ -226,13 +227,14 @@ func (s *Service) readStatus() Status {
 	outDiscards, _ := walkCounter(g, ".1.3.6.1.2.1.2.2.1.19")
 	inUcast, _ := walkCounter(g, ".1.3.6.1.2.1.31.1.1.1.7")
 	outUcast, _ := walkCounter(g, ".1.3.6.1.2.1.31.1.1.1.11")
+	alias, _ := walkText(g, ".1.3.6.1.2.1.31.1.1.1.18")
 	ix := make([]int, 0, len(d))
 	for i := range d {
 		ix = append(ix, i)
 	}
 	sort.Ints(ix)
 	for _, i := range ix {
-		p := Port{Index: i, Name: d[i], Admin: state(adm[i]), Oper: state(op[i]), MTU: mtu[i], InOctets: inOctets[i], OutOctets: outOctets[i], InErrors: inErrors[i], OutErrors: outErrors[i], InDiscards: inDiscards[i], OutDiscards: outDiscards[i], InUcastPkts: inUcast[i], OutUcastPkts: outUcast[i]}
+		p := Port{Index: i, Name: d[i], Admin: state(adm[i]), Oper: state(op[i]), MTU: mtu[i], InOctets: inOctets[i], OutOctets: outOctets[i], InErrors: inErrors[i], OutErrors: outErrors[i], InDiscards: inDiscards[i], OutDiscards: outDiscards[i], InUcastPkts: inUcast[i], OutUcastPkts: outUcast[i], Description: strings.TrimSpace(alias[i])}
 		if highSpeed[i] > 0 {
 			p.Speed = fmt.Sprintf("%d Mb/s", highSpeed[i])
 		} else if speed[i] > 0 {

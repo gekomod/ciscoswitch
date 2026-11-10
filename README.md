@@ -31,7 +31,7 @@ Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948
 
 ## Front switcha
 
-Przegląd pokazuje front AT-GS948MX: 48 portów miedzianych (górny rząd nieparzyste, dolny parzyste) i 4 SFP, w kolorach według stanu (1 Gb/s, 10 Gb/s, 10/100 Mb/s, brak łącza, wyłączony). Czerwona kropka oznacza przyrost błędów w ostatnich 5 minutach. Kliknięcie portu otwiera szczegóły (tryb, VLAN-y, prędkość, MTU, liczniki) i akcje panelu: ustawienia portu, ruch i historia, topologia, włączenie lub wyłączenie (porty z `PROTECTED_PORTS` są zablokowane).
+Przegląd pokazuje front AT-GS948MX: 48 portów miedzianych (górny rząd nieparzyste, dolny parzyste) i 4 SFP, w kolorach według stanu (1 Gb/s, 10 Gb/s, 10/100 Mb/s, brak łącza, wyłączony). Czerwona kropka oznacza przyrost błędów w ostatnich 5 minutach. Najechanie na port pokazuje jego opis (`description`, odczytywany przez SNMP jako ifAlias). Kliknięcie portu otwiera szczegóły (opis, tryb, VLAN-y, prędkość, MTU, liczniki, wykres ruchu z historii monitoringu, a na żądanie podłączone urządzenia: adresy MAC z IP z tablicy ARP i sąsiad LLDP) i akcje panelu: ustawienia portu, ruch i historia, topologia, włączenie lub wyłączenie (porty z `PROTECTED_PORTS` są zablokowane). Pod frontem jest lista ostatnich zdarzeń z monitoringu: zmiany łączy, przyrost błędów, dostępność SNMP.
 
 ## Monitorowanie
 

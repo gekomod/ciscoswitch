@@ -948,3 +948,30 @@ html,body{width:100%;min-width:320px;overflow-x:hidden}
 .set-reset{background:none;border:0;padding:0;color:var(--accent);font:inherit;font-size:11px;cursor:pointer;text-decoration:underline}
 :root[data-theme="light"] .set-field input,:root[data-theme="light"] .set-field select{background:#fff;color:#24364b;border-color:#cbd7e3}
 :root[data-theme="light"] .set-field label{color:#637287}
+
+/* Front switcha: opis, wykres, urządzenia, zdarzenia */
+.fp-desc{margin:2px 0 0;color:var(--muted);font-size:13px}
+.fp-chart{margin-top:16px}
+.fp-chart-head{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-bottom:6px}
+.fp-chart svg{width:100%;height:70px;display:block}
+.fp-chart polyline{fill:none;stroke-width:2;vector-effect:non-scaling-stroke}
+.fp-rx{stroke:var(--accent)}.fp-tx{stroke:var(--amber)}
+.fp-chart-legend{display:flex;gap:16px;color:var(--muted);font-size:12px;margin-top:4px}
+.fp-chart-legend span{display:inline-flex;align-items:center;gap:6px}
+.fp-rx-key,.fp-tx-key{display:inline-block;width:10px;height:2px}
+.fp-rx-key{background:var(--accent)}.fp-tx-key{background:var(--amber)}
+.fp-device-box{margin-top:16px;padding:12px 14px;border:1px solid var(--line-soft);border-radius:12px;background:var(--surface-2)}
+.fp-device-box b{font-size:13px}
+.fp-device-box .btn{margin-top:8px;min-height:36px;font-size:12px;background:var(--surface-3);border-color:var(--line)}
+.fp-lldp{margin:6px 0 0;font-size:12px;overflow-wrap:anywhere}
+.fp-macs{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:12px}
+.fp-macs code{font-size:12px}.fp-macs span{color:var(--text)}.fp-macs small{color:var(--subtle)}
+.fp-link{background:none;border:0;padding:0;color:var(--accent);font:inherit;cursor:pointer;text-decoration:underline}
+.fp-events{margin-top:20px;border-top:1px solid var(--line-soft);padding-top:14px}
+.fp-events h3{margin:0 0 8px;font-size:14px;font-weight:600}
+.fp-event-list{list-style:none;margin:0;padding:0}
+.fp-event-list li{display:flex;gap:12px;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--line-soft);font-size:13px}
+.fp-event-list li:last-child{border-bottom:0}
+.fp-event-list time{color:var(--subtle);font-size:12px;min-width:92px;flex:none}
+.fp-event-list li::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--subtle);flex:none;align-self:center}
+.fp-ev-ok::before{background:var(--green)!important}.fp-ev-warn::before{background:var(--amber)!important}.fp-ev-bad::before{background:var(--red)!important}.fp-ev-info::before{background:var(--accent)!important}

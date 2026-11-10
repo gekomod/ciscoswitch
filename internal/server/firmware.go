@@ -134,9 +134,16 @@ func serveOnce(addr, name, path string, lifetime time.Duration) (string, func(),
 		return "", nil, err
 	}
 	token := hex.EncodeToString(tokenBytes)
-	ln, err := net.Listen("tcp", addr)
+	// Nasłuch na wszystkich interfejsach na porcie z adresu; switch dostaje adres
+	// z addr. Dzięki temu działa też w kontenerze z przekierowanym portem, gdzie
+	// adres hosta nie istnieje wewnątrz kontenera.
+	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		return "", nil, fmt.Errorf("nie udało się nasłuchiwać na %s: %w", addr, err)
+		return "", nil, err
+	}
+	ln, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		return "", nil, fmt.Errorf("nie udało się nasłuchiwać na porcie %s: %w", port, err)
 	}
 	want := "/fw/" + token + "/" + name
 	mux := http.NewServeMux()

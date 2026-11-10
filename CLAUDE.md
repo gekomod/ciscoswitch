@@ -63,6 +63,10 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 ## Ustawienia
 - `internal/settings`: `settings.Get(KEY)` = panel (data/settings.json) → .env → domyślna. Nowe ustawienia nie-sekretne dodawać do `settings.Defs` i czytać przez `settings.Get`, nie `os.Getenv`. Hasła tylko w .env. Zmiany w locie przez `settings.OnChange` (main.go → `svc.SetTuning`). `/api/settings` tylko dla admina (middleware).
 
+## Docker
+- `Dockerfile` (multi-stage, alpine, użytkownik panel, wolumen /app/data), `docker-compose.yml`, `.github/workflows/docker.yml` (testy + obraz amd64/arm64 do ghcr.io).
+- Serwer firmware (`serveOnce`) nasłuchuje na `:port`, a switchowi podaje adres z ustawień; w kontenerze bridge trzeba ustawić FIRMWARE_HTTP_ADDR.
+
 ## Zasady
 - Zmiany konfiguracji testować najpierw na nieużywanym porcie; nie dotykać portów z PROTECTED_PORTS.
 - Nie commitować `.env` ani `data/` (hasła, community, kopie konfiguracji).

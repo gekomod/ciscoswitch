@@ -1,0 +1,23 @@
+# Uruchomienie: docker compose up -d
+# Wymaga pliku .env obok (zob. .env.example): adres switcha i hasła.
+services:
+  panel:
+    image: ghcr.io/gekomod/ciscoswitch:latest
+    # albo zbuduj lokalnie: zamień linię image na `build: .`
+    container_name: gs948mx-panel
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      LISTEN_ADDR: 0.0.0.0:8090
+    ports:
+      # Panel tylko z tego komputera. Aby udostępnić w sieci lokalnej,
+      # zamień 127.0.0.1 na adres komputera (pamiętaj o silnym haśle).
+      - "127.0.0.1:8090:8090"
+      # Serwer firmware: switch pobiera z niego plik w trakcie kopiowania.
+      - "8091:8091"
+    volumes:
+      - ./data:/app/data
+    # Adres, pod którym switch widzi ten komputer, ustaw w panelu:
+    # Narzędzia → Ustawienia panelu → Adres panelu dla switcha (np. 192.168.31.10:8091).
+    # W kontenerze automatyczne wykrywanie poda adres kontenera, nie komputera.
+    # Alternatywa: network_mode: host (bez sekcji ports), wtedy wykrywanie działa samo.

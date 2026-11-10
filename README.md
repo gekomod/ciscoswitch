@@ -79,6 +79,16 @@ Sekcja „Usługi” pokazuje stan serwera SSH, serwera WWW (HTTP), Telnetu, age
 
 Każde kliknięcie, które pobiera dane lub wprowadza zmianę, pokazuje pasek postępu, blokuje przycisk na czas operacji i kończy się komunikatem z czasem trwania albo opisem błędu. Gdy switch odpowiada dłużej niż 4 s, panel informuje, że odczyt nadal trwa. Automatyczne odświeżanie w tle działa bez komunikatów.
 
+## Docker
+
+Obraz jest budowany przez GitHub Actions (`.github/workflows/docker.yml`) dla linux/amd64 i linux/arm64 (np. Raspberry Pi) i publikowany jako `ghcr.io/gekomod/ciscoswitch` z tagami `latest` (gałąź main), wersji (`v1.2.3` → `1.2.3`, `1.2`) i skrótu commita. Przed budową workflow sprawdza formatowanie, `go vet`, testy z `-race` i składnię JS.
+
+Uruchomienie: skopiuj `.env.example` do `.env`, uzupełnij adres switcha i hasła, potem `docker compose up -d`. Dane panelu (użytkownicy, ustawienia, kopie konfiguracji, historia, firmware) są w `./data`. Panel jest domyślnie dostępny tylko z tego komputera (`127.0.0.1:8090`); `docker-compose.yml` opisuje, jak udostępnić go w sieci lokalnej.
+
+Wgrywanie firmware w kontenerze: switch musi dotrzeć do portu 8091 komputera. Przy przekierowanych portach (domyślny `docker-compose.yml`) ustaw w Ustawieniach panelu adres komputera, np. `192.168.31.10:8091`, bo automatyczne wykrywanie poda adres kontenera. Z `network_mode: host` wykrywanie działa samo.
+
+Obraz jest prywatny, dopóki nie zmienisz widoczności pakietu w ustawieniach repozytorium na GitHubie (Packages). Prywatny obraz wymaga `docker login ghcr.io` z tokenem z uprawnieniem `read:packages`.
+
 ## Wydajność
 
 - Stan portów jest odczytywany przez SNMP GETBULK (wiele wierszy tabeli w jednym zapytaniu) zamiast GETNEXT dla każdego wiersza osobno.

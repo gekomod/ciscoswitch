@@ -1,0 +1,7 @@
+.git
+.github
+.env
+data/
+*.log
+/gs948mx-manager
+CLAUDE.md

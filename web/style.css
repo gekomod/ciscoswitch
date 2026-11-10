@@ -975,3 +975,4 @@ html,body{width:100%;min-width:320px;overflow-x:hidden}
 .fp-event-list time{color:var(--subtle);font-size:12px;min-width:92px;flex:none}
 .fp-event-list li::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--subtle);flex:none;align-self:center}
 .fp-ev-ok::before{background:var(--green)!important}.fp-ev-warn::before{background:var(--amber)!important}.fp-ev-bad::before{background:var(--red)!important}.fp-ev-info::before{background:var(--accent)!important}
+#qos .mon-form{margin-top:12px}#qos .mon-list{margin-top:4px}#qos .mon-list small{color:var(--subtle)}

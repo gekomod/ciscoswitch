@@ -14,3 +14,13 @@ func TestTrafficProtectedPorts(t *testing.T) {
 		t.Fatal("igmp has no ports")
 	}
 }
+
+func TestQoSProtectedPorts(t *testing.T) {
+	t.Setenv("PROTECTED_PORTS", "port1.0.49")
+	if err := trafficPortsAllowed("qos-port", "45-52"); err == nil {
+		t.Fatal("QoS on protected port must be refused")
+	}
+	if err := trafficPortsAllowed("qos-global", ""); err != nil {
+		t.Fatal(err)
+	}
+}

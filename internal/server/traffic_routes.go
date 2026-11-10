@@ -10,6 +10,14 @@ import (
 
 // registerTrafficRoutes: storm control, ochrona przed pętlami, IGMP snooping.
 func registerTrafficRoutes(apiMux *http.ServeMux, svc *device.Service, backupDir string) {
+	apiMux.HandleFunc("/api/qos", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		info, err := svc.QoS()
+		writeJSON(w, info, err)
+	})
 	apiMux.HandleFunc("/api/traffic", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -45,6 +53,10 @@ func registerTrafficRoutes(apiMux *http.ServeMux, svc *device.Service, backupDir
 					return svc.ConfigureLoopAction(q.Ports, q.Value, q.Remove)
 				case "igmp":
 					return svc.ConfigureIGMP(q.VLAN, q.Enable)
+				case "qos-global":
+					return svc.ConfigureQoSGlobal(q.Enable)
+				case "qos-port":
+					return svc.ConfigureQoSPorts(q.Ports, q.Level, q.Remove)
 				}
 				return "", fmt.Errorf("nieznana akcja %q", q.Action)
 			})
@@ -59,7 +71,7 @@ func registerTrafficRoutes(apiMux *http.ServeMux, svc *device.Service, backupDir
 // zbyt niski limit ruchu albo wyłączenie portu przez ochronę przed pętlami
 // mogłyby odciąć panel od switcha.
 func trafficPortsAllowed(action, raw string) error {
-	if action != "storm" && action != "loop-action" {
+	if action != "storm" && action != "loop-action" && action != "qos-port" {
 		return nil
 	}
 	ports, err := device.ParsePortRanges(raw)

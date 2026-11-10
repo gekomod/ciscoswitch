@@ -59,7 +59,9 @@ Porty z `PROTECTED_PORTS`: nie można na nich włączyć port security, przypisa
 
 ## Ochrona ruchu
 
-Sekcja „Ochrona ruchu” (grupa Przełączanie): wykrywanie pętli na całym switchu (`loop-protection loop-detect`) i reakcja na pętlę na portach (`loop-protection action ...`), storm control dla broadcastu, multicastu i nieznanego unicastu (`storm-control TYP level N`) oraz IGMP snooping per VLAN (`ip igmp snooping` w `interface vlanN`). Porty podaje się jako zakresy, np. `1-24,49`; porty chronione są odrzucane. Składnia dla AW+ 5.4.6 jest niepotwierdzona; odrzucone polecenie pokazuje komunikat switcha. QoS jeszcze nie jest obsługiwany.
+Sekcja „Ochrona ruchu” (grupa Przełączanie): wykrywanie pętli na całym switchu (`loop-protection loop-detect`) i reakcja na pętlę na portach (`loop-protection action ...`), storm control dla broadcastu, multicastu i nieznanego unicastu (`storm-control TYP level N`) oraz IGMP snooping per VLAN (`ip igmp snooping` w `interface vlanN`). Porty podaje się jako zakresy, np. `1-24,49`; porty chronione są odrzucane. Składnia dla AW+ 5.4.6 jest niepotwierdzona; odrzucone polecenie pokazuje komunikat switcha.
+
+**QoS (priorytety)** (grupa Przełączanie), wersja podstawowa: włączenie QoS (`mls qos enable`) i priorytet ruchu bez znacznika z wybranych portów (`mls qos cos 0–7`, w panelu jako Głos, Wideo, Ważny, Niski, Zwykły, Tło), z podglądem `show mls qos`. Bez map klas i polityk.
 
 Panel rozwija zakresy portów zapisane przez AW+ w running-config (`interface port1.0.1-1.0.24`) przed analizą, dzięki czemu topologia, audyt bezpieczeństwa, mirroring i zmiany VLAN widzą konfigurację każdego portu.
 

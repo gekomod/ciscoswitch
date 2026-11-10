@@ -151,6 +151,7 @@ func (s *Service) Compatibility() CompatReport {
 		{"Usługi", "show lldp", func(o string) (string, string) { return serviceProbe("lldp", o) }, true},
 		{"Topologia", "show lldp neighbors", func(o string) (string, string) { return "ok", "format niezweryfikowany, próbka poniżej" }, true},
 		{"Topologia", "show spanning-tree", func(o string) (string, string) { return "ok", "format niezweryfikowany, próbka poniżej" }, true},
+		{"QoS", "show mls qos", func(o string) (string, string) { return "ok", "format niezweryfikowany, próbka poniżej" }, true},
 		{"Topologia", "show mac address-table", func(o string) (string, string) { return "ok", "odczyt działa" }, false},
 	}
 	for _, c := range checks {

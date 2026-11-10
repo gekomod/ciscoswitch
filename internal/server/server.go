@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 )
 
 func Register(m *http.ServeMux, svc *device.Service) {
@@ -25,13 +24,8 @@ func Register(m *http.ServeMux, svc *device.Service) {
 	if backupDir == "" {
 		backupDir = filepath.Join("data", "config-backups")
 	}
-	retention := 100
-	if raw := os.Getenv("CONFIG_BACKUP_RETENTION"); raw != "" {
-		if n, err := strconv.Atoi(raw); err == nil && n >= 1 && n <= 10000 {
-			retention = n
-		}
-	}
-	apiMux.Handle("/api/config/backups", configBackupsHandler(svc.RunReadOnly, backupDir, retention))
+	// Liczba kopii jest czytana przy każdej kopii z ustawień panelu (CONFIG_BACKUP_RETENTION).
+	apiMux.Handle("/api/config/backups", configBackupsHandler(svc.RunReadOnly, backupDir, 0))
 	apiMux.Handle("/api/config/backups/download", configBackupDownloadHandler(backupDir))
 	apiMux.Handle("/api/config/backups/compare", configBackupCompareHandler(svc.RunReadOnly, backupDir))
 	apiMux.Handle("/api/config/backups/restore-preview", configBackupRestorePreviewHandler(backupDir))
@@ -120,6 +114,7 @@ func Register(m *http.ServeMux, svc *device.Service) {
 	registerTrafficRoutes(apiMux, svc, backupDir)
 	registerSecurityRoutes(apiMux, svc, backupDir)
 	registerFirmwareRoutes(apiMux, svc, backupDir)
+	registerSettingsRoutes(apiMux, svc)
 	m.Handle("/api/", panelUsers.middleware(apiMux))
 	m.Handle("/", panelUsers.middleware(apiMux))
 	m.HandleFunc("/login", panelLoginPageHandler)

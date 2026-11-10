@@ -3,9 +3,11 @@ package device
 import (
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -31,14 +33,19 @@ const (
 
 // perfLogEnabled włącza logowanie czasu każdego zapytania (PERF_LOG=1).
 // Bez tej zmiennej logowane są tylko zapytania wolniejsze niż slowThreshold.
-var perfLogEnabled = func() bool {
+var perfLog atomic.Bool
+
+func init() {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("PERF_LOG")))
-	return v == "1" || v == "true" || v == "yes"
-}()
+	perfLog.Store(v == "1" || v == "true" || v == "yes")
+}
+
+// SetPerfLog włącza lub wyłącza logowanie czasu każdego zapytania.
+func SetPerfLog(on bool) { perfLog.Store(on) }
 
 func logTiming(kind, what string, started time.Time, err error) {
 	d := time.Since(started)
-	if !perfLogEnabled && d < slowThreshold {
+	if !perfLog.Load() && d < slowThreshold {
 		return
 	}
 	status := "ok"
@@ -251,6 +258,8 @@ func (s *Service) InvalidateCache() {
 }
 
 func (s *Service) statusTTL() time.Duration {
+	s.tuneMu.RLock()
+	defer s.tuneMu.RUnlock()
 	if s.cfg.StatusCacheTTL < 0 {
 		return 0
 	}
@@ -261,6 +270,8 @@ func (s *Service) statusTTL() time.Duration {
 }
 
 func (s *Service) commandTimeout() time.Duration {
+	s.tuneMu.RLock()
+	defer s.tuneMu.RUnlock()
 	if s.cfg.CommandTimeout > 0 {
 		return s.cfg.CommandTimeout
 	}
@@ -268,6 +279,8 @@ func (s *Service) commandTimeout() time.Duration {
 }
 
 func (s *Service) readTTL() time.Duration {
+	s.tuneMu.RLock()
+	defer s.tuneMu.RUnlock()
 	if s.cfg.ReadCacheTTL < 0 {
 		return 0
 	}
@@ -318,3 +331,46 @@ func cloneStatus(st Status) Status {
 type errString string
 
 func (e errString) Error() string { return string(e) }
+
+// Tuning to ustawienia zmieniane w panelu bez restartu.
+type Tuning struct {
+	StatusCacheTTL, ReadCacheTTL, CommandTimeout time.Duration
+	SNMPV3PrivacyProtocol                        string
+}
+
+// SetTuning stosuje nowe ustawienia i czyści cache.
+func (s *Service) SetTuning(t Tuning) {
+	s.tuneMu.Lock()
+	s.cfg.StatusCacheTTL = t.StatusCacheTTL
+	s.cfg.ReadCacheTTL = t.ReadCacheTTL
+	s.cfg.CommandTimeout = t.CommandTimeout
+	if t.SNMPV3PrivacyProtocol != "" {
+		s.cfg.SNMPV3PrivacyProtocol = t.SNMPV3PrivacyProtocol
+	}
+	s.tuneMu.Unlock()
+	s.InvalidateCache()
+}
+
+func (s *Service) snmpConfig() Config {
+	s.tuneMu.RLock()
+	defer s.tuneMu.RUnlock()
+	return s.cfg
+}
+
+// LocalIP zwraca adres IP tego komputera, przez który panel łączy się ze switchem
+// (ten adres switch widzi jako adres panelu). Nie wysyła żadnych pakietów.
+func (s *Service) LocalIP() (net.IP, error) {
+	if strings.TrimSpace(s.cfg.Host) == "" {
+		return nil, fmt.Errorf("brak SWITCH_HOST")
+	}
+	c, err := net.Dial("udp", net.JoinHostPort(s.cfg.Host, "22"))
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+	a, ok := c.LocalAddr().(*net.UDPAddr)
+	if !ok || a.IP == nil || a.IP.To4() == nil {
+		return nil, fmt.Errorf("nie udało się ustalić adresu IPv4")
+	}
+	return a.IP.To4(), nil
+}

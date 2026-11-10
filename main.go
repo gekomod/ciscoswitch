@@ -18,11 +18,16 @@ import (
 
 	"gs948mx-manager/internal/device"
 	"gs948mx-manager/internal/server"
+	"gs948mx-manager/internal/settings"
 )
 
 func main() {
 	if err := loadEnv(".env"); err != nil && !os.IsNotExist(err) {
 		log.Fatalf("Nie można odczytać .env: %v", err)
+	}
+	settingsPath := env("PANEL_SETTINGS_PATH", filepath.Join("data", "settings.json"))
+	if err := settings.Load(settingsPath); err != nil {
+		log.Fatalf("Nie można odczytać ustawień: %v", err)
 	}
 	cfg := device.Config{
 		Host: os.Getenv("SWITCH_HOST"), SSHPort: env("SWITCH_SSH_PORT", "22"),
@@ -33,13 +38,19 @@ func main() {
 		SNMPV3User:            os.Getenv("SWITCH_SNMP_V3_USER"),
 		SNMPV3AuthPassword:    os.Getenv("SWITCH_SNMP_V3_AUTH_PASSWORD"),
 		SNMPV3PrivacyPassword: os.Getenv("SWITCH_SNMP_V3_PRIV_PASSWORD"),
-		SNMPV3PrivacyProtocol: env("SWITCH_SNMP_V3_PRIV_PROTOCOL", "des"),
+		SNMPV3PrivacyProtocol: settings.Get("SWITCH_SNMP_V3_PRIV_PROTOCOL"),
 		Timeout:               4 * time.Second,
 		StatusCacheTTL:        cacheTTL("STATUS_CACHE_TTL"),
 		ReadCacheTTL:          cacheTTL("READ_CACHE_TTL"),
 		CommandTimeout:        commandTimeout(),
 	}
 	svc := device.New(cfg)
+	device.SetPerfLog(settings.Bool("PERF_LOG"))
+	settings.OnChange(func() {
+		svc.SetTuning(tuningFromSettings())
+		device.SetPerfLog(settings.Bool("PERF_LOG"))
+		log.Printf("Zastosowano nowe ustawienia panelu")
+	})
 	defer svc.Close()
 	addr := env("LISTEN_ADDR", "127.0.0.1:8090")
 	mux := http.NewServeMux()
@@ -485,12 +496,15 @@ func auditLog(next http.Handler, path string) http.Handler {
 
 // cacheTTL czyta czas życia cache z .env: pusty = domyślne 5 s, "0" lub "off" wyłącza cache.
 func cacheTTL(name string) time.Duration {
-	raw := strings.ToLower(strings.TrimSpace(os.Getenv(name)))
+	raw := strings.ToLower(strings.TrimSpace(settings.Get(name)))
 	switch raw {
 	case "":
 		return 0
-	case "0", "off", "false":
+	case "0", "0s", "off", "false":
 		return -1
+	}
+	if !strings.HasSuffix(raw, "s") && !strings.HasSuffix(raw, "m") {
+		raw += "s"
 	}
 	d, err := time.ParseDuration(raw)
 	if err != nil || d < 0 || d > 5*time.Minute {
@@ -502,9 +516,12 @@ func cacheTTL(name string) time.Duration {
 
 // commandTimeout czyta SSH_COMMAND_TIMEOUT (np. 30s); puste lub błędne = domyślne 30 s.
 func commandTimeout() time.Duration {
-	raw := strings.TrimSpace(os.Getenv("SSH_COMMAND_TIMEOUT"))
+	raw := strings.TrimSpace(settings.Get("SSH_COMMAND_TIMEOUT"))
 	if raw == "" {
 		return 0
+	}
+	if !strings.HasSuffix(raw, "s") && !strings.HasSuffix(raw, "m") {
+		raw += "s"
 	}
 	d, err := time.ParseDuration(raw)
 	if err != nil || d < 5*time.Second || d > 5*time.Minute {
@@ -512,4 +529,14 @@ func commandTimeout() time.Duration {
 		return 0
 	}
 	return d
+}
+
+// tuningFromSettings zbiera ustawienia, które panel stosuje bez restartu.
+func tuningFromSettings() device.Tuning {
+	return device.Tuning{
+		StatusCacheTTL:        cacheTTL("STATUS_CACHE_TTL"),
+		ReadCacheTTL:          cacheTTL("READ_CACHE_TTL"),
+		CommandTimeout:        commandTimeout(),
+		SNMPV3PrivacyProtocol: settings.Get("SWITCH_SNMP_V3_PRIV_PROTOCOL"),
+	}
 }

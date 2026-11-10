@@ -932,3 +932,19 @@ html,body{width:100%;min-width:320px;overflow-x:hidden}
 .fw-done{color:var(--green);font-size:12px;margin:8px 0 0}
 #fw-files .mon-list{margin-top:10px}
 #fw-file{padding:8px}
+
+/* Ustawienia panelu */
+.set-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.set-field{display:flex;flex-direction:column;gap:6px;padding:14px;border:1px solid var(--line-soft);border-radius:12px;background:var(--surface)}
+.set-field label{color:#a6b6c9;font-size:10px;font-weight:650}
+.set-field input,.set-field select{background:#0d1723;color:#e0e9f3;border:1px solid #304257;border-radius:10px;padding:11px 12px;font-size:11px;outline:none;min-height:40px;box-sizing:border-box;width:100%}
+.set-field input:focus,.set-field select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #65a9ff1c}
+.set-field input::placeholder{color:#6f8299}
+.set-field small{color:var(--subtle);font-size:11px;line-height:1.45}
+.set-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:2px}
+.set-src{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.set-src-panel{color:var(--accent);border-color:#65a9ff55}
+.set-src-env{color:var(--amber);border-color:#e9bd7055}
+.set-reset{background:none;border:0;padding:0;color:var(--accent);font:inherit;font-size:11px;cursor:pointer;text-decoration:underline}
+:root[data-theme="light"] .set-field input,:root[data-theme="light"] .set-field select{background:#fff;color:#24364b;border-color:#cbd7e3}
+:root[data-theme="light"] .set-field label{color:#637287}

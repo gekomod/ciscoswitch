@@ -3,8 +3,8 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"gs948mx-manager/internal/settings"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,15 +13,15 @@ import (
 // Port shutdown is opt-in because the panel cannot reliably infer which physical
 // interface carries its own management session. Protected ports remain immutable.
 func portShutdownEnabled() bool {
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("ALLOW_PORT_SHUTDOWN")), "true")
+	return settings.Bool("ALLOW_PORT_SHUTDOWN")
 }
 func managementDHCPChangeEnabled() bool {
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("ALLOW_MANAGEMENT_DHCP_CHANGE")), "true")
+	return settings.Bool("ALLOW_MANAGEMENT_DHCP_CHANGE")
 }
 func protectedPortNames() []string {
 	seen := map[string]bool{}
 	ports := []string{}
-	for _, item := range strings.Split(os.Getenv("PROTECTED_PORTS"), ",") {
+	for _, item := range strings.Split(settings.Get("PROTECTED_PORTS"), ",") {
 		name := strings.TrimSpace(item)
 		if !strings.HasPrefix(strings.ToLower(name), "port1.0.") {
 			continue
@@ -64,7 +64,7 @@ func isProtectedPort(name string) bool {
 	if name == "" {
 		return false
 	}
-	for _, item := range strings.Split(os.Getenv("PROTECTED_PORTS"), ",") {
+	for _, item := range strings.Split(settings.Get("PROTECTED_PORTS"), ",") {
 		if strings.EqualFold(strings.TrimSpace(item), name) {
 			return true
 		}

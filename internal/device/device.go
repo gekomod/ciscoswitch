@@ -33,6 +33,7 @@ type Service struct {
 	reads    readCache
 	flights  flightGroup
 	statusMu sync.Mutex
+	tuneMu   sync.RWMutex
 	status   Status
 	statusAt time.Time
 }
@@ -112,7 +113,7 @@ type Identity struct {
 // depend on vendor-specific CLI output and is safe for read-only discovery.
 func (s *Service) DeviceIdentity() (Identity, error) {
 	var out Identity
-	g, err := newSNMPClient(s.cfg)
+	g, err := newSNMPClient(s.snmpConfig())
 	if err != nil {
 		return out, err
 	}
@@ -192,7 +193,7 @@ func (s *Service) readStatus() Status {
 		version = "3"
 	}
 	o := Status{Host: s.cfg.Host, Ports: []Port{}, SNMPVersion: version}
-	g, err := newSNMPClient(s.cfg)
+	g, err := newSNMPClient(s.snmpConfig())
 	if err != nil {
 		o.Warning = err.Error()
 		return o

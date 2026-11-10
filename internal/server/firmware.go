@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"gs948mx-manager/internal/settings"
 	"io"
 	"log"
 	"net"
@@ -43,11 +44,10 @@ type firmwareJob struct {
 }
 
 type firmwareManager struct {
-	dir  string
-	addr string // FIRMWARE_HTTP_ADDR, np. 192.168.31.10:8091
-	svc  *device.Service
-	mu   sync.Mutex
-	job  *firmwareJob
+	dir string
+	svc *device.Service
+	mu  sync.Mutex
+	job *firmwareJob
 }
 
 // firmwareAddrValid wymaga konkretnego adresu IP (switch musi wiedzieć, dokąd się połączyć).
@@ -171,8 +171,27 @@ func serveOnce(addr, name, path string, lifetime time.Duration) (string, func(),
 	return "http://" + addr + want, stop, nil
 }
 
+// address zwraca adres serwera firmware: z ustawień panelu albo .env, a gdy brak,
+// adres tego komputera widziany przez switch z portem FIRMWARE_HTTP_PORT.
+func (m *firmwareManager) address() (addr string, auto bool, err error) {
+	if a := strings.TrimSpace(settings.Get("FIRMWARE_HTTP_ADDR")); a != "" {
+		return a, false, firmwareAddrValid(a)
+	}
+	ip, err := m.svc.LocalIP()
+	if err != nil {
+		return "", true, fmt.Errorf("nie udało się wykryć adresu panelu: %w; ustaw go w Ustawieniach", err)
+	}
+	port := settings.Int("FIRMWARE_HTTP_PORT")
+	if port == 0 {
+		port = 8091
+	}
+	a := net.JoinHostPort(ip.String(), fmt.Sprint(port))
+	return a, true, firmwareAddrValid(a)
+}
+
 func (m *firmwareManager) install(name string) error {
-	if err := firmwareAddrValid(m.addr); err != nil {
+	addr, _, err := m.address()
+	if err != nil {
 		return err
 	}
 	if !device.ValidFirmwareName(name) {
@@ -218,7 +237,7 @@ func (m *firmwareManager) install(name string) error {
 			finish(err)
 			return
 		}
-		url, stop, err := serveOnce(m.addr, name, path, firmwareCopyTimeout+time.Minute)
+		url, stop, err := serveOnce(addr, name, path, firmwareCopyTimeout+time.Minute)
 		if err != nil {
 			finish(err)
 			return
@@ -247,9 +266,8 @@ func (m *firmwareManager) currentJob() *firmwareJob {
 // registerFirmwareRoutes: pliki firmware w panelu i kopiowanie do switcha.
 func registerFirmwareRoutes(apiMux *http.ServeMux, svc *device.Service, backupDir string) {
 	m := &firmwareManager{
-		dir:  envOr("FIRMWARE_DIR", filepath.Join(filepath.Dir(backupDir), "firmware")),
-		addr: strings.TrimSpace(os.Getenv("FIRMWARE_HTTP_ADDR")),
-		svc:  svc,
+		dir: envOr("FIRMWARE_DIR", filepath.Join(filepath.Dir(backupDir), "firmware")),
+		svc: svc,
 	}
 	apiMux.HandleFunc("/api/firmware", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -257,10 +275,11 @@ func registerFirmwareRoutes(apiMux *http.ServeMux, svc *device.Service, backupDi
 			return
 		}
 		cfgErr := ""
-		if err := firmwareAddrValid(m.addr); err != nil {
+		addr, auto, err := m.address()
+		if err != nil {
 			cfgErr = err.Error()
 		}
-		writeJSON(w, map[string]any{"files": m.list(), "job": m.currentJob(), "address": m.addr, "configError": cfgErr}, nil)
+		writeJSON(w, map[string]any{"files": m.list(), "job": m.currentJob(), "address": addr, "autoAddress": auto, "configError": cfgErr}, nil)
 	})
 	apiMux.HandleFunc("/api/firmware/upload", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

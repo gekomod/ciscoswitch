@@ -299,7 +299,7 @@ func (s *panelUserStore) middleware(next http.Handler) http.Handler {
 			http.Error(w, "forbidden: rola Podgląd nie może zmieniać konfiguracji", 403)
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, "/api/users") && id.Role != "admin" {
+		if (strings.HasPrefix(r.URL.Path, "/api/users") || strings.HasPrefix(r.URL.Path, "/api/settings")) && id.Role != "admin" {
 			http.Error(w, "forbidden", 403)
 			return
 		}

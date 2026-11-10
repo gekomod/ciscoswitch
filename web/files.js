@@ -127,8 +127,8 @@
       if (!res.ok) return;
       const d = await res.json();
       fwConfig.innerHTML = d.configError
-        ? '<p class="mon-error">Kopiowanie do switcha wymaga ustawienia w .env: FIRMWARE_HTTP_ADDR=IP_komputera_z_panelem:8091 (adres, pod którym switch widzi ten komputer), a potem restartu panelu. ' + esc(d.configError) + '</p>'
-        : '<p class="mon-note">Switch pobierze plik z ' + esc(d.address) + ' (serwer działa tylko w trakcie kopiowania).</p>';
+        ? '<p class="mon-error">' + esc(d.configError) + ' Adres możesz ustawić w Narzędzia → Ustawienia panelu.</p>'
+        : '<p class="mon-note">Switch pobierze plik z ' + esc(d.address) + (d.autoAddress ? ' (wykryty automatycznie)' : '') + '. Serwer działa tylko w trakcie kopiowania; zapora musi przepuszczać połączenia ze switcha na ten port.</p>';
       fwFiles.innerHTML = d.files.length
         ? '<ul class="mon-list">' + d.files.map((f) => '<li><span><b>' + esc(f.name) + '</b> ' + esc(size(f.size)) + '<small class="fw-sum">SHA-256: ' + esc(f.sha256 || '—') + '</small></span><span class="files-actions"><button class="btn" data-fw-install="' + esc(f.name) + '"' + (d.configError ? ' disabled' : '') + '>Kopiuj do switcha</button><button class="btn" data-fw-delete="' + esc(f.name) + '">Usuń z panelu</button></span></li>').join('') + '</ul>'
         : '<p class="mon-note">W panelu nie ma plików firmware.</p>';

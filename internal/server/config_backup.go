@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"gs948mx-manager/internal/settings"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -152,7 +153,7 @@ func configBackupsHandler(run func(string) (string, error), dir string, retentio
 				http.Error(w, "configuration backup could not be stored", http.StatusInternalServerError)
 				return
 			}
-			if err := pruneConfigBackups(dir, retention); err != nil {
+			if err := pruneConfigBackups(dir, backupRetentionFromEnv()); err != nil {
 				http.Error(w, "backup saved but retention cleanup failed", http.StatusInternalServerError)
 				return
 			}
@@ -477,7 +478,7 @@ func runWithPreChangeBackup(dir string, run func(string) (string, error), change
 }
 
 func backupRetentionFromEnv() int {
-	n, err := strconv.Atoi(os.Getenv("CONFIG_BACKUP_RETENTION"))
+	n, err := strconv.Atoi(settings.Get("CONFIG_BACKUP_RETENTION"))
 	if err != nil || n < 1 || n > 10000 {
 		return 100
 	}

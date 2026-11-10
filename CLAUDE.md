@@ -59,6 +59,9 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 4. Zrobione: gofmt, podział server.go, wydzielenie grup tras z `Register` (server.go: 132 linie).
 5. SNMPv3: AES dostępny (`SWITCH_SNMP_V3_PRIV_PROTOCOL`, wybór w formularzu); potwierdzić, że AW+ 5.4.6 przyjmuje `priv aes`.
 
+## Ustawienia
+- `internal/settings`: `settings.Get(KEY)` = panel (data/settings.json) → .env → domyślna. Nowe ustawienia nie-sekretne dodawać do `settings.Defs` i czytać przez `settings.Get`, nie `os.Getenv`. Hasła tylko w .env. Zmiany w locie przez `settings.OnChange` (main.go → `svc.SetTuning`). `/api/settings` tylko dla admina (middleware).
+
 ## Zasady
 - Zmiany konfiguracji testować najpierw na nieużywanym porcie; nie dotykać portów z PROTECTED_PORTS.
 - Nie commitować `.env` ani `data/` (hasła, community, kopie konfiguracji).

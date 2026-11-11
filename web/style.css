@@ -1021,3 +1021,10 @@ html,body{width:100%;min-width:320px;overflow-x:hidden}
 @keyframes fp-blink{to{opacity:.25}}
 @media(prefers-reduced-motion:reduce){.fp-act1 .fp-led,.fp-act2 .fp-led,.fp-act3 .fp-led{animation:none;box-shadow:0 0 6px currentColor}}
 .fp-now{margin:12px 0 0;font-size:12px;color:var(--muted);min-height:1em}
+
+/* Powiadomienia */
+.ntf-toggle{display:flex!important;flex-direction:row!important;align-items:center;gap:8px;font-size:12px!important;font-weight:500!important;color:var(--text)!important}
+.ntf-toggle input{width:16px;height:16px;accent-color:var(--accent)}
+.set-field b{font-size:13px}
+.ntf-ok{color:var(--green);border-color:#48d6a055}
+.ntf-bad{color:var(--red);border-color:#ff788755;white-space:normal}

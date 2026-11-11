@@ -75,6 +75,10 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 - `/api/ports/live` (internal/server/live.go): liveHub odpytuje SNMP (`LiveSample`) tylko przy podłączonych klientach; faceplate.js otwiera strumień tylko na widocznym przeglądzie i aktualizuje przyciski w miejscu (fokus).
 - Porty 49–52 = SFP/SFP+ (`IsFiberPort`): prędkość auto/1000/10000, bez `duplex auto`. Do potwierdzenia na switchu: czy `speed auto` działa na SFP+ i jaki jest podział combo/SFP/SFP+.
 
+## Powiadomienia i widoki
+- `internal/server/notify.go` + `web/notify.js`: subskrybuje `sharedMonitorEventHub`, reguły, paczki 10 s, cooldown 2 min; sekrety w data/notify.json (0600), nigdy w odpowiedziach API. `/api/notify*` tylko admin.
+- Widoki: menu używa `history.replaceState` (bez hashchange); moduły nasłuchują `page:change` z `activatePage`. Strony tylko dla admina mają `data-admin-only`; rola steruje wyłącznie menu.
+
 ## Zasady
 - Zmiany konfiguracji testować najpierw na nieużywanym porcie; nie dotykać portów z PROTECTED_PORTS.
 - Nie commitować `.env` ani `data/` (hasła, community, kopie konfiguracji).

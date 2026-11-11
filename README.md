@@ -43,6 +43,10 @@ Przegląd pokazuje front AT-GS948MX: 48 portów miedzianych (górny rząd niepar
 
 W `.env` są tylko dane dostępowe: adres switcha, hasła SSH i SNMP, odcisk klucza SSH i pierwsze konto administratora (zob. `.env.example`). Pozostałe ustawienia administrator zmienia w Narzędzia → Ustawienia panelu: porty chronione, zezwolenia na wyłączanie portów i zmianę DHCP zarządzania, liczba kopii konfiguracji, szyfrowanie SNMPv3, limit czasu SSH, cache, logowanie wydajności i adres serwera firmware. Zapisują się w `data/settings.json` (`PANEL_SETTINGS_PATH`), mają pierwszeństwo przed `.env` i działają od razu, bez restartu. Przy każdym ustawieniu panel pokazuje, czy wartość pochodzi z panelu, z `.env`, czy jest domyślna. Adres serwera firmware jest domyślnie wykrywany automatycznie: to adres tego komputera, przez który panel łączy się ze switchem, z portem `FIRMWARE_HTTP_PORT` (8091).
 
+## Powiadomienia
+
+Narzędzia → Powiadomienia (tylko administrator). Kanały: Telegram (token bota i chat ID), webhook (POST z JSON `title`, `message`, `lines`, `timestamp`; np. automatyzacja Home Assistant z wyzwalaczem „Webhook”) i e-mail (SMTP, port 587 ze STARTTLS albo 465 z TLS). Reguły: utrata i powrót połączenia ze switchem, przyrost błędów na portach, zmiany łącza na wszystkich albo wybranych portach. Zdarzenia z 10 sekund trafiają do jednej wiadomości, a to samo zdarzenie nie powtarza się częściej niż co 2 minuty. Konfiguracja jest w `data/notify.json` (`NOTIFY_PATH`) z uprawnieniami 0600; tokeny, hasła i adres webhooka nigdy nie są odsyłane do przeglądarki. Przycisk „Zapisz i wyślij test” sprawdza wszystkie włączone kanały.
+
 ## Raport zgodności
 
 Narzędzia → Raport zgodności wykonuje na switchu wszystkie polecenia odczytu używane przez panel i sprawdza, czy parsery rozumieją odpowiedzi (SNMP i nazwy portów, uprawnienia odczytu running-config, pliki, boot, logi, czas, switchport, usługi, LLDP, STP). Niczego nie zmienia. Wynik można skopiować jako tekst; raport nie zawiera running-config, haseł ani community, a adresy IP i MAC w próbkach są ukryte.

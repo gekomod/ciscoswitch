@@ -48,6 +48,10 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 - Wpisy MAC i członkostwo VLAN za LAG (`saN`, `poN`) są widoczne w topologii jako osobne wiersze.
 - Brak próbki `show lldp neighbors` (skrót) i `show spanning-tree` — format niepotwierdzony; pobrać z własnego switcha.
 
+## Potwierdzone na prawdziwym AT-GS948MX (AW+ 5.4.6)
+- Ścieżka zmian `runConfig`: enable → terminal length 0 → configure terminal → polecenie → end → exit (Usługi: `no service http`).
+- Zapis konfiguracji do startup-config z panelu.
+
 ## Do zweryfikowania na prawdziwym switchu
 - Czy AW+ 5.4.6 poprawnie kończy sesję po `exit` i akceptuje `terminal length 0`.
 - Czy współdzielone połączenie SSH jest stabilne (limity sesji AW+).

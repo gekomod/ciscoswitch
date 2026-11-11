@@ -43,6 +43,8 @@ function activatePage(hash){
  setTimeout(()=>document.dispatchEvent(new CustomEvent('page:change',{detail:{hash:hash||'#overview'}})),0);
  const main=document.querySelector('.main');if(!main)return;
  const targetId=(hash||'#overview').slice(1),target=document.getElementById(targetId);
+ // Strony tylko dla administratora: inna rola wraca na przegląd (rola znana po /api/session).
+ if(target&&target.hasAttribute('data-admin-only')&&document.body.dataset.role&&document.body.dataset.role!=='admin'){history.replaceState(null,'','#overview');activatePage('#overview');return;}
  const topbar=main.querySelector('.topbar');
  [...main.children].forEach(node=>{if(node!==topbar&&node.id!=='port-dialog')node.hidden=true;});
  document.querySelectorAll('.sidebar .nav').forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+targetId));
@@ -1408,7 +1410,10 @@ $('panel-users-rows')?.addEventListener('click',async event=>{
  catch(e){$('panel-users-status').textContent='Nie udało się zapisać konta: '+e.message;}
  finally{button.disabled=false;}
 });
-async function loadSessionIdentity(){const el=$('session-identity');if(!el)return;try{const d=await api('/api/session');const labels={viewer:'Podgląd',operator:'Operator',admin:'Administrator'};el.textContent=(d.username||'Konto')+' · '+(labels[d.role]||d.role||'');el.title='Zalogowano jako '+(d.username||'konto')+' · rola: '+(d.role||'nieznana');document.body.dataset.role=d.role||'';const panel=document.getElementById('panel-users'),nav=document.getElementById('panel-users-nav');if(panel)panel.hidden=d.role!=='admin';if(nav)nav.hidden=d.role!=='admin';if(d.role==='admin')loadPanelUsers();}catch(_e){el.textContent='Sesja';}}
+async function loadSessionIdentity(){const el=$('session-identity');if(!el)return;try{const d=await api('/api/session');const labels={viewer:'Podgląd',operator:'Operator',admin:'Administrator'};el.textContent=(d.username||'Konto')+' · '+(labels[d.role]||d.role||'');el.title='Zalogowano jako '+(d.username||'konto')+' · rola: '+(d.role||'nieznana');document.body.dataset.role=d.role||'';// Rola steruje tylko menu; widoczność sekcji należy do activatePage (wcześniej sekcja użytkowników pojawiała się na każdej stronie).
+document.querySelectorAll('.sidebar .nav').forEach(n=>{const sec=document.getElementById((n.getAttribute('href')||'').slice(1));if(sec&&sec.hasAttribute('data-admin-only'))n.hidden=d.role!=='admin';});
+const current=document.getElementById((location.hash||'#overview').slice(1));if(current&&current.hasAttribute('data-admin-only'))activatePage(location.hash);
+if(d.role==='admin')loadPanelUsers();}catch(_e){el.textContent='Sesja';}}
 loadSessionIdentity();
 $('logout').onclick=async()=>{try{await fetch('/api/logout',{method:'POST',credentials:'same-origin'});}finally{location.href='/login';}};
 

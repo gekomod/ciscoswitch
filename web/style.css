@@ -976,3 +976,48 @@ html,body{width:100%;min-width:320px;overflow-x:hidden}
 .fp-event-list li::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--subtle);flex:none;align-self:center}
 .fp-ev-ok::before{background:var(--green)!important}.fp-ev-warn::before{background:var(--amber)!important}.fp-ev-bad::before{background:var(--red)!important}.fp-ev-info::before{background:var(--accent)!important}
 #qos .mon-form{margin-top:12px}#qos .mon-list{margin-top:4px}#qos .mon-list small{color:var(--subtle)}
+
+/* ===== Bazowy styl pól dla całego panelu =====
+   :where() ma zerową specyficzność: pola z własnym stylem go zachowują,
+   a każde pole bez stylu (także w nowych sekcjach) wygląda jak reszta panelu. */
+:where(.main, dialog) :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]), select, textarea){background:#0d1723;color:#e0e9f3;border:1px solid #304257;border-radius:10px;padding:10px 12px;font:inherit;font-size:12px;min-height:40px;box-sizing:border-box;max-width:100%;outline:none}
+:where(.main, dialog) :where(input, select, textarea):focus-visible{border-color:var(--accent);box-shadow:0 0 0 3px #65a9ff1c}
+:where(.main, dialog) :where(input, textarea)::placeholder{color:#6f8299}
+:where(.main, dialog) input[type="file"]{max-width:100%;color:var(--muted);font-size:12px}
+:root[data-theme="light"] :where(.main, dialog) :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea){background:#fff;color:#24364b;border-color:#cbd7e3}
+.alert-toolbar label{display:flex;flex-direction:column;gap:4px;color:#a6b6c9;font-size:10px;font-weight:650}
+:root[data-theme="light"] .alert-toolbar label{color:#637287}
+
+/* ===== Układ bez rozjeżdżania na wąskich ekranach ===== */
+.set-grid{grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr))}
+.files-boot{grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))}
+.mon-filters input{min-width:min(240px,100%)}
+.mon-form label{min-width:min(170px,100%)}
+.mon-form label input,.mon-form label select{width:100%}
+.svc-head-actions{flex-wrap:wrap;justify-content:flex-end}
+.files-save-row{flex-wrap:wrap}
+.files-save-row input,.files-save-row select{flex:1 1 180px}
+.mon-list li{flex-wrap:wrap}
+.mon-list li>span{min-width:0;overflow-wrap:anywhere}
+.files-actions{flex-wrap:wrap}
+@media(max-width:640px){
+  .mon-form{flex-direction:column;align-items:stretch}
+  .mon-form label{min-width:0}
+  .mon-form .btn,.files-save-row .btn{width:100%}
+  .svc-head-actions{justify-content:flex-start;width:100%}
+  .files-table th:nth-child(4),.files-table td:nth-child(4){display:none}
+}
+
+/* Front switcha na żywo: wskaźnik i diody aktywności */
+.fp-live{display:inline-flex;align-items:center;gap:6px;margin-left:10px;font-size:11px;font-weight:600;color:var(--muted);vertical-align:middle}
+.fp-live::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--subtle)}
+.fp-live[data-state="on"]{color:var(--green)}
+.fp-live[data-state="on"]::before{background:var(--green);box-shadow:0 0 0 3px #48d6a02a}
+.fp-live[data-state="err"]{color:var(--amber)}
+.fp-live[data-state="err"]::before{background:var(--amber)}
+.fp-act1 .fp-led{animation:fp-blink 1.2s steps(2,start) infinite}
+.fp-act2 .fp-led{animation:fp-blink .5s steps(2,start) infinite}
+.fp-act3 .fp-led{animation:fp-blink .18s steps(2,start) infinite}
+@keyframes fp-blink{to{opacity:.25}}
+@media(prefers-reduced-motion:reduce){.fp-act1 .fp-led,.fp-act2 .fp-led,.fp-act3 .fp-led{animation:none;box-shadow:0 0 6px currentColor}}
+.fp-now{margin:12px 0 0;font-size:12px;color:var(--muted);min-height:1em}

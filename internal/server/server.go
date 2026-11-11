@@ -115,6 +115,7 @@ func Register(m *http.ServeMux, svc *device.Service) {
 	registerSecurityRoutes(apiMux, svc, backupDir)
 	registerFirmwareRoutes(apiMux, svc, backupDir)
 	registerSettingsRoutes(apiMux, svc)
+	registerLiveRoutes(apiMux, svc)
 	m.Handle("/api/", panelUsers.middleware(apiMux))
 	m.Handle("/", panelUsers.middleware(apiMux))
 	m.HandleFunc("/login", panelLoginPageHandler)

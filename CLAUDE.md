@@ -71,6 +71,10 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 - `Dockerfile` (multi-stage, alpine, użytkownik panel, wolumen /app/data), `docker-compose.yml`, `.github/workflows/docker.yml` (testy + obraz amd64/arm64 do ghcr.io).
 - Serwer firmware (`serveOnce`) nasłuchuje na `:port`, a switchowi podaje adres z ustawień; w kontenerze bridge trzeba ustawić FIRMWARE_HTTP_ADDR.
 
+## Na żywo i SFP
+- `/api/ports/live` (internal/server/live.go): liveHub odpytuje SNMP (`LiveSample`) tylko przy podłączonych klientach; faceplate.js otwiera strumień tylko na widocznym przeglądzie i aktualizuje przyciski w miejscu (fokus).
+- Porty 49–52 = SFP/SFP+ (`IsFiberPort`): prędkość auto/1000/10000, bez `duplex auto`. Do potwierdzenia na switchu: czy `speed auto` działa na SFP+ i jaki jest podział combo/SFP/SFP+.
+
 ## Zasady
 - Zmiany konfiguracji testować najpierw na nieużywanym porcie; nie dotykać portów z PROTECTED_PORTS.
 - Nie commitować `.env` ani `data/` (hasła, community, kopie konfiguracji).

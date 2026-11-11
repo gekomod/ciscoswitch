@@ -21,7 +21,7 @@
   section.id = 'faceplate';
   section.setAttribute('aria-label', 'Front switcha');
   section.innerHTML =
-    '<div class="fp-head"><h2>Porty</h2><div class="fp-legend">' +
+    '<div class="fp-head"><h2>Porty <span class="fp-live" id="fp-live" data-state="off">Łączenie…</span></h2><div class="fp-legend">' +
       '<span><i class="fp-key fp-k-g"></i>1 Gb/s</span>' +
       '<span><i class="fp-key fp-k-x"></i>10 Gb/s</span>' +
       '<span><i class="fp-key fp-k-f"></i>10/100 Mb/s</span>' +
@@ -39,10 +39,33 @@
   const detail = section.querySelector('#fp-detail');
   const hint = section.querySelector('#fp-hint');
 
+  // Dane na żywo (strumień /api/ports/live) nakładane na pełny odczyt z app.js.
+  const live = new Map();
+  let liveAt = 0;
+
   function ports() {
     const map = new Map();
     for (const p of (typeof latestPorts !== 'undefined' ? latestPorts : [])) map.set(p.name, p);
+    if (Date.now() - liveAt < 15000) {
+      for (const [name, l] of live) {
+        const base = map.get(name) || { name };
+        map.set(name, Object.assign({}, base, {
+          admin: l.admin, oper: l.oper,
+          speed: l.oper === 'up' && l.speed ? l.speed + ' Mb/s' : base.speed,
+          liveRx: l.rx, liveTx: l.tx,
+        }));
+      }
+    }
     return map;
+  }
+
+  // Poziom migania diody aktywności, jak na prawdziwym switchu.
+  function activity(p) {
+    const r = (p && p.oper === 'up') ? (p.liveRx || 0) + (p.liveTx || 0) : 0;
+    if (r > 100e6) return 3;
+    if (r > 1e6) return 2;
+    if (r > 2e3) return 1;
+    return 0;
   }
 
   function speedMb(p) {
@@ -78,12 +101,49 @@
     return { x: 'aktywny, 10 Gb/s', g: 'aktywny, 1 Gb/s', f: 'aktywny, 10/100 Mb/s', down: 'brak łącza', off: 'wyłączony', unknown: 'brak danych' }[k];
   }
 
+  function portClass(n, k, name, p) {
+    const a = activity(p);
+    return 'fp-port fp-' + k + (n > COPPER ? ' fp-sfp' : '') + (selected === name ? ' is-selected' : '') + (a ? ' fp-act' + a : '');
+  }
+
+  // Aktualizacja istniejących przycisków bez przebudowy (zachowuje fokus klawiatury).
+  function updateInPlace() {
+    const map = ports();
+    const buttons = device.querySelectorAll('[data-port]');
+    if (buttons.length !== TOTAL) { render(); return; }
+    let up = 0;
+    buttons.forEach((b) => {
+      const name = b.dataset.port, n = Number(name.split('.').pop()), p = map.get(name), k = kind(p);
+      if (p && p.oper === 'up') up++;
+      const cls = portClass(n, k, name, p);
+      if (b.className !== cls) b.className = cls;
+      const err = hasRecentErrors(name);
+      const label = 'Port ' + n + (p && p.description ? ', ' + p.description : '') + ', ' + stateLabel(k) + (err ? ', rosną błędy' : '');
+      if (b.getAttribute('aria-label') !== label) { b.setAttribute('aria-label', label); b.title = label; }
+      const dot = b.querySelector('.fp-err');
+      if (err && !dot) b.insertAdjacentHTML('beforeend', '<span class="fp-err"></span>');
+      if (!err && dot) dot.remove();
+    });
+    hint.textContent = 'Aktywne: ' + up + ' z ' + TOTAL + '. Kliknij port, aby zobaczyć szczegóły. Górny rząd to porty nieparzyste, dolny parzyste.';
+    if (selected) updateLiveRates();
+  }
+
+  function updateLiveRates() {
+    const el = detail.querySelector('#fp-now');
+    const p = ports().get(selected);
+    if (!el) return;
+    const fmt = typeof formatRate === 'function' ? formatRate : (v) => Math.round(v) + ' b/s';
+    el.textContent = p && p.oper === 'up' && Date.now() - liveAt < 15000
+      ? 'Teraz: odbiór ' + fmt(p.liveRx || 0) + ', wysyłanie ' + fmt(p.liveTx || 0)
+      : '';
+  }
+
   function portButton(n, map) {
     const name = portName(n), p = map.get(name), k = kind(p);
     const err = hasRecentErrors(name);
     const desc = p && p.description ? ', ' + p.description : '';
     const label = 'Port ' + n + desc + ', ' + stateLabel(k) + (err ? ', rosną błędy' : '');
-    return '<button type="button" class="fp-port fp-' + k + (n > COPPER ? ' fp-sfp' : '') + (selected === name ? ' is-selected' : '') + '" data-port="' + name + '" aria-pressed="' + (selected === name) + '" aria-label="' + esc(label) + '" title="' + esc(label) + '">' +
+    return '<button type="button" class="' + portClass(n, k, name, p) + '" data-port="' + name + '" aria-pressed="' + (selected === name) + '" aria-label="' + esc(label) + '" title="' + esc(label) + '">' +
       '<span class="fp-led"></span><span class="fp-num">' + n + '</span>' + (err ? '<span class="fp-err"></span>' : '') + '</button>';
   }
 
@@ -237,6 +297,7 @@
         '<div><dt>Błędy od startu</dt><dd class="' + (hasRecentErrors(selected) ? 'fp-bad' : '') + '">' + esc(errs.toLocaleString('pl-PL')) + (hasRecentErrors(selected) ? ', rosną' : '') + '</dd></div>' +
         '<div><dt>Odrzucone</dt><dd>' + esc(drops.toLocaleString('pl-PL')) + '</dd></div>' +
       '</dl>' +
+      '<p class="fp-now" id="fp-now" aria-live="off"></p>' +
       trafficChart(selected) +
       deviceBox(selected, p) +
       '<div class="fp-actions">' +
@@ -300,7 +361,7 @@
     trackErrors(ports());
     loadEvents();
     switchportCache = new Map([...switchportCache].filter(([k]) => k === selected));
-    render();
+    updateInPlace();
   });
 
   fetch('/api/ports/protection', { cache: 'no-store' })
@@ -308,6 +369,45 @@
     .then((d) => { protectedPorts = new Set(d.ports || []); if (selected) renderDetail(); })
     .catch(() => {});
 
+  // ---------- Strumień na żywo ----------
+  const liveBadge = section.querySelector('#fp-live');
+  let stream = null;
+  function setLive(state, text) { liveBadge.dataset.state = state; liveBadge.textContent = text; }
+
+  function wanted() {
+    const h = location.hash || '#overview';
+    return document.visibilityState === 'visible' && (h === '#overview' || h === '#');
+  }
+
+  function openStream() {
+    if (stream || typeof EventSource === 'undefined' || !wanted()) return;
+    stream = new EventSource('/api/ports/live');
+    setLive('off', 'Łączenie…');
+    stream.addEventListener('ports', (ev) => {
+      let f;
+      try { f = JSON.parse(ev.data); } catch (_) { return; }
+      if (f.error) { setLive('err', 'Brak odczytu'); return; }
+      liveAt = Date.now();
+      for (const l of f.ports) {
+        live.set(l.name, l);
+        if (l.errNew > 0) errorSeen.set(l.name, Date.now());
+      }
+      setLive('on', 'Na żywo');
+      updateInPlace();
+    });
+    stream.onerror = () => setLive('err', 'Ponowne łączenie…');
+  }
+
+  function closeStream() {
+    if (stream) { stream.close(); stream = null; }
+    setLive('off', 'Wstrzymane');
+  }
+
+  function syncStream() { if (wanted()) openStream(); else closeStream(); }
+  document.addEventListener('visibilitychange', syncStream);
+  window.addEventListener('hashchange', syncStream);
+
   render();
   loadEvents();
+  syncStream();
 })();

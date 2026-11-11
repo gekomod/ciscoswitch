@@ -71,6 +71,14 @@ Sekcja „Pliki i firmware” (grupa System) pokazuje zawartość pamięci flash
 
 **Wgrywanie firmware**: plik `.rel` (do 128 MB) trafia najpierw do panelu (`FIRMWARE_DIR`, domyślnie `data/firmware`, z sumą SHA-256). Adres, z którego switch pobiera plik, jest wykrywany automatycznie (adres tego komputera widziany przez switch, port 8091); można go zmienić w Ustawieniach panelu. Zapora musi przepuszczać ruch ze switcha na ten port. Na czas kopiowania panel uruchamia na tym adresie osobny serwer HTTP, który udostępnia tylko ten jeden plik pod losowym adresem i zamyka się po transferze (najpóźniej po 16 minutach); sam panel może dalej nasłuchiwać tylko lokalnie. Przed kopiowaniem panel sprawdza wolne miejsce we flash i brak pliku o tej nazwie, a po kopiowaniu rozmiar pliku. Firmware startowy nie jest zmieniany automatycznie.
 
+### Na żywo
+
+Gdy przegląd jest otwarty, front switcha dostaje dane ze strumienia `/api/ports/live` (SSE): co `LIVE_INTERVAL` sekund (domyślnie 2, w Ustawieniach panelu) panel odczytuje przez SNMP tylko stan, prędkość i liczniki portów. Stan łącza zmienia się od razu, dioda aktywności miga szybciej przy większym ruchu, a szczegóły portu pokazują bieżący ruch. Odczyt działa tylko wtedy, gdy ktoś ogląda przegląd, i zatrzymuje się po przejściu na inną stronę lub ukryciu karty.
+
+### Porty SFP i SFP+ (49–52)
+
+Okno ustawień portu dla gniazd SFP/SFP+ pozwala wybrać prędkość auto, 1000 albo 10000 Mb/s i nie wysyła `duplex auto` (tylko jawne `duplex full`). Moduł 1 Gb/s w gnieździe SFP+ zwykle wymaga ustawienia 1000 Mb/s.
+
 ## Usługi switcha
 
 Sekcja „Usługi” pokazuje stan serwera SSH, serwera WWW (HTTP), Telnetu, agenta SNMP, LLDP i serwera DHCP oraz pozwala je włączać i wyłączać. Stan pochodzi z running-config (jawne `service x` / `no service x`), a gdy wpisu brak, z odpowiedzi polecenia `show`; jeśli żadne źródło nie jest jednoznaczne, panel pokazuje „Stan nieustalony” zamiast zgadywać. Wyłączenie SSH jest zablokowane (panel z niego korzysta), a wyłączenie SNMP i serwera DHCP wymaga potwierdzenia ryzyka. Przed każdą zmianą panel zapisuje kopię konfiguracji; po zmianie proponuje zapis do startup-config.

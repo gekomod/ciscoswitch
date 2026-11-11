@@ -47,6 +47,8 @@ var Defs = []Def{
 		Help: "Jak długo panel używa ostatniego odczytu SNMP. 0 wyłącza."},
 	{Key: "READ_CACHE_TTL", Group: "Wydajność", Label: "Pamięć wyników poleceń show (s)", Kind: "seconds", Default: "5", Min: 0, Max: 300,
 		Help: "Jak długo panel używa ostatniego wyniku polecenia. 0 wyłącza. Po każdej zmianie pamięć jest czyszczona."},
+	{Key: "LIVE_INTERVAL", Group: "Wydajność", Label: "Odświeżanie portów na żywo (s)", Kind: "int", Default: "2", Min: 1, Max: 30,
+		Help: "Jak często front switcha odczytuje stan portów i ruch, gdy panel jest otwarty. Mniej = szybciej, ale większe obciążenie switcha."},
 	{Key: "PERF_LOG", Group: "Wydajność", Label: "Loguj czas każdego zapytania", Kind: "bool", Default: "false",
 		Help: "Wpisy [perf] w logu panelu; bez tego logowane są tylko zapytania dłuższe niż 1,5 s."},
 	{Key: "FIRMWARE_HTTP_ADDR", Group: "Firmware", Label: "Adres panelu dla switcha (IP:port)", Kind: "text",

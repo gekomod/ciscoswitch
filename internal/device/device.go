@@ -918,6 +918,16 @@ func BuildVLANCommands(id int, name string, remove bool) ([]string, error) {
 	}
 	return []string{"configure terminal", "vlan database", cmd, "exit", "end"}, nil
 }
+
+// IsFiberPort mówi, czy port to gniazdo SFP/SFP+ (49–52 na AT-GS948MX).
+func IsFiberPort(name string) bool {
+	if !strings.HasPrefix(name, "port1.0.") {
+		return false
+	}
+	n, err := strconv.Atoi(strings.TrimPrefix(name, "port1.0."))
+	return err == nil && n >= 49 && n <= 52
+}
+
 func BuildPortSettingsCommands(name, mode string, access int, allowed string, native int, speed, duplex, description string) ([]string, error) {
 	if !validPort(name) {
 		return nil, fmt.Errorf("nieprawidłowy port")
@@ -925,11 +935,18 @@ func BuildPortSettingsCommands(name, mode string, access int, allowed string, na
 	if mode != "access" && mode != "trunk" {
 		return nil, fmt.Errorf("tryb portu musi być access lub trunk")
 	}
-	if speed != "auto" && speed != "10" && speed != "100" && speed != "1000" {
-		return nil, fmt.Errorf("prędkość musi wynosić auto, 10, 100 lub 1000 Mb/s")
+	fiber := IsFiberPort(name)
+	switch {
+	case fiber && speed != "auto" && speed != "1000" && speed != "10000":
+		return nil, fmt.Errorf("port %s to gniazdo SFP/SFP+: prędkość auto, 1000 (moduł 1 Gb/s) albo 10000 Mb/s (moduł 10 Gb/s)", name)
+	case !fiber && speed != "auto" && speed != "10" && speed != "100" && speed != "1000":
+		return nil, fmt.Errorf("port %s jest miedziany: prędkość auto, 10, 100 lub 1000 Mb/s", name)
 	}
 	if duplex != "auto" && duplex != "full" && duplex != "half" {
 		return nil, fmt.Errorf("duplex musi być auto, full lub half")
+	}
+	if fiber && duplex == "half" {
+		return nil, fmt.Errorf("port %s to gniazdo SFP/SFP+: półdupleks nie jest obsługiwany", name)
 	}
 	description = strings.TrimSpace(description)
 	ok, _ := regexp.MatchString("^[A-Za-z0-9 _./:-]*$", description)
@@ -942,7 +959,13 @@ func BuildPortSettingsCommands(name, mode string, access int, allowed string, na
 	} else {
 		cmds = append(cmds, "description "+description)
 	}
-	cmds = append(cmds, "speed "+speed, "duplex "+duplex, "switchport")
+	cmds = append(cmds, "speed "+speed)
+	// Na gniazdach SFP/SFP+ duplex wynika z modułu; "duplex auto" bywa odrzucane,
+	// więc wysyłamy go tylko przy jawnym wyborze.
+	if !fiber || duplex == "full" {
+		cmds = append(cmds, "duplex "+duplex)
+	}
+	cmds = append(cmds, "switchport")
 	if mode == "access" {
 		if access < 1 || access > 4094 {
 			return nil, fmt.Errorf("access VLAN musi być z zakresu 1–4094")

@@ -51,6 +51,7 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 ## Potwierdzone na prawdziwym AT-GS948MX (AW+ 5.4.6)
 - Ścieżka zmian `runConfig`: enable → terminal length 0 → configure terminal → polecenie → end → exit (Usługi: `no service http`).
 - Zapis konfiguracji do startup-config z panelu.
+- Powiadomienia przez webhook do Home Assistant → telefon (notify.send_message z encją notify.*).
 
 ## Do zweryfikowania na prawdziwym switchu
 - Czy AW+ 5.4.6 poprawnie kończy sesję po `exit` i akceptuje `terminal length 0`.

@@ -47,6 +47,27 @@ W `.env` są tylko dane dostępowe: adres switcha, hasła SSH i SNMP, odcisk klu
 
 Narzędzia → Powiadomienia (tylko administrator). Kanały: Telegram (token bota i chat ID), webhook (POST z JSON `title`, `message`, `lines`, `timestamp`; np. automatyzacja Home Assistant z wyzwalaczem „Webhook”) i e-mail (SMTP, port 587 ze STARTTLS albo 465 z TLS). Reguły: utrata i powrót połączenia ze switchem, przyrost błędów na portach, zmiany łącza na wszystkich albo wybranych portach. Zdarzenia z 10 sekund trafiają do jednej wiadomości, a to samo zdarzenie nie powtarza się częściej niż co 2 minuty. Konfiguracja jest w `data/notify.json` (`NOTIFY_PATH`) z uprawnieniami 0600; tokeny, hasła i adres webhooka nigdy nie są odsyłane do przeglądarki. Przycisk „Zapisz i wyślij test” sprawdza wszystkie włączone kanały.
 
+Przykład automatyzacji Home Assistant (adres w panelu: `http://ADRES_HA:8123/api/webhook/ID`; przy panelu w Dockerze podaj IP komputera, nie `localhost`):
+
+```yaml
+alias: Switch GS948MX - powiadomienia
+triggers:
+  - trigger: webhook
+    webhook_id: wymysl-losowy-identyfikator
+    allowed_methods: [POST]
+    local_only: true
+actions:
+  - action: notify.send_message
+    target:
+      entity_id: notify.TWOJ_TELEFON   # encja z Narzędzia deweloperskie → Stany
+    data:
+      title: "{{ trigger.json.title }}"
+      message: "{{ trigger.json.message }}"
+mode: queued
+```
+
+Jeśli telefon jest usługą (np. `notify.mobile_app_...` widoczne w Narzędzia deweloperskie → Akcje), użyj `action: notify.mobile_app_...` z tym samym `data`, bez `target`.
+
 ## Raport zgodności
 
 Narzędzia → Raport zgodności wykonuje na switchu wszystkie polecenia odczytu używane przez panel i sprawdza, czy parsery rozumieją odpowiedzi (SNMP i nazwy portów, uprawnienia odczytu running-config, pliki, boot, logi, czas, switchport, usługi, LLDP, STP). Niczego nie zmienia. Wynik można skopiować jako tekst; raport nie zawiera running-config, haseł ani community, a adresy IP i MAC w próbkach są ukryte.

@@ -39,6 +39,8 @@ initThemeToggle();
 async function api(path,body,method){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);let r;try{r=await fetch(path,{method:method||(body===undefined?'GET':'POST'),headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store',signal:controller.signal});}catch(e){if(e.name==='AbortError')throw Error('Przekroczono limit czasu odpowiedzi API (30 s): '+path);throw e;}finally{clearTimeout(timer);}const raw=await r.text();let d={};try{d=raw?JSON.parse(raw):{};}catch(_e){d={error:raw||'Nieprawidłowa odpowiedź API'};}if(r.status===401){location.href='/login';throw Error('Sesja wygasła — zaloguj się ponownie.');}if(!r.ok)throw Error(d.error||'Błąd API');return d;}
 
 function activatePage(hash){
+ // Moduły (ustawienia, front na żywo) reagują na zmianę widoku; menu używa replaceState, które nie wywołuje hashchange.
+ setTimeout(()=>document.dispatchEvent(new CustomEvent('page:change',{detail:{hash:hash||'#overview'}})),0);
  const main=document.querySelector('.main');if(!main)return;
  const targetId=(hash||'#overview').slice(1),target=document.getElementById(targetId);
  const topbar=main.querySelector('.topbar');

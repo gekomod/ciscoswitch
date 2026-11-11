@@ -374,8 +374,9 @@
   let stream = null;
   function setLive(state, text) { liveBadge.dataset.state = state; liveBadge.textContent = text; }
 
+  let currentPage = location.hash || '#overview';
   function wanted() {
-    const h = location.hash || '#overview';
+    const h = currentPage;
     return document.visibilityState === 'visible' && (h === '#overview' || h === '#');
   }
 
@@ -405,7 +406,8 @@
 
   function syncStream() { if (wanted()) openStream(); else closeStream(); }
   document.addEventListener('visibilitychange', syncStream);
-  window.addEventListener('hashchange', syncStream);
+  window.addEventListener('hashchange', () => { currentPage = location.hash || '#overview'; syncStream(); });
+  document.addEventListener('page:change', (e) => { currentPage = (e.detail && e.detail.hash) || '#overview'; syncStream(); });
 
   render();
   loadEvents();

@@ -89,7 +89,8 @@
     if (b && confirm('Przywrócić wartość z pliku .env albo domyślną?')) save({ [b.dataset.reset]: '' });
   });
 
-  window.addEventListener('hashchange', () => { if (location.hash === '#panel-settings') load(); });
+  // Wczytanie przy każdym wejściu na stronę ustawień (menu panelu wysyła page:change).
+  document.addEventListener('page:change', (e) => { if (e.detail && e.detail.hash === '#panel-settings') load(); });
   if (location.hash === '#panel-settings') load();
   $id('settings-reload').addEventListener('click', load);
 })();

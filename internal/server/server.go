@@ -17,7 +17,13 @@ func Register(m *http.ServeMux, svc *device.Service) {
 	panelUsers := newPanelUserStore(userPath)
 	apiMux.Handle("/api/users", panelUsers.usersHandler())
 	apiMux.Handle("/api/users/", panelUsers.usersHandler())
-	apiMux.Handle("/", http.FileServer(http.Dir("web")))
+	// Pliki strony: przeglądarka musi sprawdzać aktualność przy każdym wczytaniu,
+	// inaczej po aktualizacji panelu może dalej używać starego app.js i style.css.
+	static := http.FileServer(http.Dir("web"))
+	apiMux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		static.ServeHTTP(w, r)
+	}))
 	apiMux.Handle("/api/config/export", configExportHandler(svc.RunReadOnly))
 	apiMux.Handle("/api/config/compare", configCompareHandler(svc.RunReadOnly))
 	backupDir := os.Getenv("CONFIG_BACKUP_DIR")

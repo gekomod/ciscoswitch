@@ -1028,3 +1028,8 @@ html,body{width:100%;min-width:320px;overflow-x:hidden}
 .set-field b{font-size:13px}
 .ntf-ok{color:var(--green);border-color:#48d6a055}
 .ntf-bad{color:var(--red);border-color:#ff788755;white-space:normal}
+
+/* Ukryte elementy są ukryte w obu motywach. Wcześniej ta reguła działała tylko
+   w jasnym motywie, a w ciemnym np. .lower-grid{display:grid} przebijało atrybut
+   hidden i sekcje innych zakładek (LACP, STP, System) pokazywały się na przeglądzie. */
+[hidden]{display:none!important}

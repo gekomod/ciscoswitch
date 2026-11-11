@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -31,5 +32,25 @@ func TestSettingsAreAdminOnly(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestStaticFilesAreRevalidated(t *testing.T) {
+	if _, err := os.Stat("../../web/index.html"); err != nil {
+		t.Skip("brak katalogu web")
+	}
+	cwd, _ := os.Getwd()
+	defer os.Chdir(cwd)
+	os.Chdir("../..")
+	mux := http.NewServeMux()
+	static := http.FileServer(http.Dir("web"))
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		static.ServeHTTP(w, r)
+	}))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/app.js", nil))
+	if rec.Code != 200 || rec.Header().Get("Cache-Control") != "no-cache" {
+		t.Fatalf("status %d cache %q", rec.Code, rec.Header().Get("Cache-Control"))
 	}
 }

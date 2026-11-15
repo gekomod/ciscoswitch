@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -153,14 +154,14 @@ func TestConfigBackupCreatesRestrictedSnapshotAndListsIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0700 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0700 {
 		t.Fatalf("directory permissions=%o", info.Mode().Perm())
 	}
 	fileInfo, err := os.Stat(filepath.Join(dir, entry.ID+".cfg"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fileInfo.Mode().Perm() != 0600 {
+	if runtime.GOOS != "windows" && fileInfo.Mode().Perm() != 0600 {
 		t.Fatalf("file permissions=%o", fileInfo.Mode().Perm())
 	}
 	listed, err := listConfigBackups(dir)
@@ -585,15 +586,25 @@ func TestAuditHistoryReturnsOnlyLatest200Records(t *testing.T) {
 	}
 }
 
-func TestAuditHistoryRejectsLargeFile(t *testing.T) {
+func TestAuditHistoryReadsTailOfLargeFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.jsonl")
-	if err := os.WriteFile(path, make([]byte, 10<<20+1), 0600); err != nil {
+	var b strings.Builder
+	b.Write(make([]byte, 10<<20)) // śmieci na początku dużego pliku
+	b.WriteString("\n")
+	for i := 0; i < 250; i++ {
+		fmt.Fprintf(&b, `{"timestamp":"2026-01-01T00:00:00Z","username":"admin","method":"POST","path":"/api/port","status":200,"durationMs":%d}`+"\n", i)
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0600); err != nil {
 		t.Fatal(err)
 	}
 	rec := httptest.NewRecorder()
 	auditHistoryHandler(path).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/audit", nil))
-	if rec.Code != http.StatusRequestEntityTooLarge {
-		t.Fatalf("status=%d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var items []auditHistoryRecord
+	if err := json.Unmarshal(rec.Body.Bytes(), &items); err != nil || len(items) != 200 || items[199].DurationMS != 249 {
+		t.Fatalf("items=%d err=%v", len(items), err)
 	}
 }
 
@@ -1364,14 +1375,14 @@ func TestDiagnosticsStoreRetainsBoundedHistoryAndSecurePermissions(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0600 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatalf("file permissions=%o want 600", info.Mode().Perm())
 	}
 	dirInfo, err := os.Stat(filepath.Dir(path))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if dirInfo.Mode().Perm() != 0700 {
+	if runtime.GOOS != "windows" && dirInfo.Mode().Perm() != 0700 {
 		t.Fatalf("directory permissions=%o want 700", dirInfo.Mode().Perm())
 	}
 }

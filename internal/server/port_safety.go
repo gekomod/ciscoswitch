@@ -64,12 +64,24 @@ func isProtectedPort(name string) bool {
 	if name == "" {
 		return false
 	}
+	name = canonicalPort(name)
 	for _, item := range strings.Split(settings.Get("PROTECTED_PORTS"), ",") {
-		if strings.EqualFold(strings.TrimSpace(item), name) {
+		if canonicalPort(item) == name {
 			return true
 		}
 	}
 	return false
+}
+
+// canonicalPort sprowadza "port1.0.05", " Port1.0.5" i "5" do "port1.0.5",
+// aby inna pisownia nie omijała listy portów chronionych.
+func canonicalPort(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	num := strings.TrimPrefix(s, "port1.0.")
+	if n, err := strconv.Atoi(num); err == nil && n >= 0 && !strings.HasPrefix(num, "+") {
+		return "port1.0." + strconv.Itoa(n)
+	}
+	return s
 }
 
 func protectedPortNumberList(raw string) bool {

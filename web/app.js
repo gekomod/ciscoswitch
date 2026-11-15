@@ -656,20 +656,28 @@ function receiveMonitorRecord(record){
   counterHistory.push({...record,timestamp});counterHistory=counterHistory.slice(-2000);renderCounterHistory();renderPortDetail();renderPortQuality();updateOverviewHealth();
  }
 }
+// Jeden strumień na kartę: wcześniej każde wywołanie dokładało słuchacza visibilitychange
+// i po kilku przełączeniach kart otwierało kolejne połączenia (limit 6 na adres).
+let monitorStream=null,monitorStreamOnline=false;
 function connectMonitorStream(){
  const state=$('monitor-stream-state');if(typeof EventSource==='undefined'){if(state)state.textContent='BRAK OBSŁUGI STREAMU';return;}
- const stream=new EventSource('/api/monitor/stream');
- stream.addEventListener('ready',()=>{if(state){state.textContent='NA ŻYWO';state.classList.remove('stream-offline');state.classList.add('stream-online');}restoreMonitorHistory();});
+ if(monitorStream&&monitorStream.readyState!==EventSource.CLOSED)return;
+ if(monitorStream)monitorStream.close();
+ const stream=monitorStream=new EventSource('/api/monitor/stream');
+ stream.addEventListener('ready',()=>{monitorStreamOnline=true;if(state){state.textContent='NA ŻYWO';state.classList.remove('stream-offline');state.classList.add('stream-online');}restoreMonitorHistory();});
  stream.addEventListener('monitor',event=>{try{receiveMonitorRecord(JSON.parse(event.data));}catch(_e){}});
- stream.onerror=()=>{if(state){state.textContent='PONOWNE ŁĄCZENIE';state.classList.remove('stream-online');state.classList.add('stream-offline');}};
- document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&stream.readyState===EventSource.CLOSED){stream.close();connectMonitorStream();}});
+ stream.onerror=()=>{monitorStreamOnline=false;if(state){state.textContent='PONOWNE ŁĄCZENIE';state.classList.remove('stream-online');state.classList.add('stream-offline');}};
 }
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&monitorStream)connectMonitorStream();});
 function persistMonitorRecord(record){fetch('/api/monitor/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(record),keepalive:true}).catch(()=>{});}
 function addEvent(message,type='info',persist=true){const now=new Date();recentEvents.unshift({message,at:now.toLocaleTimeString(),timestamp:now.toISOString(),type});recentEvents=recentEvents.slice(0,12);renderEvents();if(persist)persistMonitorRecord({kind:'event',message,type});}
 async function restoreMonitorHistory(){try{const d=await api('/api/monitor/history');portHistory=d.portEvents||[];counterHistory=d.counterEvents||[];renderPortHistory();renderCounterHistory();renderPortQuality();recentEvents=(d.events||[]).slice(-200).reverse().map(x=>({message:x.message,type:x.type,timestamp:x.timestamp,at:new Date(x.timestamp).toLocaleString()}));trafficHistory=(d.samples||[]).slice(-30).map(x=>({rx:Number(x.rx)||0,tx:Number(x.tx)||0}));
  for(const sample of d.portSamples||[]){const at=Date.parse(sample.timestamp)||Date.now();for(const [name,rate] of Object.entries(sample.ports||{})){const history=portTrafficHistory.get(name)||[];history.push({at,rx:Number(rate.rx)||0,tx:Number(rate.tx)||0});portTrafficHistory.set(name,history.slice(-60));portRates.set(name,{rx:Number(rate.rx)||0,tx:Number(rate.tx)||0});}}
  renderPortDetail();renderPortTraffic();renderEvents();updateOverviewHealth();drawTraffic();$('traffic-samples').textContent=trafficHistory.length;if(trafficHistory.length){const last=trafficHistory[trafficHistory.length-1];$('traffic-rx').textContent=formatRate(last.rx);$('traffic-tx').textContent=formatRate(last.tx);}}catch(e){console.warn('Historia monitoringu niedostępna:',e.message);}}
-function recordStatusEvents(d){if(previousReachable!==null&&d.reachable!==previousReachable)addEvent(d.reachable?'Połączenie SNMP zostało przywrócone':'Utracono połączenie SNMP',d.reachable?'success':'danger');if(d.reachable){if(hasPortBaseline){for(const p of latestPorts){const oldState=previousPortStates.get(p.name);if(oldState&&oldState!==p.oper){addEvent(p.name+': link '+oldState.toUpperCase()+' → '+String(p.oper||'unknown').toUpperCase(),p.oper==='up'?'success':'danger');if((oldState==='up'||oldState==='down')&&(p.oper==='up'||p.oper==='down')){persistMonitorRecord({kind:'port',port:p.name,state:p.oper});portHistory.push({port:p.name,state:p.oper,timestamp:new Date().toISOString()});renderPortHistory();renderPortDetail();}}const old=previousErrorCounters.get(p.name);if(old){const inErrors=Number(p.inErrors||0),outErrors=Number(p.outErrors||0),inDiscards=Number(p.inDiscards||0),outDiscards=Number(p.outDiscards||0),errorRXDelta=inErrors-old.inErrors,errorTXDelta=outErrors-old.outErrors,discardRXDelta=inDiscards-old.inDiscards,discardTXDelta=outDiscards-old.outDiscards;if(errorRXDelta>0||errorTXDelta>0||discardRXDelta>0||discardTXDelta>0){const parts=[];if(errorRXDelta>0)parts.push('RX +'+errorRXDelta+' błędów');if(errorTXDelta>0)parts.push('TX +'+errorTXDelta+' błędów');if(discardRXDelta>0)parts.push('RX +'+discardRXDelta+' discard');if(discardTXDelta>0)parts.push('TX +'+discardTXDelta+' discard');addEvent(p.name+': '+parts.join(', '),'warning');const rec={kind:'counter',port:p.name,errorRxDelta:Math.max(0,errorRXDelta),errorTxDelta:Math.max(0,errorTXDelta),discardRxDelta:Math.max(0,discardRXDelta),discardTxDelta:Math.max(0,discardTXDelta),errorRxTotal:inErrors,errorTxTotal:outErrors,discardRxTotal:inDiscards,discardTxTotal:outDiscards};persistMonitorRecord(rec);counterHistory.push({...rec,timestamp:new Date().toISOString()});counterHistory=counterHistory.slice(-2000);renderCounterHistory();renderPortDetail();}}}}previousPortStates=new Map(latestPorts.map(p=>[p.name,p.oper]));previousErrorCounters=new Map(latestPorts.map(p=>[p.name,{inErrors:Number(p.inErrors||0),outErrors:Number(p.outErrors||0),inDiscards:Number(p.inDiscards||0),outDiscards:Number(p.outDiscards||0)}]));hasPortBaseline=true;}previousReachable=d.reachable;}
+// Zdarzenia zapisuje kolektor na serwerze i rozsyła strumieniem; przeglądarka pokazuje je
+// lokalnie (bez zapisu) tylko wtedy, gdy strumień nie działa — inaczej każda karta dublowała wpisy.
+function localEvent(message,type){if(!monitorStreamOnline)addEvent(message,type,false);}
+function recordStatusEvents(d){if(previousReachable!==null&&d.reachable!==previousReachable)localEvent(d.reachable?'Połączenie SNMP zostało przywrócone':'Utracono połączenie SNMP',d.reachable?'success':'danger');if(d.reachable){if(hasPortBaseline){for(const p of latestPorts){const oldState=previousPortStates.get(p.name);if(oldState&&oldState!==p.oper){localEvent(p.name+': link '+oldState.toUpperCase()+' → '+String(p.oper||'unknown').toUpperCase(),p.oper==='up'?'success':'danger');if((oldState==='up'||oldState==='down')&&(p.oper==='up'||p.oper==='down')){if(!monitorStreamOnline)portHistory.push({port:p.name,state:p.oper,timestamp:new Date().toISOString()});renderPortHistory();renderPortDetail();}}const old=previousErrorCounters.get(p.name);if(old){const inErrors=Number(p.inErrors||0),outErrors=Number(p.outErrors||0),inDiscards=Number(p.inDiscards||0),outDiscards=Number(p.outDiscards||0),errorRXDelta=inErrors-old.inErrors,errorTXDelta=outErrors-old.outErrors,discardRXDelta=inDiscards-old.inDiscards,discardTXDelta=outDiscards-old.outDiscards;if(errorRXDelta>0||errorTXDelta>0||discardRXDelta>0||discardTXDelta>0){const parts=[];if(errorRXDelta>0)parts.push('RX +'+errorRXDelta+' błędów');if(errorTXDelta>0)parts.push('TX +'+errorTXDelta+' błędów');if(discardRXDelta>0)parts.push('RX +'+discardRXDelta+' discard');if(discardTXDelta>0)parts.push('TX +'+discardTXDelta+' discard');localEvent(p.name+': '+parts.join(', '),'warning');const rec={kind:'counter',port:p.name,errorRxDelta:Math.max(0,errorRXDelta),errorTxDelta:Math.max(0,errorTXDelta),discardRxDelta:Math.max(0,discardRXDelta),discardTxDelta:Math.max(0,discardTXDelta),errorRxTotal:inErrors,errorTxTotal:outErrors,discardRxTotal:inDiscards,discardTxTotal:outDiscards};if(!monitorStreamOnline)counterHistory.push({...rec,timestamp:new Date().toISOString()});counterHistory=counterHistory.slice(-2000);renderCounterHistory();renderPortDetail();}}}}previousPortStates=new Map(latestPorts.map(p=>[p.name,p.oper]));previousErrorCounters=new Map(latestPorts.map(p=>[p.name,{inErrors:Number(p.inErrors||0),outErrors:Number(p.outErrors||0),inDiscards:Number(p.inDiscards||0),outDiscards:Number(p.outDiscards||0)}]));hasPortBaseline=true;}previousReachable=d.reachable;}
 function renderMap(){
   const el=$('port-map');if(!el)return;
   const counts={up:0,down:0,unknown:0};
@@ -1105,6 +1113,11 @@ async function applyVLANMembership(){
 $('vlan-apply-membership').onclick=applyVLANMembership;
 $('vlan-use-selected').onclick=()=>{const nums=[...vlanSelectedPorts].map(name=>Number(name.match(/\.(\d+)$/)?.[1])).filter(n=>Number.isInteger(n)&&n>=1&&n<=52).sort((a,b)=>a-b);if(!nums.length){alert('Nie znaleziono poprawnych numerów zaznaczonych portów.');return;}$('bulk-ports').value=nums.join(',');$('bulk-port-settings').scrollIntoView({behavior:'smooth',block:'center'});$('bulk-ports').focus();};
 let topologyData={rows:[],raw:{}};
+// Nazwy urządzeń z /api/topology/names (DNS/mDNS/NetBIOS/LLDP), klucz: MAC.
+let topologyNames=new Map(),topologyLLDP=new Map();
+function deviceName(mac){const x=topologyNames.get(mac);return x&&x.name?x.name:'';}
+const nameSourceLabel={dns:'DNS',mdns:'mDNS',netbios:'NetBIOS',lldp:'LLDP'};
+function lldpLabel(n){return [n.systemName||n.chassisId||'Sąsiad bez nazwy',n.portId?'port '+n.portId:'',n.systemDescription||'',n.managementAddress?'IP '+n.managementAddress:''].filter(Boolean).join(' · ');}
 const ouiVendors={
  '000c29':'VMware','005056':'VMware','001c42':'Parallels',
  '001b63':'Apple','3c22fb':'Apple','f0d1a9':'Apple','a4b1c1':'Apple','acde48':'Apple','f0dbf8':'Apple',
@@ -1144,7 +1157,7 @@ function classifyNeighbor(text){
   ['camera',/\b(camera|ipcam|cctv|surveillance)\b/],
   ['printer',/\b(printer|printing)\b/],
   ['phone',/\b(telephone|phone|voip|sip phone)\b/],
-  ['computer',/\b(workstation|desktop|laptop|computer|server)\b/]
+  ['computer',/\b(workstation|desktop|laptop|computer|server|station only)\b/]
  ];
  for(const [kind,pattern] of rules)if(pattern.test(value))return {kind,label:{switch:'Switch',router:'Router',ap:'Access point',camera:'Kamera',printer:'Drukarka',phone:'Telefon',computer:'Komputer'}[kind],evidence:'Jawny opis LLDP'};
  return {kind:'unknown',label:'Nieustalone',evidence:'Brak jednoznacznego opisu LLDP'};
@@ -1164,9 +1177,9 @@ function parseSTP(raw){
 }
 function renderTopology(){
  const q=$('topology-filter').value.trim().toLowerCase(),kind=$('topology-class-filter').value;
- const rows=topologyData.rows.filter(r=>(kind==='all'||r.deviceClass===kind)&&[r.port,r.link,r.vlans,r.macs,r.ips,r.lldp,r.deviceLabel,r.stp,...(r.macs?r.macs.split(', ').map(macVendor):[])].join(' ').toLowerCase().includes(q));
- $('topology-rows').innerHTML=rows.length?rows.map(r=>'<tr><td><button class="port-diagnostic-link" data-topology-port="'+esc(r.port)+'">'+esc(r.port)+'</button></td><td><span class="state '+(r.link==='up'?'up':r.link==='down'?'down':'unknown')+'">'+esc(r.link)+'</span></td><td>'+esc(r.vlans||'—')+'</td><td>'+esc(r.macs||'—')+'</td><td>'+esc(r.ips||'—')+'</td><td>'+esc(r.lldp||'—')+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">Brak danych pasujących do filtra.</td></tr>';
- $('topology-map').innerHTML=rows.length?rows.map(r=>{const macs=r.macs?r.macs.split(', ').filter(Boolean):[],ips=r.ips?r.ips.split(', ').filter(Boolean):[],uplink=r.uplink?' · Prawdopodobny uplink':'';return '<article class="topology-port-card"><div class="topology-port-node"><span class="state '+(r.link==='up'?'up':r.link==='down'?'down':'unknown')+'">'+esc(r.link)+'</span><button data-topology-port="'+esc(r.port)+'">'+esc(r.port)+'</button><small>VLAN '+esc(r.vlans||'—')+'</small><span class="topology-class-badge">'+esc(r.deviceLabel)+'</span>'+(r.uplink?'<span class="topology-hint">Prawdopodobny uplink</span>':'')+(r.neighborCount>1?'<span class="topology-multi-neighbor">Wiele bloków LLDP: '+r.neighborCount+'</span>':'')+(r.stp==='blocked'?'<span class="topology-stp-blocked">STP: blokowany</span>':r.stp==='forwarding'?'<span class="topology-stp-forwarding">STP: forwarding</span>':'')+'</div><div class="topology-device-list">'+(macs.length?macs.map(mac=>{const vendor=macVendor(mac);return '<div class="topology-device"><b>'+esc(vendor)+'</b><code>'+esc(mac)+'</code><small>'+esc(ips.join(', ')||'Brak adresu IP w ARP')+'</small></div>';}).join(''):'<div class="topology-device empty-device">Brak wpisu FDB dla tego portu</div>')+(r.lldp?'<div class="topology-lldp"><small>LLDP · '+esc(r.deviceEvidence)+'</small>'+esc(r.lldp)+'</div>':'')+'</div></article>';}).join(''):'<div class="empty">Brak danych pasujących do filtra.</div>';
+ const rows=topologyData.rows.filter(r=>(kind==='all'||r.deviceClass===kind)&&[r.port,r.link,r.vlans,r.macs,r.ips,r.lldp,r.deviceLabel,r.stp,...(r.macs?r.macs.split(', ').map(macVendor):[]),...(r.macs?r.macs.split(', ').map(deviceName):[])].join(' ').toLowerCase().includes(q));
+ $('topology-rows').innerHTML=rows.length?rows.map(r=>'<tr><td><button class="port-diagnostic-link" data-topology-port="'+esc(r.port)+'">'+esc(r.port)+'</button></td><td><span class="state '+(r.link==='up'?'up':r.link==='down'?'down':'unknown')+'">'+esc(r.link)+'</span></td><td>'+esc(r.vlans||'—')+'</td><td>'+esc(r.macs?r.macs.split(', ').map(m=>deviceName(m)?deviceName(m)+' ('+m+')':m).join(', '):'—')+'</td><td>'+esc(r.ips||'—')+'</td><td>'+esc(r.lldp||'—')+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">Brak danych pasujących do filtra.</td></tr>';
+ $('topology-map').innerHTML=rows.length?rows.map(r=>{const macs=r.macs?r.macs.split(', ').filter(Boolean):[],ips=r.ips?r.ips.split(', ').filter(Boolean):[],uplink=r.uplink?' · Prawdopodobny uplink':'';return '<article class="topology-port-card"><div class="topology-port-node"><span class="state '+(r.link==='up'?'up':r.link==='down'?'down':'unknown')+'">'+esc(r.link)+'</span><button data-topology-port="'+esc(r.port)+'">'+esc(r.port)+'</button><small>VLAN '+esc(r.vlans||'—')+'</small><span class="topology-class-badge">'+esc(r.deviceLabel)+'</span>'+(r.uplink?'<span class="topology-hint">Prawdopodobny uplink</span>':'')+(r.neighborCount>1?'<span class="topology-multi-neighbor">Wiele bloków LLDP: '+r.neighborCount+'</span>':'')+(r.stp==='blocked'?'<span class="topology-stp-blocked">STP: blokowany</span>':r.stp==='forwarding'?'<span class="topology-stp-forwarding">STP: forwarding</span>':'')+'</div><div class="topology-device-list">'+(macs.length?macs.map(mac=>{const vendor=macVendor(mac),x=topologyNames.get(mac),name=x&&x.name,own=x&&x.ips&&x.ips.length?x.ips:ips;return '<div class="topology-device"><b>'+esc(name||vendor)+'</b>'+(name?'<small>'+esc(vendor)+' · nazwa z '+esc(nameSourceLabel[x.source]||x.source)+'</small>':'')+'<code>'+esc(mac)+'</code><small>'+esc(own.join(', ')||'Brak adresu IP')+'</small></div>';}).join(''):'<div class="topology-device empty-device">Brak wpisu FDB dla tego portu</div>')+(r.lldp?'<div class="topology-lldp"><small>LLDP · '+esc(r.deviceEvidence)+'</small>'+esc(r.lldp)+'</div>':'')+'</div></article>';}).join(''):'<div class="empty">Brak danych pasujących do filtra.</div>';
  const candidates=topologyData.rows.filter(r=>r.uplink),blocked=candidates.filter(r=>r.stp==='blocked'),forwarding=candidates.filter(r=>r.stp==='forwarding');
  $('topology-redundancy').textContent=candidates.length>=2?(blocked.length&&forwarding.length?'Wykryto wiele prawdopodobnych uplinków, w tym STP blokowany i forwarding. To może wskazywać na redundancję ścieżek; nie jest automatycznym potwierdzeniem pętli.':'Wykryto '+candidates.length+' prawdopodobne uplinki LLDP. Sprawdź LACP i STP; sama liczba uplinków nie potwierdza redundancji ani pętli.'):'Brak wystarczających danych LLDP do oceny redundancji. Brak wskazania nie wyklucza połączeń zapasowych.';
 }
@@ -1180,7 +1193,7 @@ async function inspectTopologyVLAN(){
   const rows=latestPorts.map(p=>({port:p.name,mode:members.get(p.name)||'none',device:topologyData.rows.find(r=>r.port===p.name)}));
   box.innerHTML=rows.map(x=>{
    const r=x.device,macs=r&&r.macs?r.macs.split(', ').filter(Boolean):[],ips=r&&r.ips?r.ips.split(', ').filter(Boolean):[];
-   return '<article class="topology-vlan-port"><div class="topology-vlan-port-head"><button class="port-diagnostic-link" data-topology-port="'+esc(x.port)+'">'+esc(x.port)+'</button><span class="vlan-member '+(x.mode==='u'?'untagged':x.mode==='t'?'tagged':'none')+'">'+(x.mode==='u'?'UNTAGGED':x.mode==='t'?'TAGGED':'POZA VLAN / BRAK DANYCH')+'</span></div><div class="topology-vlan-devices">'+(macs.length?macs.map(mac=>'<div><b>'+esc(macVendor(mac))+'</b><code>'+esc(mac)+'</code></div>').join(''):'<small>Brak wpisów MAC na tym porcie</small>')+(ips.length?'<small>IP: '+esc(ips.join(', '))+'</small>':'')+(r&&r.lldp?'<small>LLDP: '+esc(r.lldp)+'</small>':'')+'</div></article>';
+   return '<article class="topology-vlan-port"><div class="topology-vlan-port-head"><button class="port-diagnostic-link" data-topology-port="'+esc(x.port)+'">'+esc(x.port)+'</button><span class="vlan-member '+(x.mode==='u'?'untagged':x.mode==='t'?'tagged':'none')+'">'+(x.mode==='u'?'UNTAGGED':x.mode==='t'?'TAGGED':'POZA VLAN / BRAK DANYCH')+'</span></div><div class="topology-vlan-devices">'+(macs.length?macs.map(mac=>'<div><b>'+esc(deviceName(mac)||macVendor(mac))+'</b><code>'+esc(mac)+'</code></div>').join(''):'<small>Brak wpisów MAC na tym porcie</small>')+(ips.length?'<small>IP: '+esc(ips.join(', '))+'</small>':'')+(r&&r.lldp?'<small>LLDP: '+esc(r.lldp)+'</small>':'')+'</div></article>';
   }).join('');
   status.textContent='VLAN '+id+' · '+[...members.values()].filter(x=>x==='u').length+' portów untagged · '+[...members.values()].filter(x=>x==='t').length+' portów tagged · dane urządzeń pochodzą z ostatniego skanowania topologii.';
   if(!members.size)status.textContent+=' Nie rozpoznano członkostwa w formacie CLI — sprawdź odpowiedź surową w module VLAN.';
@@ -1205,7 +1218,29 @@ async function refreshTopology(){
   const errors=results.filter(x=>x[1].error).map(x=>x[0]+': '+x[1].error);
   $('topology-status').textContent='Odczyt '+new Date().toLocaleString()+' · FDB: '+fdb.length+' wpisów · ARP: '+[...arp.values()].reduce((n,x)=>n+x.length,0)+' adresów · LLDP: '+[...lldp.values()].reduce((n,x)=>n+x.length,0)+' obserwacji'+(errors.length?' · Nie udało się odczytać '+errors.length+' źródeł':' · Odczyt zakończony');
   renderTopology();
+  await enrichTopologyNames();
  }finally{button.disabled=false;button.textContent='Skanuj ponownie';}
+}
+async function enrichTopologyNames(){
+ const status=$('topology-status'),base=status.textContent;
+ status.textContent=base+' · Ustalanie nazw urządzeń (DNS, mDNS, NetBIOS, LLDP)…';
+ try{
+  const d=await api('/api/topology/names'),devices=d.devices||[];
+  topologyNames=new Map(devices.map(x=>[x.mac,x]));
+  topologyLLDP=new Map();for(const n of d.lldp||[]){const list=topologyLLDP.get(n.localPort)||[];list.push(n);topologyLLDP.set(n.localPort,list);}
+  for(const r of topologyData.rows){
+   const ips=new Set(r.ips?r.ips.split(', ').filter(Boolean):[]);
+   for(const mac of r.macs?r.macs.split(', ').filter(Boolean):[]){const x=topologyNames.get(mac);for(const ip of (x&&x.ips)||[])ips.add(ip);}
+   r.ips=[...ips].join(', ');
+   const nb=topologyLLDP.get(r.port);
+   if(nb&&nb.length){r.lldp=nb.map(lldpLabel).join(' | ');r.neighborCount=nb.length;const dev=classifyNeighbor(nb.map(n=>[n.capabilities,n.systemDescription,n.systemName].join(' ')).join(' '));r.deviceClass=dev.kind;r.deviceLabel=dev.label;r.deviceEvidence=dev.evidence;r.uplink=r.link==='up'&&['switch','router'].includes(dev.kind);}
+  }
+  $('topology-ip-count').textContent=new Set(devices.flatMap(x=>x.ips||[])).size;
+  const sweep=d.sweep&&d.sweep.done?' (przeszukano sieć '+d.sweep.subnet+')':'';
+  status.textContent=base+' · Nazwy ustalone dla '+(d.named||0)+' z '+devices.length+' urządzeń'+sweep+'.';
+  if(!d.named&&devices.length)status.textContent+=' Brak nazw: urządzenia nie ogłaszają ich przez DNS/mDNS/NetBIOS albo są w innej podsieci niż komputer z panelem.';
+  renderTopology();
+ }catch(e){status.textContent=base+' · Nie ustalono nazw: '+e.message;}
 }
 $('refresh-topology').onclick=refreshTopology;
 $('topology-filter').addEventListener('input',renderTopology);$('topology-class-filter').addEventListener('change',renderTopology);
@@ -1387,7 +1422,7 @@ async function loadPanelUsers(){
  try{
   const data=await api('/api/users');
   const users=Array.isArray(data.users)?data.users:[];
-  body.innerHTML=users.map(user=>'<tr data-panel-user="'+esc(user.id)+'"><td><b>'+esc(user.username)+'</b><small class="muted">'+(user.id===undefined?'':'Konto panelu')+'</small></td><td><select data-user-role aria-label="Rola użytkownika '+esc(user.username)+'"><option value="viewer" '+(user.role==='viewer'?'selected':'')+'>Podgląd</option><option value="operator" '+(user.role==='operator'?'selected':'')+'>Operator</option><option value="admin" '+(user.role==='admin'?'selected':'')+'>Administrator</option></select></td><td><label class="inline-check"><input type="checkbox" data-user-active '+(user.active?'checked':'')+'> Aktywne</label></td><td><input type="password" data-user-password autocomplete="new-password" minlength="12" placeholder="Nowe hasło (opcjonalnie)" aria-label="Nowe hasło dla '+esc(user.username)+'"></td><td><button class="btn primary" type="button" data-user-save>Zapisz</button></td></tr>').join('')||'<tr><td colspan="5" class="empty">Brak kont użytkowników.</td></tr>';
+  body.innerHTML=users.map(user=>'<tr data-panel-user="'+esc(user.id)+'"><td><b>'+esc(user.username)+'</b><small class="muted">'+(user.id===undefined?'':'Konto panelu')+'</small></td><td><select data-user-role aria-label="Rola użytkownika '+esc(user.username)+'"><option value="viewer" '+(user.role==='viewer'?'selected':'')+'>Podgląd</option><option value="operator" '+(user.role==='operator'?'selected':'')+'>Operator</option><option value="admin" '+(user.role==='admin'?'selected':'')+'>Administrator</option></select></td><td><label class="inline-check"><input type="checkbox" data-user-active '+(user.active?'checked':'')+'> Aktywne</label></td><td><input type="password" data-user-password autocomplete="new-password" minlength="8" placeholder="Nowe hasło (min. 8 znaków)" aria-label="Nowe hasło dla '+esc(user.username)+'"></td><td><button class="btn primary" type="button" data-user-save>Zapisz</button></td></tr>').join('')||'<tr><td colspan="5" class="empty">Brak kont użytkowników.</td></tr>';
   status.textContent='Liczba kont: '+users.length+'. Hasła nie są widoczne w panelu.';
  }catch(e){status.textContent='Nie udało się pobrać listy kont: '+e.message;body.innerHTML='<tr><td colspan="5" class="empty">Błąd odczytu listy użytkowników.</td></tr>';}
 }

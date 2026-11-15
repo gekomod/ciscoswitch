@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pl">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta name="color-scheme" content="light">
+ <title>Instalator · Panel GS948MX</title>
+ <link rel="stylesheet" href="/login.css">
+ <link rel="stylesheet" href="/setup.css">
+ <script src="/setup.js" defer></script>
+</head>
+<body>
+ <main class="login-shell setup-shell">
+  <section class="login-card setup-card">
+   <div class="brand">
+    <div class="brand-mark" aria-hidden="true">AN</div>
+    <div><b>Allied Network</b><small>PIERWSZE URUCHOMIENIE</small></div>
+   </div>
+   <ol class="setup-steps" aria-label="Kroki instalatora">
+    <li data-step-dot="1" class="active">Konto</li>
+    <li data-step-dot="2">Switch</li>
+    <li data-step-dot="3">Podsumowanie</li>
+   </ol>
+
+   <form id="setup-form" novalidate>
+    <!-- Krok 1: kod i konto administratora -->
+    <fieldset data-step="1">
+     <legend>Konto administratora</legend>
+     <p class="setup-lead">Kod instalatora jest wypisany w logu panelu przy starcie (okno konsoli albo <code>docker logs gs948mx-panel</code>).</p>
+     <label for="setup-code">Kod instalatora</label>
+     <input id="setup-code" autocomplete="off" placeholder="XXXX-XXXX" maxlength="9" required autofocus>
+     <label for="setup-user">Login administratora</label>
+     <input id="setup-user" autocomplete="username" value="admin" maxlength="32" required>
+     <label for="setup-pass">Hasło (min. 8 znaków)</label>
+     <input id="setup-pass" type="password" autocomplete="new-password" minlength="8" required>
+     <label for="setup-pass2">Powtórz hasło</label>
+     <input id="setup-pass2" type="password" autocomplete="new-password" minlength="8" required>
+    </fieldset>
+
+    <!-- Krok 2: połączenie ze switchem -->
+    <fieldset data-step="2" hidden>
+     <legend>Połączenie ze switchem</legend>
+     <p class="setup-lead" id="setup-env-note" hidden></p>
+     <div class="setup-grid">
+      <div><label for="c-host">Adres IP switcha</label><input id="c-host" placeholder="np. 192.168.1.2" autocomplete="off"></div>
+      <div><label for="c-ssh-port">Port SSH</label><input id="c-ssh-port" value="22" inputmode="numeric"></div>
+      <div><label for="c-ssh-user">Login SSH</label><input id="c-ssh-user" value="manager" autocomplete="off"></div>
+      <div><label for="c-ssh-pass">Hasło SSH</label><input id="c-ssh-pass" type="password" autocomplete="off"></div>
+     </div>
+     <label for="c-hostkey">Odcisk klucza SSH switcha</label>
+     <div class="setup-row"><input id="c-hostkey" placeholder="SHA256:…" autocomplete="off"><button type="button" class="btn-sec" id="fetch-key">Pobierz</button></div>
+     <label class="setup-check" id="key-confirm-row" hidden><input type="checkbox" id="key-confirm"> Porównałem odcisk z wynikiem <code>show crypto key hostkey</code> na switchu (albo ufam swojej sieci lokalnej).</label>
+
+     <div class="setup-grid">
+      <div><label for="c-snmp-ver">Wersja SNMP</label><select id="c-snmp-ver"><option value="2c">SNMPv2c (community)</option><option value="3">SNMPv3 (użytkownik)</option></select></div>
+      <div><label for="c-snmp-port">Port SNMP</label><input id="c-snmp-port" value="161" inputmode="numeric"></div>
+     </div>
+     <div data-snmp="2c"><label for="c-community">Community (tylko odczyt)</label><input id="c-community" type="password" autocomplete="off"></div>
+     <div data-snmp="3" hidden class="setup-grid">
+      <div><label for="c-v3-user">Użytkownik SNMPv3</label><input id="c-v3-user" autocomplete="off"></div>
+      <div><label for="c-v3-priv-proto">Szyfrowanie</label><select id="c-v3-priv-proto"><option value="aes">AES-128</option><option value="des">DES</option></select></div>
+      <div><label for="c-v3-auth">Hasło auth (SHA)</label><input id="c-v3-auth" type="password" autocomplete="off"></div>
+      <div><label for="c-v3-priv">Hasło priv</label><input id="c-v3-priv" type="password" autocomplete="off"></div>
+     </div>
+     <label for="c-protected">Porty chronione (panel ich nie zmieni)</label>
+     <input id="c-protected" placeholder="np. 1,49 — uplink i port, przez który działa panel" autocomplete="off">
+     <div class="setup-row"><button type="button" class="btn-sec" id="test-conn">Sprawdź połączenie</button><span id="test-result" class="setup-test" aria-live="polite"></span></div>
+     <label class="setup-check"><input type="checkbox" id="skip-switch"> Pomiń — ustawię połączenie później (Narzędzia → Ustawienia panelu)</label>
+    </fieldset>
+
+    <!-- Krok 3: podsumowanie -->
+    <fieldset data-step="3" hidden>
+     <legend>Podsumowanie</legend>
+     <dl id="setup-summary" class="setup-summary"></dl>
+     <p class="setup-lead">Hasła są zapisywane w katalogu <code>data/</code> z dostępem tylko dla właściciela. Plik <code>.env</code> nie jest potrzebny.</p>
+    </fieldset>
+
+    <p id="setup-error" class="error" role="alert" aria-live="polite"></p>
+    <div class="setup-nav">
+     <button type="button" class="btn-sec" id="back" hidden>← Wstecz</button>
+     <button type="submit" id="next">Dalej <span>→</span></button>
+    </div>
+   </form>
+  </section>
+  <aside class="login-side">
+   <div class="side-orb orb-one"></div><div class="side-orb orb-two"></div>
+   <div class="side-content">
+    <span>INSTALATOR</span>
+    <h2>Trzy kroki<br>i gotowe.</h2>
+    <p>Utwórz konto administratora, podaj adres i dane dostępu do switcha AT-GS948MX. Wszystko zmienisz później w ustawieniach panelu.</p>
+   </div>
+  </aside>
+ </main>
+</body>
+</html>

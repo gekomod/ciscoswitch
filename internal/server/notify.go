@@ -260,24 +260,23 @@ func portMatches(rule, port string) bool {
 // messageFor zamienia zdarzenie monitoringu na linijkę powiadomienia i klucz
 // do limitu powtórzeń. Zwraca pusty tekst, gdy reguły go wykluczają.
 func (n *notifier) messageFor(r monitorRecord) (key, text string) {
+	if r.FromClient {
+		// Wpisy z przeglądarki (np. „Potwierdzono konfigurację”) nie są alarmami.
+		return "", ""
+	}
 	n.mu.Lock()
 	rules := n.cfg.Rules
 	n.mu.Unlock()
 	switch r.Kind {
 	case "event":
-		switch r.Type {
-		case "error", "success":
-			if rules.Switch {
-				mark := "🔴"
-				if r.Type == "success" {
-					mark = "🟢"
-				}
-				return "switch:" + r.Type, mark + " " + r.Message
+		// Kolektor zgłasza utratę SNMP jako "danger", powrót jako "success".
+		// Zmiany łączy i błędy mają własne wpisy "port" i "counter".
+		if (r.Type == "danger" || r.Type == "success") && strings.Contains(r.Message, "SNMP") && rules.Switch {
+			mark := "🔴"
+			if r.Type == "success" {
+				mark = "🟢"
 			}
-		case "warning":
-			if rules.Errors {
-				return "warn:" + r.Message, "⚠️ " + r.Message
-			}
+			return "switch:" + r.Type, mark + " " + r.Message
 		}
 	case "port":
 		if portMatches(rules.Ports, r.Port) {
@@ -452,16 +451,35 @@ func sendEmail(c notifyConfig, title, body string) error {
 	for i := range to {
 		to[i] = strings.TrimSpace(to[i])
 	}
+	// Własne połączenie z limitami czasu: smtp.SendMail nie ma żadnego, a
+	// serwer, który przyjmie TCP i zamilknie, zawiesiłby wysyłkę na zawsze.
+	var conn net.Conn
+	var err error
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	if c.Email.Port == 465 { // TLS od początku połączenia
-		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 10 * time.Second}, "tcp", addr, &tls.Config{ServerName: c.Email.Host})
-		if err != nil {
-			return fmt.Errorf("SMTP: %w", err)
+		conn, err = tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: c.Email.Host})
+	} else {
+		conn, err = dialer.Dial("tcp", addr)
+	}
+	if err != nil {
+		return fmt.Errorf("SMTP: %w", err)
+	}
+	_ = conn.SetDeadline(time.Now().Add(45 * time.Second))
+	cl, err := smtp.NewClient(conn, c.Email.Host)
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("SMTP: %w", err)
+	}
+	defer cl.Close()
+	if c.Email.Port != 465 {
+		// port 587/25: STARTTLS, jeśli serwer go oferuje (jak smtp.SendMail)
+		if ok, _ := cl.Extension("STARTTLS"); ok {
+			if err := cl.StartTLS(&tls.Config{ServerName: c.Email.Host}); err != nil {
+				return fmt.Errorf("SMTP STARTTLS: %w", err)
+			}
 		}
-		cl, err := smtp.NewClient(conn, c.Email.Host)
-		if err != nil {
-			return fmt.Errorf("SMTP: %w", err)
-		}
-		defer cl.Close()
+	}
+	{
 		if auth != nil {
 			if err := cl.Auth(auth); err != nil {
 				return fmt.Errorf("SMTP logowanie: %w", err)
@@ -487,11 +505,6 @@ func sendEmail(c notifyConfig, title, body string) error {
 		}
 		return cl.Quit()
 	}
-	// port 587/25: smtp.SendMail sam włącza STARTTLS, jeśli serwer go oferuje
-	if err := smtp.SendMail(addr, auth, c.Email.From, to, []byte(msg)); err != nil {
-		return fmt.Errorf("SMTP: %w", err)
-	}
-	return nil
 }
 
 func mimeHeader(s string) string {

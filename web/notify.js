@@ -75,6 +75,7 @@
   }
 
   async function save() {
+    if (!view) { await load(); if (!view) return false; }
     try {
       view = await call('/api/notify', 'POST', { config: collect(), clear: [...clear] });
       clear.clear(); render();

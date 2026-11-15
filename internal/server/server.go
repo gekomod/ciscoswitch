@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"gs948mx-manager/internal/device"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,6 +16,10 @@ func Register(m *http.ServeMux, svc *device.Service) {
 		userPath = filepath.Join("data", "panel-users.json")
 	}
 	panelUsers := newPanelUserStore(userPath)
+	if panelUsers.loadErr != nil {
+		log.Fatalf("Rejestr użytkowników %s jest uszkodzony: %v. Popraw plik albo usuń go, aby uruchomić instalator.", userPath, panelUsers.loadErr)
+	}
+	panelUsers.prepareSetup()
 	apiMux.Handle("/api/users", panelUsers.usersHandler())
 	apiMux.Handle("/api/users/", panelUsers.usersHandler())
 	// Pliki strony: przeglądarka musi sprawdzać aktualność przy każdym wczytaniu,
@@ -38,6 +43,7 @@ func Register(m *http.ServeMux, svc *device.Service) {
 	apiMux.Handle("/api/audit", auditHistoryHandler(os.Getenv("AUDIT_LOG_PATH")))
 	apiMux.Handle("/api/security-audit", securityAuditHandler(svc.RunReadOnly))
 	apiMux.Handle("/api/topology/map", topologyMapHandler(svc.RunReadOnly))
+	apiMux.Handle("/api/topology/names", topologyNamesHandler(svc.RunReadOnly, svc.LocalIP))
 	diagnosticsPath := os.Getenv("DIAGNOSTICS_HISTORY_PATH")
 	if diagnosticsPath == "" {
 		diagnosticsPath = filepath.Join("data", "diagnostics-history.json")
@@ -123,9 +129,9 @@ func Register(m *http.ServeMux, svc *device.Service) {
 	registerSettingsRoutes(apiMux, svc)
 	registerLiveRoutes(apiMux, svc)
 	registerNotifyRoutes(apiMux, backupDir)
+	registerSetupRoutes(m, apiMux, panelUsers, svc)
 	m.Handle("/api/", panelUsers.middleware(apiMux))
 	m.Handle("/", panelUsers.middleware(apiMux))
-	m.HandleFunc("/login", panelLoginPageHandler)
 }
 func write(w http.ResponseWriter, v string, e error) {
 	w.Header().Set("Content-Type", "application/json")

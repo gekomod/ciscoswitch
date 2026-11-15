@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -42,7 +43,7 @@ func TestNotifySecretsNeverReturned(t *testing.T) {
 	if err := n.update(c, nil); err != nil || n.cfg.Telegram.Token != "123:SECRET" || n.cfg.Email.Password != "haslo" {
 		t.Fatalf("empty secret must keep the old one: %v", err)
 	}
-	if st, _ := os.Stat(n.path); st.Mode().Perm() != 0o600 {
+	if st, _ := os.Stat(n.path); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 		t.Fatalf("file mode %v", st.Mode().Perm())
 	}
 	if err := n.update(c, []string{"emailPassword"}); err != nil || n.cfg.Email.Password != "" {
@@ -92,7 +93,7 @@ func TestNotifyRulesBatchingCooldown(t *testing.T) {
 		{Kind: "port", Port: "port1.0.1", State: "down"},
 		{Kind: "port", Port: "port1.0.7", State: "down"}, // nieobserwowany port
 		{Kind: "port", Port: "port1.0.1", State: "down"}, // powtórka w cooldown
-		{Kind: "event", Type: "error", Message: "Utracono połączenie SNMP ze switchem"},
+		{Kind: "event", Type: "danger", Message: "Utracono połączenie SNMP ze switchem"},
 		{Kind: "counter", Port: "port1.0.23", ErrorRXDelta: 42},
 	}
 	for _, r := range recs {

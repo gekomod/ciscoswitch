@@ -68,7 +68,7 @@ func TestParsePortNumbers(t *testing.T) {
 }
 func TestConfigureSTPValidation(t *testing.T) {
 	s := New(Config{})
-	if _, err := s.ConfigureSTP("rstp", 8192); err == nil || !strings.Contains(err.Error(), "brak konfiguracji SSH") {
+	if _, err := s.ConfigureSTP("rstp", 8192); err == nil || !strings.Contains(err.Error(), "brak danych SSH") {
 		t.Fatalf("valid values should pass validation and reach SSH config check; got %v", err)
 	}
 	if _, err := s.ConfigureSTP("rapid", 8192); err == nil {

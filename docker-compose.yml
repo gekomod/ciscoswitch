@@ -1,12 +1,16 @@
 # Uruchomienie: docker compose up -d
-# Wymaga pliku .env obok (zob. .env.example): adres switcha i hasła.
+# Pierwsze uruchomienie: `docker logs gs948mx-panel` pokaże kod instalatora,
+# potem otwórz panel w przeglądarce — instalator ustawi konto i switch.
+# Plik .env jest opcjonalny (zob. .env.example).
 services:
   panel:
     image: ghcr.io/gekomod/ciscoswitch:latest
     # albo zbuduj lokalnie: zamień linię image na `build: .`
     container_name: gs948mx-panel
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       LISTEN_ADDR: 0.0.0.0:8090
     ports:

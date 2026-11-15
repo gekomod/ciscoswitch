@@ -1,8 +1,9 @@
 package server
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -37,32 +38,41 @@ func auditHistoryHandler(path string) http.Handler {
 			http.Error(w, "audit history unavailable", http.StatusInternalServerError)
 			return
 		}
-		if info.Size() > 10<<20 {
-			http.Error(w, "audit history exceeds 10 MiB safety limit", http.StatusRequestEntityTooLarge)
-			return
-		}
 		file, err := os.Open(path)
 		if err != nil {
 			http.Error(w, "audit history unavailable", http.StatusInternalServerError)
 			return
 		}
 		defer file.Close()
+		// Potrzebne jest tylko ostatnie 200 wpisów: czytamy najwyżej ostatni 1 MiB
+		// (wcześniej plik >10 MiB blokował dziennik na stałe).
+		partial := false
+		if info.Size() > 1<<20 {
+			if _, err := file.Seek(info.Size()-(1<<20), io.SeekStart); err != nil {
+				http.Error(w, "audit history unavailable", http.StatusInternalServerError)
+				return
+			}
+			partial = true
+		}
+		tail, err := io.ReadAll(io.LimitReader(file, 1<<20))
+		if err != nil {
+			http.Error(w, "audit history read failed", http.StatusInternalServerError)
+			return
+		}
+		lines := bytes.Split(tail, []byte("\n"))
+		if partial && len(lines) > 0 {
+			lines = lines[1:] // pierwsza linia jest ucięta
+		}
 		records := make([]auditHistoryRecord, 0, 200)
-		scanner := bufio.NewScanner(file)
-		scanner.Buffer(make([]byte, 4096), 64*1024)
-		for scanner.Scan() {
+		for _, line := range lines {
 			var item auditHistoryRecord
-			if json.Unmarshal(scanner.Bytes(), &item) != nil {
+			if len(bytes.TrimSpace(line)) == 0 || json.Unmarshal(line, &item) != nil {
 				continue
 			}
 			records = append(records, item)
 			if len(records) > 200 {
 				records = records[1:]
 			}
-		}
-		if err := scanner.Err(); err != nil {
-			http.Error(w, "audit history read failed", http.StatusInternalServerError)
-			return
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")

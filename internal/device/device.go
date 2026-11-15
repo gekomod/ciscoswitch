@@ -36,6 +36,9 @@ type Service struct {
 	tuneMu   sync.RWMutex
 	status   Status
 	statusAt time.Time
+	// statusGen rośnie przy każdym unieważnieniu cache; odczyt rozpoczęty
+	// przed zmianą konfiguracji nie zapisze wtedy starego stanu jako świeżego.
+	statusGen uint64
 }
 type Port struct {
 	Index        int    `json:"index"`
@@ -66,7 +69,7 @@ func New(c Config) *Service { return &Service{cfg: c} }
 
 func newSNMPClient(c Config) (*gosnmp.GoSNMP, error) {
 	if strings.TrimSpace(c.Host) == "" {
-		return nil, fmt.Errorf("brak SWITCH_HOST")
+		return nil, fmt.Errorf("brak adresu switcha (uruchom instalator lub ustaw połączenie w panelu)")
 	}
 	g := *gosnmp.Default
 	g.Target = c.Host
@@ -77,7 +80,7 @@ func newSNMPClient(c Config) (*gosnmp.GoSNMP, error) {
 	version := strings.ToLower(strings.TrimSpace(c.SNMPVersion))
 	if version == "" || version == "2" || version == "2c" {
 		if c.SNMPCommunity == "" {
-			return nil, fmt.Errorf("brak SWITCH_SNMP_COMMUNITY dla SNMPv2c")
+			return nil, fmt.Errorf("brak community SNMP (SNMPv2c)")
 		}
 		g.Version = gosnmp.Version2c
 		g.Community = c.SNMPCommunity
@@ -87,7 +90,7 @@ func newSNMPClient(c Config) (*gosnmp.GoSNMP, error) {
 		return nil, fmt.Errorf("nieobsługiwana wersja SNMP %q; użyj 2c lub 3", c.SNMPVersion)
 	}
 	if strings.TrimSpace(c.SNMPV3User) == "" || len(c.SNMPV3AuthPassword) < 8 || len(c.SNMPV3PrivacyPassword) < 8 {
-		return nil, fmt.Errorf("SNMPv3 wymaga SWITCH_SNMP_V3_USER oraz haseł auth/priv o długości co najmniej 8 znaków")
+		return nil, fmt.Errorf("SNMPv3 wymaga użytkownika oraz haseł auth/priv o długości co najmniej 8 znaków")
 	}
 	g.Version = gosnmp.Version3
 	g.SecurityModel = gosnmp.UserSecurityModel
@@ -186,15 +189,16 @@ func (s *Service) DeviceIdentity() (Identity, error) {
 
 // readStatus odpytuje switch przez SNMP bez użycia cache (patrz Status w perf.go).
 func (s *Service) readStatus() Status {
-	version := strings.ToLower(strings.TrimSpace(s.cfg.SNMPVersion))
+	cfg := s.snmpConfig()
+	version := strings.ToLower(strings.TrimSpace(cfg.SNMPVersion))
 	if version == "" {
 		version = "2c"
 	}
 	if version == "v3" {
 		version = "3"
 	}
-	o := Status{Host: s.cfg.Host, Ports: []Port{}, SNMPVersion: version}
-	g, err := newSNMPClient(s.snmpConfig())
+	o := Status{Host: cfg.Host, Ports: []Port{}, SNMPVersion: version}
+	g, err := newSNMPClient(cfg)
 	if err != nil {
 		o.Warning = err.Error()
 		return o
@@ -213,21 +217,42 @@ func (s *Service) readStatus() Status {
 		o.Warning = "SNMP działa, ale IF-MIB ifDescr jest pusty."
 		return o
 	}
-	o.Reachable = true
+	// Nieudany odczyt licznika nie może dać zer: historia i powiadomienia
+	// policzyłyby wtedy cały licznik od nowa jako nowe błędy lub ruch.
+	var walkErrs []string
+	num := func(oid, name string) map[int]uint32 {
+		m, err := walkNum(g, oid)
+		if err != nil {
+			walkErrs = append(walkErrs, name+": "+err.Error())
+		}
+		return m
+	}
+	ctr := func(oid, name string) map[int]uint64 {
+		m, err := walkCounter(g, oid)
+		if err != nil {
+			walkErrs = append(walkErrs, name+": "+err.Error())
+		}
+		return m
+	}
 	mtu, _ := walkNum(g, ".1.3.6.1.2.1.2.2.1.4")
 	speed, _ := walkNum(g, ".1.3.6.1.2.1.2.2.1.5")
 	highSpeed, _ := walkNum(g, ".1.3.6.1.2.1.31.1.1.1.15")
-	adm, _ := walkNum(g, ".1.3.6.1.2.1.2.2.1.7")
-	op, _ := walkNum(g, ".1.3.6.1.2.1.2.2.1.8")
-	inOctets, _ := walkCounter(g, ".1.3.6.1.2.1.31.1.1.1.6")
-	outOctets, _ := walkCounter(g, ".1.3.6.1.2.1.31.1.1.1.10")
-	inErrors, _ := walkCounter(g, ".1.3.6.1.2.1.2.2.1.14")
-	outErrors, _ := walkCounter(g, ".1.3.6.1.2.1.2.2.1.20")
-	inDiscards, _ := walkCounter(g, ".1.3.6.1.2.1.2.2.1.13")
-	outDiscards, _ := walkCounter(g, ".1.3.6.1.2.1.2.2.1.19")
-	inUcast, _ := walkCounter(g, ".1.3.6.1.2.1.31.1.1.1.7")
-	outUcast, _ := walkCounter(g, ".1.3.6.1.2.1.31.1.1.1.11")
+	adm := num(".1.3.6.1.2.1.2.2.1.7", "ifAdminStatus")
+	op := num(".1.3.6.1.2.1.2.2.1.8", "ifOperStatus")
+	inOctets := ctr(".1.3.6.1.2.1.31.1.1.1.6", "ifHCInOctets")
+	outOctets := ctr(".1.3.6.1.2.1.31.1.1.1.10", "ifHCOutOctets")
+	inErrors := ctr(".1.3.6.1.2.1.2.2.1.14", "ifInErrors")
+	outErrors := ctr(".1.3.6.1.2.1.2.2.1.20", "ifOutErrors")
+	inDiscards := ctr(".1.3.6.1.2.1.2.2.1.13", "ifInDiscards")
+	outDiscards := ctr(".1.3.6.1.2.1.2.2.1.19", "ifOutDiscards")
+	inUcast := ctr(".1.3.6.1.2.1.31.1.1.1.7", "ifHCInUcastPkts")
+	outUcast := ctr(".1.3.6.1.2.1.31.1.1.1.11", "ifHCOutUcastPkts")
 	alias, _ := walkText(g, ".1.3.6.1.2.1.31.1.1.1.18")
+	if len(walkErrs) > 0 {
+		o.Warning = "SNMP: niepełny odczyt (" + strings.Join(walkErrs, "; ") + ")"
+		return o
+	}
+	o.Reachable = true
 	ix := make([]int, 0, len(d))
 	for i := range d {
 		ix = append(ix, i)
@@ -348,13 +373,10 @@ func state(v uint32) string {
 		return "unknown"
 	}
 }
-func validPort(v string) bool {
-	if !strings.HasPrefix(v, "port1.0.") {
-		return false
-	}
-	n, e := strconv.Atoi(strings.TrimPrefix(v, "port1.0."))
-	return e == nil && n >= 1 && n <= 52
-}
+
+// validPort przyjmuje wyłącznie kanoniczną nazwę (bez zer wiodących i "+"),
+// inaczej "port1.0.01" ominąłby listę portów chronionych.
+func validPort(v string) bool { return portRE.MatchString(v) }
 func port(v string, f int) int {
 	n, e := strconv.Atoi(v)
 	if e != nil || n < 1 || n > 65535 {
@@ -365,10 +387,14 @@ func port(v string, f int) int {
 
 // dialSSH verifies the switch host key against a SHA256 fingerprint configured out of band.
 func (s *Service) dialSSH() (*ssh.Client, error) {
-	if s.cfg.SSHHostKeyFingerprint == "" {
-		return nil, fmt.Errorf("brak SWITCH_SSH_HOST_KEY: połączenie SSH zablokowane do czasu przypięcia klucza hosta")
+	return dialSSHConfig(s.snmpConfig())
+}
+
+func dialSSHConfig(cfg Config) (*ssh.Client, error) {
+	if strings.TrimSpace(cfg.SSHHostKeyFingerprint) == "" {
+		return nil, fmt.Errorf("brak odcisku klucza SSH switcha: połączenie SSH zablokowane do czasu przypięcia klucza (Ustawienia panelu → Połączenie ze switchem)")
 	}
-	expected := strings.TrimSpace(s.cfg.SSHHostKeyFingerprint)
+	expected := strings.TrimSpace(cfg.SSHHostKeyFingerprint)
 	callback := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		actual := ssh.FingerprintSHA256(key)
 		if subtle.ConstantTimeCompare([]byte(actual), []byte(expected)) != 1 {
@@ -376,11 +402,11 @@ func (s *Service) dialSSH() (*ssh.Client, error) {
 		}
 		return nil
 	}
-	return ssh.Dial("tcp", net.JoinHostPort(s.cfg.Host, s.cfg.SSHPort), &ssh.ClientConfig{
-		User:            s.cfg.SSHUser,
-		Auth:            []ssh.AuthMethod{ssh.Password(s.cfg.SSHPassword)},
+	return ssh.Dial("tcp", net.JoinHostPort(cfg.Host, sshPort(cfg)), &ssh.ClientConfig{
+		User:            cfg.SSHUser,
+		Auth:            []ssh.AuthMethod{ssh.Password(cfg.SSHPassword)},
 		HostKeyCallback: callback,
-		Timeout:         s.cfg.Timeout,
+		Timeout:         dialTimeout(cfg),
 	})
 }
 
@@ -391,8 +417,8 @@ func (s *Service) runConfig(cmds []string) (string, error) {
 // runConfigTimeout działa jak runConfig, z własnym limitem czasu sesji
 // (np. kopiowanie firmware trwa minuty).
 func (s *Service) runConfigTimeout(cmds []string, timeout time.Duration) (string, error) {
-	if s.cfg.Host == "" || s.cfg.SSHUser == "" || s.cfg.SSHPassword == "" {
-		return "", fmt.Errorf("brak konfiguracji SSH w .env")
+	if !s.sshConfigured() {
+		return "", errNoSSH
 	}
 	// Każda próba zmiany (także nieudana) unieważnia cache, aby kolejne odczyty
 	// pokazały rzeczywisty stan switcha.
@@ -495,11 +521,13 @@ func inConfigMode(cmds []string) bool {
 // zwykłe linie informacyjne (np. "% Static Aggregator: sa1"), więc nie wystarczy sam prefiks.
 var cliErrorRE = regexp.MustCompile(`(?i)^%\s*(invalid|incomplete|unrecognized|ambiguous|error|unknown command|.*\b(fail(ed|ure)?|not (found|exist|allowed|permitted|supported)|does not exist|cannot|can't|unable)\b)`)
 
+var cliWarningRE = regexp.MustCompile(`(?i)^%\s*warning\b`)
+
 // cliError zwraca pierwszy komunikat błędu AlliedWare Plus z odpowiedzi CLI.
 func cliError(out string) string {
 	for _, line := range strings.Split(out, "\n") {
 		l := strings.TrimSpace(line)
-		if cliErrorRE.MatchString(l) {
+		if cliErrorRE.MatchString(l) && !cliWarningRE.MatchString(l) {
 			return l
 		}
 	}
@@ -542,7 +570,7 @@ func (s *Service) SaveConfig() (string, error) {
 	return s.runConfig([]string{"copy running-config startup-config"})
 }
 
-var allowed = []string{"show system", "show running-config", "show startup-config", "show system environment", "show version", "show cpu", "show memory", "show interfaces status", "show interfaces", "show vlan", "show vlan all", "show ip interface brief", "show ip route", "show arp", "show lldp neighbors", "show snmp-server", "show snmp-server community", "show snmp-server user", "show snmp-server group", "show users", "show ssh server", "show running-config ssh", "show running-config snmp", "show counter snmp-server", "show spanning-tree", "show boot", "show http", "show interface switchport", "show running-config interface", "show etherchannel", "show etherchannel detail", "show etherchannel summary", "show static-channel-group", "show mac address-table", "show log", "show log tail 30", "show system mac", "show system serialnumber", "show ip dhcp server summary", "show telnet", "show lldp", "dir", "show clock", "show ntp associations", "show mls qos", "show ip dhcp binding", "show running-config dhcp"}
+var allowed = []string{"show system", "show running-config", "show startup-config", "show system environment", "show version", "show cpu", "show memory", "show interfaces status", "show interfaces", "show vlan", "show vlan all", "show ip interface brief", "show ip route", "show arp", "show lldp neighbors", "show lldp neighbors detail", "show snmp-server", "show snmp-server community", "show snmp-server user", "show snmp-server group", "show users", "show ssh server", "show running-config ssh", "show running-config snmp", "show counter snmp-server", "show spanning-tree", "show boot", "show http", "show interface switchport", "show running-config interface", "show etherchannel", "show etherchannel detail", "show etherchannel summary", "show static-channel-group", "show mac address-table", "show log", "show log tail 30", "show system mac", "show system serialnumber", "show ip dhcp server summary", "show telnet", "show lldp", "dir", "show clock", "show ntp associations", "show mls qos", "show ip dhcp binding", "show running-config dhcp"}
 
 // SystemInfo returns raw, read-only AlliedWare Plus diagnostics. Values are deliberately
 // kept as device output because available sensors and command formats vary by firmware.
@@ -584,21 +612,22 @@ func (s *Service) RunReadOnly(cmd string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("polecenie niedozwolone")
 	}
-	if s.cfg.Host == "" || s.cfg.SSHUser == "" || s.cfg.SSHPassword == "" {
-		return "", fmt.Errorf("brak SWITCH_HOST lub danych SSH w .env")
+	if !s.sshConfigured() {
+		return "", errNoSSH
 	}
 	if out, ok := s.reads.get(cmd, s.readTTL()); ok {
 		return out, nil
 	}
-	v, err := s.flights.do("cmd:"+cmd, func() (any, error) {
-		gen := s.reads.gen()
+	gen := s.reads.gen()
+	v, err := s.flights.do(fmt.Sprintf("cmd:%d:%s", gen, cmd), func() (any, error) {
 		out, err := s.readFromSwitch(cmd)
 		if err == nil {
 			s.reads.put(cmd, out, gen)
 		}
 		return out, err
 	})
-	return v.(string), err
+	out, _ := v.(string)
+	return out, err
 }
 
 // RunReadOnlyFresh działa jak RunReadOnly, ale zawsze pyta switch
@@ -623,8 +652,8 @@ func (s *Service) ConfigureSSHUser(username, password string, privilege int, rem
 		return "", fmt.Errorf("login: 1–32 znaków A-Z, a-z, 0-9, _ . -")
 	}
 	if remove {
-		if strings.EqualFold(username, strings.TrimSpace(s.cfg.SSHUser)) {
-			return "", fmt.Errorf("nie można usunąć konta używanego przez panel (SWITCH_SSH_USER); najpierw skonfiguruj i przetestuj inne konto")
+		if strings.EqualFold(username, strings.TrimSpace(s.snmpConfig().SSHUser)) {
+			return "", fmt.Errorf("nie można usunąć konta używanego przez panel; najpierw skonfiguruj i przetestuj inne konto")
 		}
 		return s.runConfig([]string{"configure terminal", "no username " + username, "end"})
 	}
@@ -762,8 +791,8 @@ func (s *Service) ProbeNetwork(kind, target string) (string, error) {
 	return s.RunCLICommand(cmd)
 }
 func (s *Service) RunCLICommand(cmd string) (string, error) {
-	if s.cfg.Host == "" || s.cfg.SSHUser == "" || s.cfg.SSHPassword == "" {
-		return "", fmt.Errorf("brak SWITCH_HOST lub danych SSH w .env")
+	if !s.sshConfigured() {
+		return "", errNoSSH
 	}
 	client, e := s.dialSSH()
 	if e != nil {
@@ -775,7 +804,13 @@ func (s *Service) RunCLICommand(cmd string) (string, error) {
 		return "", e
 	}
 	defer session.Close()
-	output, e := session.Output(cmd)
+	// ping/traceroute do nieosiągalnego hosta potrafi trwać minutami;
+	// bez limitu sesja SSH (AW+ ma ich niewiele) i żądanie HTTP wisiałyby.
+	output, e, timedOut := runWithTimeout(session, cmd, 90*time.Second)
+	if timedOut {
+		client.Close()
+		return string(output), fmt.Errorf("switch nie zakończył %q w ciągu 90 s", cmd)
+	}
 	return string(output), e
 }
 func (s *Service) ConfigureStaticRoute(prefix, gateway string, distance int, remove bool) (string, error) {
@@ -848,6 +883,8 @@ func validIPv4(s string) bool {
 }
 func (s *Service) ConfigureDHCPPool(name, network, mask, low, high, router, dns string, enable bool) (string, error) {
 	name = strings.TrimSpace(name)
+	network, mask, low, high = strings.TrimSpace(network), strings.TrimSpace(mask), strings.TrimSpace(low), strings.TrimSpace(high)
+	router, dns = strings.TrimSpace(router), strings.TrimSpace(dns)
 	if len(name) < 1 || len(name) > 32 || !regexp.MustCompile("^[A-Za-z0-9_-]+$").MatchString(name) {
 		return "", fmt.Errorf("nazwa puli: 1–32 znaków A-Z, a-z, 0-9, _ lub -")
 	}
@@ -873,7 +910,8 @@ func (s *Service) ConfigureDHCPPool(name, network, mask, low, high, router, dns 
 	if bytesCompare(lo, hi) > 0 {
 		return "", fmt.Errorf("początek zakresu jest większy niż koniec")
 	}
-	if lo.Equal(ipnet.IP) || hi.Equal(ipnet.IP) || lo.Equal(net.IP{byte(n[0] | ^m[0]), byte(n[1] | ^m[1]), byte(n[2] | ^m[2]), byte(n[3] | ^m[3])}) {
+	bcast := net.IP{n[0] | ^m[0], n[1] | ^m[1], n[2] | ^m[2], n[3] | ^m[3]}
+	if lo.Equal(ipnet.IP) || hi.Equal(ipnet.IP) || lo.Equal(bcast) || hi.Equal(bcast) {
 		return "", fmt.Errorf("zakres nie może zawierać adresu sieci ani broadcast")
 	}
 	if bytesCompare(gw, lo) >= 0 && bytesCompare(gw, hi) <= 0 {
@@ -921,7 +959,7 @@ func BuildVLANCommands(id int, name string, remove bool) ([]string, error) {
 
 // IsFiberPort mówi, czy port to gniazdo SFP/SFP+ (49–52 na AT-GS948MX).
 func IsFiberPort(name string) bool {
-	if !strings.HasPrefix(name, "port1.0.") {
+	if !portRE.MatchString(name) {
 		return false
 	}
 	n, err := strconv.Atoi(strings.TrimPrefix(name, "port1.0."))

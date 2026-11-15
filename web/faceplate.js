@@ -257,10 +257,11 @@
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const d = await res.json();
       const items = [];
-      for (const e of d.events || []) items.push({ t: e.timestamp, kind: e.type === 'success' ? 'ok' : e.type === 'error' ? 'bad' : 'info', text: e.message });
+      for (const e of d.events || []) items.push({ t: e.timestamp, kind: e.type === 'success' ? 'ok' : (e.type === 'error' || e.type === 'danger') ? 'bad' : 'info', text: e.message });
       for (const e of d.portEvents || []) items.push({ t: e.timestamp, kind: e.state === 'up' ? 'ok' : 'warn', text: (e.message || (e.port + ': łącze ' + (e.state === 'up' ? 'w górę' : 'w dół'))) });
       for (const e of d.counterEvents || []) {
         const n = (e.errorRxDelta || 0) + (e.errorTxDelta || 0);
+        if (!n && !e.message) continue; // same odrzucone ramki (discard), bez błędów
         items.push({ t: e.timestamp, kind: 'bad', text: e.message || (e.port + ': ' + errorsPhrase(n)) });
       }
       items.sort((a, b) => Date.parse(b.t) - Date.parse(a.t));

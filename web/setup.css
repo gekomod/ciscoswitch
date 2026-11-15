@@ -1,0 +1,28 @@
+.setup-shell{min-height:0}
+.setup-card{padding:40px 44px}
+.setup-steps{display:flex;gap:6px;list-style:none;padding:0;margin:28px 0 18px;counter-reset:st}
+.setup-steps li{flex:1;font-size:10px;font-weight:650;color:#9aa6b6;border-top:3px solid #e2e8f0;padding-top:7px;counter-increment:st}
+.setup-steps li::before{content:counter(st) ". "}
+.setup-steps li.active{color:#1677f8;border-color:#1677f8}
+.setup-steps li.done{color:#20b66b;border-color:#20b66b}
+.setup-card fieldset{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.setup-card fieldset[hidden]{display:none}
+.setup-card legend{font-size:22px;font-weight:750;letter-spacing:-.6px;margin-bottom:6px;padding:0}
+.setup-lead{font-size:12px;line-height:1.55;color:#748195;margin:0 0 4px}
+.setup-lead code,.setup-check code{background:#eef3f9;border-radius:4px;padding:1px 4px;font-size:11px}
+.setup-card select{width:100%;height:46px;border:1px solid #dce3ec;border-radius:10px;background:#fbfcfe;padding:0 10px;font-size:13px;color:#1d2a3a}
+.setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}
+.setup-grid>div{display:flex;flex-direction:column;gap:6px}
+.setup-row{display:flex;gap:8px;align-items:center}
+.setup-row input{flex:1}
+.setup-card .btn-sec{height:46px;margin:0;padding:0 16px;background:#eef4fd;color:#1267df;box-shadow:none;border:1px solid #cfe0f7;white-space:nowrap}
+.setup-card .btn-sec:hover{background:#e1edfc}
+.setup-check{display:flex;gap:8px;align-items:flex-start;font-weight:500!important;line-height:1.5}
+.setup-check input{width:auto;height:auto;margin-top:2px}
+.setup-test{font-size:11px;line-height:1.5}
+.setup-test .ok{color:#14945a}.setup-test .bad{color:#c83d4b}
+.setup-nav{display:flex;gap:10px;justify-content:space-between}
+.setup-nav button{flex:1}
+.setup-summary{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12px;margin:4px 0 10px}
+.setup-summary dt{color:#748195}.setup-summary dd{margin:0;font-weight:600;word-break:break-all}
+@media(max-width:760px){.setup-card{padding:28px 18px}.setup-grid{grid-template-columns:1fr}}

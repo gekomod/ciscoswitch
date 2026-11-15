@@ -33,10 +33,22 @@ func (s *Service) LiveSample() (time.Time, map[int]LiveRaw, error) {
 	}
 	oper, _ := walkNum(g, ".1.3.6.1.2.1.2.2.1.8")
 	speed, _ := walkCounter(g, ".1.3.6.1.2.1.31.1.1.1.15")
-	in, _ := walkCounter(g, ".1.3.6.1.2.1.31.1.1.1.6")
-	out, _ := walkCounter(g, ".1.3.6.1.2.1.31.1.1.1.10")
-	inErr, _ := walkCounter(g, ".1.3.6.1.2.1.2.2.1.14")
-	outErr, _ := walkCounter(g, ".1.3.6.1.2.1.2.2.1.20")
+	// Liczniki muszą być kompletne, inaczej podgląd ruchu pokaże fałszywy skok.
+	var walkErr error
+	ctr := func(oid string) map[int]uint64 {
+		m, err := walkCounter(g, oid)
+		if err != nil && walkErr == nil {
+			walkErr = err
+		}
+		return m
+	}
+	in := ctr(".1.3.6.1.2.1.31.1.1.1.6")
+	out := ctr(".1.3.6.1.2.1.31.1.1.1.10")
+	inErr := ctr(".1.3.6.1.2.1.2.2.1.14")
+	outErr := ctr(".1.3.6.1.2.1.2.2.1.20")
+	if walkErr != nil {
+		return at, nil, walkErr
+	}
 	res := make(map[int]LiveRaw, len(admin))
 	for idx, a := range admin {
 		name := names[idx]

@@ -3,12 +3,16 @@ package server
 import (
 	"context"
 	"crypto/rand"
-	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -48,12 +52,151 @@ type panelUserStore struct {
 	path     string
 	users    map[string]panelUser
 	sessions map[string]panelSession
+	loadErr  error
+	limiter  loginLimiter
+	// setupCode: jednorazowy kod instalatora wypisywany w logu, gdy nie ma kont.
+	setupCode string
+}
+
+// panelPasswordMin to minimalna długość hasła konta panelu.
+const panelPasswordMin = 8
+const panelSessionTTL = 8 * time.Hour
+
+var panelUsernamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{2,31}$`)
+
+func validPanelCredentials(username, password string) error {
+	if !panelUsernamePattern.MatchString(username) {
+		return fmt.Errorf("login: 3–32 znaki (litery, cyfry, kropka, myślnik, podkreślenie)")
+	}
+	if len([]rune(password)) < panelPasswordMin {
+		return fmt.Errorf("hasło musi mieć co najmniej %d znaków", panelPasswordMin)
+	}
+	if len(password) > 72 {
+		return fmt.Errorf("hasło może mieć najwyżej 72 bajty")
+	}
+	return nil
 }
 
 func newPanelUserStore(path string) *panelUserStore {
 	s := &panelUserStore{path: path, users: map[string]panelUser{}, sessions: map[string]panelSession{}}
-	_ = s.load()
+	if err := s.load(); err != nil {
+		// Uszkodzony rejestr nie może wyglądać jak „brak kont”, bo instalator
+		// pozwoliłby wtedy komukolwiek utworzyć administratora.
+		s.loadErr = err
+		log.Printf("Nie można odczytać rejestru użytkowników %s: %v", path, err)
+	}
 	return s
+}
+
+// needsSetup: brak jakiegokolwiek konta (pierwsze uruchomienie).
+func (s *panelUserStore) needsSetup() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.loadErr == nil && len(s.users) == 0
+}
+
+func (s *panelUserStore) newSession(w http.ResponseWriter, r *http.Request, u panelUser) bool {
+	token := randomPanelToken()
+	if token == "" {
+		return false
+	}
+	s.mu.Lock()
+	now := time.Now()
+	for k, v := range s.sessions {
+		if now.After(v.ExpiresAt) {
+			delete(s.sessions, k)
+		}
+	}
+	s.sessions[token] = panelSession{Identity: panelIdentity{UserID: u.ID, Username: u.Username, Role: u.Role}, ExpiresAt: now.Add(panelSessionTTL)}
+	s.mu.Unlock()
+	http.SetCookie(w, &http.Cookie{Name: "panel_session", Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: r.TLS != nil, MaxAge: int(panelSessionTTL.Seconds())})
+	return true
+}
+
+// loginLimiter ogranicza próby logowania (i kodu instalatora) z jednego adresu:
+// po 10 nieudanych próbach w ciągu 15 minut kolejne są odrzucane do końca okna.
+type loginLimiter struct {
+	mu   sync.Mutex
+	hits map[string]loginHits
+}
+type loginHits struct {
+	count int
+	first time.Time
+}
+
+const loginMaxFailures = 10
+const loginWindow = 15 * time.Minute
+
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+func (l *loginLimiter) blocked(ip string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	h, ok := l.hits[ip]
+	if !ok {
+		return false
+	}
+	if time.Since(h.first) > loginWindow {
+		delete(l.hits, ip)
+		return false
+	}
+	return h.count >= loginMaxFailures
+}
+func (l *loginLimiter) fail(ip string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.hits == nil {
+		l.hits = map[string]loginHits{}
+	}
+	h := l.hits[ip]
+	if h.first.IsZero() || time.Since(h.first) > loginWindow {
+		h = loginHits{first: time.Now()}
+	}
+	h.count++
+	l.hits[ip] = h
+}
+func (l *loginLimiter) reset(ip string) {
+	l.mu.Lock()
+	delete(l.hits, ip)
+	l.mu.Unlock()
+}
+
+// sameOrigin odrzuca zmiany wysłane z obcej strony (CSRF). Żądania bez
+// nagłówka Origin (curl, starsze przeglądarki) są przepuszczane — ciasteczko
+// sesji i tak ma SameSite=Strict.
+func sameOrigin(r *http.Request) bool {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+		return true
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	return err == nil && strings.EqualFold(u.Host, r.Host) && (u.Scheme == "http" || u.Scheme == "https")
+}
+
+// AuditUser to miejsce na nazwę zalogowanego użytkownika dla dziennika
+// operacji (main.go). Middleware wypełnia je po rozpoznaniu sesji.
+type AuditUser struct{ Name string }
+type auditUserKey struct{}
+
+// WithAuditUser dołącza do żądania pole, które middleware uzupełni loginem.
+func WithAuditUser(r *http.Request) (*http.Request, *AuditUser) {
+	slot := &AuditUser{}
+	return r.WithContext(context.WithValue(r.Context(), auditUserKey{}, slot)), slot
+}
+
+// SetAuditUser wpisuje login do dziennika operacji (gdy żądanie przeszło przez WithAuditUser).
+func SetAuditUser(r *http.Request, name string) {
+	if slot, ok := r.Context().Value(auditUserKey{}).(*AuditUser); ok {
+		slot.Name = name
+	}
 }
 func (s *panelUserStore) load() error {
 	s.mu.Lock()
@@ -70,7 +213,7 @@ func (s *panelUserStore) load() error {
 		if v := os.Getenv("PANEL_ADMIN_PASSWORD"); v != "" {
 			password = v
 		}
-		if username != "" && len(password) >= 8 {
+		if username != "" && validPanelCredentials(username, password) == nil {
 			hash, e := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 			if e != nil {
 				return e
@@ -94,7 +237,13 @@ func (s *panelUserStore) load() error {
 		return err
 	}
 	for _, u := range rows {
+		if u.ID == "" || u.Username == "" || u.PasswordHash == "" || !validPanelRole(u.Role) {
+			return fmt.Errorf("nieprawidłowy wpis użytkownika %q", u.Username)
+		}
 		s.users[u.ID] = u
+	}
+	if len(s.users) == 0 {
+		return fmt.Errorf("rejestr jest pusty; usuń plik, aby uruchomić instalator")
 	}
 	return nil
 }
@@ -159,6 +308,16 @@ func (s *panelUserStore) login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", 405)
 		return
 	}
+	if !sameOrigin(r) {
+		http.Error(w, "forbidden origin", http.StatusForbidden)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	ip := clientIP(r)
+	if s.limiter.blocked(ip) {
+		http.Error(w, "Zbyt wiele nieudanych prób logowania. Spróbuj ponownie za kilkanaście minut.", http.StatusTooManyRequests)
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, 2048)
 	var q struct {
 		Username string `json:"username"`
@@ -168,54 +327,35 @@ func (s *panelUserStore) login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid JSON", 400)
 		return
 	}
+	name := strings.TrimSpace(q.Username)
+	if panelUsernamePattern.MatchString(name) {
+		SetAuditUser(r, name)
+	}
 	s.mu.Lock()
 	var found panelUser
 	for _, u := range s.users {
-		if strings.EqualFold(u.Username, strings.TrimSpace(q.Username)) {
+		if strings.EqualFold(u.Username, name) {
 			found = u
 			break
 		}
 	}
-	// Last-resort compatibility for installations whose old environment-based
-	// login was active before the user registry was introduced. Persist it as
-	// a bcrypt-backed admin/operator account so subsequent logins use the store.
-	if found.ID == "" {
-		configuredUser := strings.TrimSpace(os.Getenv("PANEL_USER"))
-		configuredPass := os.Getenv("PANEL_PASSWORD")
-		userOK := configuredUser != "" && subtle.ConstantTimeCompare([]byte(strings.TrimSpace(q.Username)), []byte(configuredUser)) == 1
-		passOK := configuredPass != "" && subtle.ConstantTimeCompare([]byte(q.Password), []byte(configuredPass)) == 1
-		if userOK && passOK {
-			role := strings.TrimSpace(os.Getenv("PANEL_ROLE"))
-			if !validPanelRole(role) {
-				role = "admin"
-			}
-			hash, err := bcrypt.GenerateFromPassword([]byte(configuredPass), bcrypt.DefaultCost)
-			if err == nil {
-				now := time.Now().UTC()
-				id := randomPanelToken()
-				found = panelUser{ID: id, Username: configuredUser, PasswordHash: string(hash), Role: role, Active: true, CreatedAt: now, UpdatedAt: now}
-				s.users[id] = found
-				if err = s.writeLocked(); err != nil {
-					delete(s.users, id)
-					found = panelUser{}
-				}
-			}
-		}
-	}
 	s.mu.Unlock()
-	if found.ID == "" || !found.Active || bcrypt.CompareHashAndPassword([]byte(found.PasswordHash), []byte(q.Password)) != nil {
+	hash := found.PasswordHash
+	if hash == "" {
+		// Podobny czas odpowiedzi dla nieistniejącego loginu.
+		hash = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+	}
+	passErr := bcrypt.CompareHashAndPassword([]byte(hash), []byte(q.Password))
+	if found.ID == "" || !found.Active || passErr != nil {
+		s.limiter.fail(ip)
 		http.Error(w, "Nieprawidłowy login lub hasło", 401)
 		return
 	}
-	token := randomPanelToken()
-	if token == "" {
+	s.limiter.reset(ip)
+	if !s.newSession(w, r, found) {
 		http.Error(w, "session creation failed", 500)
 		return
 	}
-	s.mu.Lock()
-	s.sessions[token] = panelSession{Identity: panelIdentity{UserID: found.ID, Username: found.Username, Role: found.Role}, ExpiresAt: time.Now().Add(8 * time.Hour)}
-	s.mu.Unlock()
-	http.SetCookie(w, &http.Cookie{Name: "panel_session", Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: r.TLS != nil, MaxAge: 8 * 60 * 60})
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 }
@@ -245,12 +385,26 @@ func (s *panelUserStore) identity(r *http.Request) (panelIdentity, bool) {
 }
 func (s *panelUserStore) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		setup := s.needsSetup()
 		switch r.URL.Path {
-		case "/login.css", "/login.js":
+		case "/login.css", "/login.js", "/setup.css", "/setup.js":
 			// Login assets are public, but remain same-origin and are covered by CSP.
 			next.ServeHTTP(w, r)
 			return
+		case "/setup", "/setup.html":
+			if !setup {
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			}
+			r.URL.Path = "/setup.html"
+			w.Header().Set("Cache-Control", "no-store")
+			next.ServeHTTP(w, r)
+			return
 		case "/login":
+			if setup {
+				http.Redirect(w, r, "/setup", http.StatusSeeOther)
+				return
+			}
 			// Keep the login page reachable even if the outer router sends it through
 			// the authenticated catch-all handler. Otherwise an unauthenticated
 			// request can redirect /login back to /login indefinitely.
@@ -262,6 +416,10 @@ func (s *panelUserStore) middleware(next http.Handler) http.Handler {
 		case "/api/logout":
 			if r.Method != "POST" {
 				http.Error(w, "method not allowed", 405)
+				return
+			}
+			if !sameOrigin(r) {
+				http.Error(w, "forbidden origin", http.StatusForbidden)
 				return
 			}
 			if c, e := r.Cookie("panel_session"); e == nil {
@@ -292,14 +450,23 @@ func (s *panelUserStore) middleware(next http.Handler) http.Handler {
 				http.Error(w, "unauthorized", 401)
 				return
 			}
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			target := "/login"
+			if setup {
+				target = "/setup"
+			}
+			http.Redirect(w, r, target, http.StatusSeeOther)
+			return
+		}
+		SetAuditUser(r, id.Username)
+		if !sameOrigin(r) {
+			http.Error(w, "forbidden origin", http.StatusForbidden)
 			return
 		}
 		if id.Role == "viewer" && r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "forbidden: rola Podgląd nie może zmieniać konfiguracji", 403)
 			return
 		}
-		if (strings.HasPrefix(r.URL.Path, "/api/users") || strings.HasPrefix(r.URL.Path, "/api/settings") || strings.HasPrefix(r.URL.Path, "/api/notify")) && id.Role != "admin" {
+		if (strings.HasPrefix(r.URL.Path, "/api/users") || strings.HasPrefix(r.URL.Path, "/api/settings") || strings.HasPrefix(r.URL.Path, "/api/notify") || strings.HasPrefix(r.URL.Path, "/api/connection")) && id.Role != "admin" {
 			http.Error(w, "forbidden", 403)
 			return
 		}
@@ -331,8 +498,13 @@ func (s *panelUserStore) usersHandler() http.Handler {
 				Password string `json:"password"`
 				Role     string `json:"role"`
 			}
-			if json.NewDecoder(r.Body).Decode(&q) != nil || len(q.Username) < 3 || len(q.Username) > 32 || len(q.Password) < 12 || !validPanelRole(q.Role) {
-				http.Error(w, "login 3–32 znaki, hasło min. 12 znaków i poprawna rola są wymagane", 400)
+			if json.NewDecoder(r.Body).Decode(&q) != nil || !validPanelRole(q.Role) {
+				http.Error(w, "nieprawidłowe dane lub rola", 400)
+				return
+			}
+			q.Username = strings.TrimSpace(q.Username)
+			if err := validPanelCredentials(q.Username, q.Password); err != nil {
+				http.Error(w, err.Error(), 400)
 				return
 			}
 			hash, err := bcrypt.GenerateFromPassword([]byte(q.Password), bcrypt.DefaultCost)
@@ -394,9 +566,11 @@ func (s *panelUserStore) usersHandler() http.Handler {
 			http.Error(w, "invalid role", 400)
 			return
 		}
-		if q.Password != "" && len(q.Password) < 12 {
-			http.Error(w, "hasło musi mieć co najmniej 12 znaków", 400)
-			return
+		if q.Password != "" {
+			if err := validPanelCredentials(u.Username, q.Password); err != nil {
+				http.Error(w, err.Error(), 400)
+				return
+			}
 		}
 		losesAdmin := u.Role == "admin" && u.Active && ((q.Role != "" && q.Role != "admin") || (q.Active != nil && !*q.Active))
 		if losesAdmin {
@@ -431,9 +605,15 @@ func (s *panelUserStore) usersHandler() http.Handler {
 			http.Error(w, "nie można zapisać zmian", 500)
 			return
 		}
-		if !u.Active {
+		if !u.Active || q.Password != "" {
+			// Po zablokowaniu konta lub zmianie hasła wylogowujemy inne sesje
+			// tego konta (bieżąca sesja zostaje, chyba że konto zablokowano).
+			current := ""
+			if c, err := r.Cookie("panel_session"); err == nil {
+				current = c.Value
+			}
 			for token, identity := range s.sessions {
-				if identity.Identity.UserID == id {
+				if identity.Identity.UserID == id && (token != current || !u.Active) {
 					delete(s.sessions, token)
 				}
 			}

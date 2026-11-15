@@ -68,7 +68,7 @@ type flightCall struct {
 	err error
 }
 
-func (g *flightGroup) do(key string, fn func() (any, error)) (any, error) {
+func (g *flightGroup) do(key string, fn func() (any, error)) (v any, err error) {
 	g.mu.Lock()
 	if g.calls == nil {
 		g.calls = map[string]*flightCall{}
@@ -83,12 +83,18 @@ func (g *flightGroup) do(key string, fn func() (any, error)) (any, error) {
 	g.calls[key] = c
 	g.mu.Unlock()
 
+	// Panika w fn nie może zostawić klucza na zawsze (kolejne wywołania czekałyby bez końca).
+	defer func() {
+		if r := recover(); r != nil {
+			c.err = fmt.Errorf("błąd wewnętrzny: %v", r)
+		}
+		c.wg.Done()
+		g.mu.Lock()
+		delete(g.calls, key)
+		g.mu.Unlock()
+		v, err = c.val, c.err
+	}()
 	c.val, c.err = fn()
-	c.wg.Done()
-
-	g.mu.Lock()
-	delete(g.calls, key)
-	g.mu.Unlock()
 	return c.val, c.err
 }
 
@@ -254,6 +260,7 @@ func (s *Service) InvalidateCache() {
 	s.reads.invalidate()
 	s.statusMu.Lock()
 	s.statusAt = time.Time{}
+	s.statusGen++
 	s.statusMu.Unlock()
 }
 
@@ -303,7 +310,10 @@ func (s *Service) Status() Status {
 		}
 		s.statusMu.Unlock()
 	}
-	v, _ := s.flights.do("status", func() (any, error) {
+	s.statusMu.Lock()
+	gen := s.statusGen
+	s.statusMu.Unlock()
+	v, _ := s.flights.do(fmt.Sprintf("status:%d", gen), func() (any, error) {
 		started := time.Now()
 		st := s.readStatus()
 		var err error
@@ -311,15 +321,19 @@ func (s *Service) Status() Status {
 			err = errString(st.Warning)
 		}
 		logTiming("snmp", "status", started, err)
-		if st.Reachable {
-			s.statusMu.Lock()
+		s.statusMu.Lock()
+		if st.Reachable && s.statusGen == gen {
 			s.status = st
 			s.statusAt = time.Now()
-			s.statusMu.Unlock()
 		}
+		s.statusMu.Unlock()
 		return st, nil
 	})
-	return cloneStatus(v.(Status))
+	st, ok := v.(Status)
+	if !ok {
+		st = Status{Ports: []Port{}, Warning: "błąd odczytu stanu portów"}
+	}
+	return cloneStatus(st)
 }
 
 func cloneStatus(st Status) Status {
@@ -360,10 +374,11 @@ func (s *Service) snmpConfig() Config {
 // LocalIP zwraca adres IP tego komputera, przez który panel łączy się ze switchem
 // (ten adres switch widzi jako adres panelu). Nie wysyła żadnych pakietów.
 func (s *Service) LocalIP() (net.IP, error) {
-	if strings.TrimSpace(s.cfg.Host) == "" {
-		return nil, fmt.Errorf("brak SWITCH_HOST")
+	host := strings.TrimSpace(s.snmpConfig().Host)
+	if host == "" {
+		return nil, fmt.Errorf("brak adresu switcha")
 	}
-	c, err := net.Dial("udp", net.JoinHostPort(s.cfg.Host, "22"))
+	c, err := net.Dial("udp", net.JoinHostPort(host, "22"))
 	if err != nil {
 		return nil, err
 	}

@@ -89,8 +89,66 @@
     if (b && confirm('Przywrócić wartość z pliku .env albo domyślną?')) save({ [b.dataset.reset]: '' });
   });
 
+
+  // ── Połączenie ze switchem (data/connection.json) ──
+  const CONN_SRC = { panel: 'Zapisane w panelu (data/connection.json).', env: 'Z pliku .env — zapis tutaj przeniesie je do panelu.', none: 'Nie ustawiono — panel nie łączy się ze switchem.' };
+  const connVer = () => $id('conn-snmp-ver').value;
+  function connToggle() { root.querySelectorAll('[data-conn-snmp]').forEach((el) => { el.hidden = el.dataset.connSnmp !== connVer(); }); }
+  function connValues() {
+    return {
+      host: $id('conn-host').value.trim(), sshPort: $id('conn-ssh-port').value.trim(), sshUser: $id('conn-ssh-user').value.trim(),
+      sshPassword: $id('conn-ssh-pass').value, sshHostKey: $id('conn-hostkey').value.trim(),
+      snmpVersion: connVer(), snmpPort: $id('conn-snmp-port').value.trim(), snmpCommunity: $id('conn-community').value,
+      snmpV3User: $id('conn-v3-user').value.trim(), snmpV3AuthPassword: $id('conn-v3-auth').value, snmpV3PrivPassword: $id('conn-v3-priv').value,
+    };
+  }
+  function connFill(c) {
+    $id('conn-source').textContent = CONN_SRC[c.source] || '';
+    $id('conn-host').value = c.host || ''; $id('conn-ssh-port').value = c.sshPort || '22'; $id('conn-ssh-user').value = c.sshUser || '';
+    $id('conn-hostkey').value = c.sshHostKey || ''; $id('conn-snmp-ver').value = c.snmpVersion === '3' ? '3' : '2c';
+    $id('conn-snmp-port').value = c.snmpPort || '161'; $id('conn-v3-user').value = c.snmpV3User || '';
+    for (const [id, has] of [['conn-ssh-pass', c.hasSSHPassword], ['conn-community', c.hasSNMPCommunity], ['conn-v3-auth', c.hasSNMPV3AuthPassword], ['conn-v3-priv', c.hasSNMPV3PrivPassword]]) {
+      $id(id).value = ''; $id(id).placeholder = has ? 'bez zmian' : 'nie ustawiono';
+    }
+    connToggle();
+  }
+  async function connApi(path, body) {
+    const res = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' });
+    const text = await res.text();
+    let d = {};
+    try { d = JSON.parse(text); } catch (_) { d = { error: text.trim() }; }
+    if (!res.ok) throw new Error(d.error || 'Błąd ' + res.status);
+    return d;
+  }
+  async function connLoad() { try { connFill(await connApi('/api/connection')); } catch (e) { $id('conn-source').textContent = 'Nie wczytano: ' + e.message; } }
+  $id('conn-snmp-ver').addEventListener('change', connToggle);
+  $id('conn-fetch-key').addEventListener('click', async () => {
+    const out = $id('conn-result');
+    out.textContent = 'Odczytuję klucz…';
+    try {
+      const d = await connApi('/api/setup/hostkey', { host: $id('conn-host').value.trim(), port: $id('conn-ssh-port').value.trim() });
+      const old = $id('conn-hostkey').value.trim();
+      $id('conn-hostkey').value = d.fingerprint;
+      out.textContent = old && old !== d.fingerprint ? 'UWAGA: klucz inny niż zapisany! Sprawdź na switchu, zanim zapiszesz.' : 'Odczytano klucz: ' + d.fingerprint;
+    } catch (e) { out.textContent = e.message; }
+  });
+  $id('conn-test').addEventListener('click', async () => {
+    const out = $id('conn-result');
+    out.textContent = 'Sprawdzam SSH i SNMP…';
+    try {
+      const r = await connApi('/api/setup/test', { connection: connValues() });
+      out.textContent = 'SSH: ' + (r.sshOk ? 'OK' : r.sshError) + ' · SNMP: ' + (r.snmpOk ? 'OK' + (r.name ? ' (' + r.name + ')' : '') : r.snmpError);
+    } catch (e) { out.textContent = e.message; }
+  });
+  $id('conn-save').addEventListener('click', async () => {
+    if (!confirm('Zapisać nowe dane połączenia? Panel od razu zacznie ich używać.')) return;
+    const out = $id('conn-result');
+    try { connFill(await connApi('/api/connection', connValues())); out.textContent = 'Zapisano o ' + new Date().toLocaleTimeString('pl-PL') + '.'; }
+    catch (e) { out.textContent = 'Nie zapisano: ' + e.message; }
+  });
+
   // Wczytanie przy każdym wejściu na stronę ustawień (menu panelu wysyła page:change).
-  document.addEventListener('page:change', (e) => { if (e.detail && e.detail.hash === '#panel-settings') load(); });
-  if (location.hash === '#panel-settings') load();
-  $id('settings-reload').addEventListener('click', load);
+  document.addEventListener('page:change', (e) => { if (e.detail && e.detail.hash === '#panel-settings') { load(); connLoad(); } });
+  if (location.hash === '#panel-settings') { load(); connLoad(); }
+  $id('settings-reload').addEventListener('click', () => { load(); connLoad(); });
 })();

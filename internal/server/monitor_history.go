@@ -36,6 +36,9 @@ type monitorRecord struct {
 	ErrorTXTotal   float64                    `json:"errorTxTotal,omitempty"`
 	DiscardRXTotal float64                    `json:"discardRxTotal,omitempty"`
 	DiscardTXTotal float64                    `json:"discardTxTotal,omitempty"`
+	// FromClient: wpis wysłany przez przeglądarkę (POST). Powiadomienia
+	// reagują tylko na wpisy kolektora z serwera. Nie da się go ustawić z JSON.
+	FromClient bool `json:"-"`
 }
 type monitorPortRate struct {
 	RX float64 `json:"rx"`
@@ -131,6 +134,8 @@ func monitorStreamHandler() http.Handler {
 			http.Error(w, "streaming is not supported", http.StatusInternalServerError)
 			return
 		}
+		// Strumień trwa dłużej niż WriteTimeout serwera (60 s).
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 		id, events := sharedMonitorEventHub.subscribe()
 		defer sharedMonitorEventHub.unsubscribe(id)
 		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
@@ -197,6 +202,7 @@ func monitorHistoryHandler(path string) http.Handler {
 				http.Error(w, "monitor history write failed", 500)
 				return
 			}
+			rec.FromClient = true
 			sharedMonitorEventHub.publish(rec)
 			w.WriteHeader(http.StatusNoContent)
 		default:

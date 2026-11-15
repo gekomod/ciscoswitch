@@ -65,8 +65,19 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 4. Zrobione: gofmt, podział server.go, wydzielenie grup tras z `Register` (server.go: 132 linie).
 5. SNMPv3: AES dostępny (`SWITCH_SNMP_V3_PRIV_PROTOCOL`, wybór w formularzu); potwierdzić, że AW+ 5.4.6 przyjmuje `priv aes`.
 
+## Instalator i połączenie
+- Brak kont panelu → `/setup` (web/setup.*, internal/server/setup.go). Wymaga jednorazowego kodu z logu (`prepareSetup`); uszkodzony rejestr kont blokuje start (nigdy nie traktować go jak „brak kont”).
+- Połączenie ze switchem: `internal/settings/connection.go` → data/connection.json (0600), fallback na zmienne SWITCH_* z .env. Zmiana w locie: `svc.SetConnection` (device/connection.go). `/api/connection` (admin) i `/api/setup/hostkey|test` (kod instalatora albo admin).
+- Hasła panelu min. 8 znaków (`panelPasswordMin`); limit 10 nieudanych logowań / 15 min na IP. Dziennik audytu dostaje login przez `server.WithAuditUser`.
+- Zmiana na switchu hasła konta SSH/SNMPv3 używanego przez panel aktualizuje data/connection.json (`updateOwnCredentials`).
+
+## Nazwy urządzeń (topologia)
+- `/api/topology/names` (internal/server/topology_names.go + internal/netnames): MAC z FDB, IP z ARP switcha i ARP komputera z panelem, nazwy: DNS PTR → mDNS (unicast 5353) → NetBIOS (137) → LLDP System Name. Cache nazw 10 min.
+- Gdy części MAC brakuje IP, panel raz na 10 min wysyła po jednym zapytaniu NetBIOS do każdego adresu własnej podsieci (max /24), żeby system uzupełnił tablicę ARP. W Dockerze (bridge) to nie działa — zostaje ARP switcha i DNS.
+- LLDP: `show lldp neighbors detail` → `device.ParseLLDPDetail` (test na próbce AW+).
+
 ## Ustawienia
-- `internal/settings`: `settings.Get(KEY)` = panel (data/settings.json) → .env → domyślna. Nowe ustawienia nie-sekretne dodawać do `settings.Defs` i czytać przez `settings.Get`, nie `os.Getenv`. Hasła tylko w .env. Zmiany w locie przez `settings.OnChange` (main.go → `svc.SetTuning`). `/api/settings` tylko dla admina (middleware).
+- `internal/settings`: `settings.Get(KEY)` = panel (data/settings.json) → .env → domyślna. Nowe ustawienia nie-sekretne dodawać do `settings.Defs` i czytać przez `settings.Get`, nie `os.Getenv`. Sekrety: data/connection.json (instalator) albo .env, nigdy settings.json. Zmiany w locie przez `settings.OnChange` (main.go → `svc.SetTuning`). `/api/settings` tylko dla admina (middleware).
 
 ## Docker
 - `Dockerfile` (multi-stage, alpine, użytkownik panel, wolumen /app/data), `docker-compose.yml`, `.github/workflows/docker.yml` (testy + obraz amd64/arm64 do ghcr.io).

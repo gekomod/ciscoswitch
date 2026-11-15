@@ -41,7 +41,7 @@ Przegląd pokazuje front AT-GS948MX: 48 portów miedzianych (górny rząd niepar
 
 ## Ustawienia panelu
 
-W `.env` są tylko dane dostępowe: adres switcha, hasła SSH i SNMP, odcisk klucza SSH i pierwsze konto administratora (zob. `.env.example`). Pozostałe ustawienia administrator zmienia w Narzędzia → Ustawienia panelu: porty chronione, zezwolenia na wyłączanie portów i zmianę DHCP zarządzania, liczba kopii konfiguracji, szyfrowanie SNMPv3, limit czasu SSH, cache, logowanie wydajności i adres serwera firmware. Zapisują się w `data/settings.json` (`PANEL_SETTINGS_PATH`), mają pierwszeństwo przed `.env` i działają od razu, bez restartu. Przy każdym ustawieniu panel pokazuje, czy wartość pochodzi z panelu, z `.env`, czy jest domyślna. Adres serwera firmware jest domyślnie wykrywany automatycznie: to adres tego komputera, przez który panel łączy się ze switchem, z portem `FIRMWARE_HTTP_PORT` (8091).
+Dane dostępowe do switcha i pierwsze konto ustawia instalator pierwszego uruchomienia (zob. „Instalacja”); `.env` jest opcjonalny. Pozostałe ustawienia administrator zmienia w Narzędzia → Ustawienia panelu: porty chronione, zezwolenia na wyłączanie portów i zmianę DHCP zarządzania, liczba kopii konfiguracji, szyfrowanie SNMPv3, limit czasu SSH, cache, logowanie wydajności i adres serwera firmware. Zapisują się w `data/settings.json` (`PANEL_SETTINGS_PATH`), mają pierwszeństwo przed `.env` i działają od razu, bez restartu. Przy każdym ustawieniu panel pokazuje, czy wartość pochodzi z panelu, z `.env`, czy jest domyślna. Adres serwera firmware jest domyślnie wykrywany automatycznie: to adres tego komputera, przez który panel łączy się ze switchem, z portem `FIRMWARE_HTTP_PORT` (8091).
 
 ## Powiadomienia
 
@@ -116,7 +116,7 @@ Każde kliknięcie, które pobiera dane lub wprowadza zmianę, pokazuje pasek po
 
 Obraz jest budowany przez GitHub Actions (`.github/workflows/docker.yml`) dla linux/amd64 i linux/arm64 (np. Raspberry Pi) i publikowany jako `ghcr.io/gekomod/ciscoswitch` z tagami `latest` (gałąź main), wersji (`v1.2.3` → `1.2.3`, `1.2`) i skrótu commita. Przed budową workflow sprawdza formatowanie, `go vet`, testy z `-race` i składnię JS.
 
-Uruchomienie: skopiuj `.env.example` do `.env`, uzupełnij adres switcha i hasła, potem `docker compose up -d`. Dane panelu (użytkownicy, ustawienia, kopie konfiguracji, historia, firmware) są w `./data`. Panel jest domyślnie dostępny tylko z tego komputera (`127.0.0.1:8090`); `docker-compose.yml` opisuje, jak udostępnić go w sieci lokalnej.
+Uruchomienie: `docker compose up -d`, potem `docker logs gs948mx-panel` (kod instalatora) i otwarcie panelu w przeglądarce — resztę ustawia instalator. Plik `.env` jest opcjonalny. Dane panelu (użytkownicy, ustawienia, kopie konfiguracji, historia, firmware) są w `./data`. Panel jest domyślnie dostępny tylko z tego komputera (`127.0.0.1:8090`); `docker-compose.yml` opisuje, jak udostępnić go w sieci lokalnej.
 
 Wgrywanie firmware w kontenerze: switch musi dotrzeć do portu 8091 komputera. Przy przekierowanych portach (domyślny `docker-compose.yml`) ustaw w Ustawieniach panelu adres komputera, np. `192.168.31.10:8091`, bo automatyczne wykrywanie poda adres kontenera. Z `network_mode: host` wykrywanie działa samo.
 
@@ -136,68 +136,57 @@ Obraz jest prywatny, dopóki nie zmienisz widoczności pakietu w ustawieniach re
 ```bash
 git clone https://github.com/gekomod/ciscoswitch.git
 cd ciscoswitch
-cp .env.example .env
-nano .env
-go mod tidy
 go run .
 ```
 
-Panel domyślnie słucha tylko na `127.0.0.1:8090`.
+Plik `.env` nie jest potrzebny. Przy pierwszym uruchomieniu (brak kont panelu) w logu pojawia się **kod instalatora**:
 
-## Konfiguracja .env
-
-```dotenv
-SWITCH_HOST=192.168.31.2
-SWITCH_SSH_PORT=22
-SWITCH_SSH_USER=manager
-SWITCH_SSH_PASSWORD=CHANGE_ME
-SWITCH_SSH_HOST_KEY=SHA256:REPLACE_WITH_VERIFIED_FINGERPRINT
-SWITCH_SNMP_COMMUNITY=CHANGE_ME_READONLY
-SWITCH_SNMP_PORT=161
-SWITCH_SNMP_VERSION=2c
-# For SNMPv3 authPriv, set SWITCH_SNMP_VERSION=3 and configure the following secrets:
-SWITCH_SNMP_V3_USER=
-SWITCH_SNMP_V3_AUTH_PASSWORD=
-SWITCH_SNMP_V3_PRIV_PASSWORD=
-LISTEN_ADDR=127.0.0.1:8090
-PANEL_USER=admin
-PANEL_PASSWORD=USE_A_RANDOM_PASSWORD_AT_LEAST_16_CHARS
-AUDIT_LOG_PATH=data/audit.jsonl
-PORT_PROFILES_PATH=data/port-profiles.json
-DIAGNOSTICS_HISTORY_PATH=data/diagnostics-history.json
-DIAGNOSTICS_INTERVAL=60s
-MONITOR_INTERVAL=30s
-MONITOR_HISTORY_PATH=data/monitor-history.jsonl
 ```
+ PIERWSZE URUCHOMIENIE: otwórz panel w przeglądarce (/setup)
+ Kod instalatora: ABCD-EFGH
+```
+
+Otwórz `http://127.0.0.1:8090` — panel przekieruje na instalator (`/setup`), który w trzech krokach:
+
+1. tworzy konto administratora (hasło min. 8 znaków; wymaga kodu z logu, żeby nikt w sieci nie przejął świeżej instalacji),
+2. ustawia połączenie ze switchem: adres, login i hasło SSH, odcisk klucza SSH (przycisk „Pobierz” — porównaj z `show crypto key hostkey` na switchu), SNMP v2c/v3, porty chronione; przycisk „Sprawdź połączenie” testuje SSH i SNMP,
+3. zapisuje wszystko i loguje administratora.
+
+Krok ze switchem można pominąć i wrócić do niego w Narzędzia → Ustawienia panelu → Połączenie ze switchem (tam też zmienisz hasła i odcisk klucza po instalacji, bez restartu). Dane połączenia są w `data/connection.json` (uprawnienia `0600`); konta w `data/panel-users.json` (bcrypt). W Dockerze kod instalatora pokaże `docker logs gs948mx-panel`.
+
+Instalacje z plikiem `.env` działają dalej: dopóki nie ma `data/connection.json`, panel używa zmiennych `SWITCH_*`, a jeśli nie ma kont, tworzy pierwsze z `PANEL_USER`/`PANEL_PASSWORD`. Instalator wczytuje adres i loginy z `.env`, a puste pola haseł oznaczają „użyj haseł z `.env`”.
+
+Panel domyślnie słucha tylko na `127.0.0.1:8090` (`LISTEN_ADDR`).
+
+## Nazwy urządzeń w topologii
+
+„Skanuj topologię” pokazuje przy każdym MAC nazwę urządzenia, jeśli da się ją ustalić: z DNS routera (nazwy z DHCP), mDNS (telefony, Apple, Linux, drukarki, NAS), NetBIOS (Windows) albo LLDP (switche, AP, telefony IP). Switch zna adres IP tylko części urządzeń, więc panel uzupełnia je z tablicy ARP komputera, na którym działa — w tym celu raz na 10 minut wysyła po jednym zapytaniu NetBIOS do każdego adresu swojej podsieci (najwyżej /24). Urządzenia w innej podsieci/VLAN-ie niż komputer z panelem mają nazwę tylko wtedy, gdy switch zna ich IP, a DNS zna nazwę. W Dockerze w trybie bridge użyj `network_mode: host`, żeby to uzupełnianie działało.
 
 ## Błąd SSH: niezgodny klucz hosta
 
-Komunikat `oczekiwano SHA256:REPLACE_WITH_VERIFIED_FINGERPRINT` oznacza, że w lokalnym pliku `.env` pozostała wartość przykładowa. Nie jest to błąd hasła SSH ani SNMP.
+Panel zawsze sprawdza odcisk SHA256 klucza SSH switcha. Komunikat o niezgodnym kluczu oznacza, że switch przedstawił inny klucz niż zapisany (np. po resecie lub wymianie urządzenia — albo atak w sieci).
 
-1. Zweryfikuj odcisk klucza SSH switcha niezależnym, zaufanym kanałem (np. konsola lokalna urządzenia i dokumentacja/konfiguracja jego serwera SSH). Sam komunikat błędu nie dowodzi autentyczności klucza.
-2. Po potwierdzeniu odcisku wpisz go w **lokalnym** `.env` jako `SWITCH_SSH_HOST_KEY=SHA256:... ` (bez spacji na końcu).
-3. Uruchom ponownie proces aplikacji, ponieważ `.env` jest odczytywany podczas startu. Dla `go run .` zatrzymaj proces i uruchom ponownie; dla usługi systemd uruchom ponownie rzeczywistą nazwę usługi.
+1. Zweryfikuj odcisk niezależnym kanałem (konsola switcha: `show crypto key hostkey`).
+2. W Ustawieniach panelu → Połączenie ze switchem kliknij „Pobierz odcisk ze switcha”; panel ostrzeże, jeśli różni się od zapisanego. Zapisz dopiero po porównaniu. Zmiana działa od razu.
 
-Możesz podejrzeć odcisk prezentowany przez urządzenie z sieci zarządzającej (to **nie** zastępuje niezależnej weryfikacji):
+Odcisk można też podejrzeć z sieci zarządzającej (to **nie** zastępuje niezależnej weryfikacji):
 
 ```bash
 ssh-keyscan -T 5 -p 22 -t rsa,ecdsa,ed25519 192.168.31.2 2>/dev/null | ssh-keygen -lf - -E sha256
 ```
 
-Jeśli pojawi się kilka odcisków, upewnij się, który algorytm klucza hosta jest negocjowany przez aplikację. Nie ustawiaj `ssh.InsecureIgnoreHostKey`, nie wyłączaj kontroli odcisku i nie zapisuj lokalnego `.env` do GitHub.
-
 ## Role panelu
 
-Panel obsługuje trwały rejestr wielu kont. Przy pierwszym uruchomieniu, jeśli plik `PANEL_USERS_PATH` (domyślnie `data/users.json`) nie istnieje, konto początkowe jest tworzone z `PANEL_USER`, `PANEL_PASSWORD` i `PANEL_ROLE`. Przy kolejnych uruchomieniach rejestr jest źródłem prawdy; zmiany tych zmiennych nie nadpisują istniejących kont.
+Panel obsługuje trwały rejestr wielu kont (`PANEL_USERS_PATH`, domyślnie `data/panel-users.json`). Pierwsze konto tworzy instalator (`/setup`) albo — gdy ustawiono — zmienne `PANEL_USER`, `PANEL_PASSWORD` i `PANEL_ROLE`. Przy kolejnych uruchomieniach rejestr jest źródłem prawdy; zmiany tych zmiennych nie nadpisują istniejących kont.
 
 Role:
 - `viewer` — podgląd danych; bez zmian konfiguracji, eksportu konfiguracji, pobierania backupów i administracji kontami.
 - `operator` — odczyt oraz operacje konfiguracyjne; bez administracji kontami panelu.
 - `admin` — pełny dostęp, w tym zarządzanie użytkownikami.
 
-Administrator zarządza kontami w sekcji „Użytkownicy i role”: może tworzyć konta, zmieniać role, blokować/odblokowywać dostęp i resetować hasła. Nowe hasła muszą mieć co najmniej 12 znaków. Hasła są przechowywane jako bcrypt; API nigdy nie zwraca hashy. Nie można zablokować ani zdegradować ostatniego aktywnego administratora. Zmiana roli, blokada konta lub reset hasła unieważnia jego dotychczasowe sesje. Konta panelu są niezależne od kont SSH na przełączniku.
+Administrator zarządza kontami w sekcji „Użytkownicy i role”: może tworzyć konta, zmieniać role, blokować/odblokowywać dostęp i resetować hasła. Hasła muszą mieć co najmniej 8 znaków. Po 10 nieudanych logowaniach z jednego adresu w ciągu 15 minut kolejne próby są odrzucane do końca tego okna. Hasła są przechowywane jako bcrypt; API nigdy nie zwraca hashy. Nie można zablokować ani zdegradować ostatniego aktywnego administratora. Zmiana roli działa od razu, a blokada konta lub reset hasła unieważnia jego dotychczasowe sesje. Konta panelu są niezależne od kont SSH na przełączniku.
 
-Autoryzacja jest egzekwowana po stronie backendu. Sesja otrzymuje rolę przy logowaniu; endpoint `/api/session` zwraca nazwę zalogowanego konta i rolę. Rejestr JSON jest zapisywany atomowo, z uprawnieniami katalogu `0700` i pliku `0600`. Wykonaj kopię `data/users.json` razem z innymi lokalnymi danymi panelu; nie publikuj tego pliku w repozytorium. Uszkodzony lub pusty rejestr blokuje start zamiast automatycznie tworzyć nowe konto i nadpisywać dane.
+Autoryzacja jest egzekwowana po stronie backendu. Sesja otrzymuje rolę przy logowaniu; endpoint `/api/session` zwraca nazwę zalogowanego konta i rolę. Rejestr JSON jest zapisywany atomowo, z uprawnieniami katalogu `0700` i pliku `0600`. Wykonaj kopię `data/panel-users.json` i `data/connection.json` razem z innymi lokalnymi danymi panelu; nie publikuj tego pliku w repozytorium. Uszkodzony lub pusty rejestr blokuje start zamiast automatycznie tworzyć nowe konto i nadpisywać dane.
 
 ## Bezpieczeństwo i ograniczenia
 - Wyłączanie portów jest domyślnie zablokowane; świadome odblokowanie wymaga `ALLOW_PORT_SHUTDOWN=true`. Nie ustawiaj tej opcji bez lokalnego planu odzyskania dostępu.
@@ -210,10 +199,10 @@ Autoryzacja jest egzekwowana po stronie backendu. Sesja otrzymuje rolę przy log
 - Sprawdź konfigurację na porcie testowym przed zmianą portów produkcyjnych.
 - Prędkości 10/100/1000 i duplex auto/full/half są oparte na instrukcji AlliedWare Plus dla miedzianych portów RJ-45. Zakres możliwości konkretnego portu zależy od sprzętu.
 - Składnia VLAN/access/trunk jest zgodna z opisami AlliedWare Plus. Dokumentacja referencyjna użyta przy implementacji: Allied Telesis How To Configure Basic Switching Functionality oraz AlliedWare Plus 5.4.6 Command Reference.
-- Panel wymaga logowania HTTP Basic: `PANEL_USER` i `PANEL_PASSWORD` (minimum 8 znaków). Bez tych danych nie uruchomi się.
-- Wszystkie połączenia SSH weryfikują SHA256 fingerprint z `SWITCH_SSH_HOST_KEY`. Wartość musi być pobrana z zaufanego źródła; przykładowy placeholder nie zadziała.
-- Panel domyślnie nasłuchuje na localhost. Przy udostępnieniu w sieci używaj wyłącznie za HTTPS (np. reverse proxy) i ogranicz dostęp do sieci zarządzającej. HTTP Basic nie szyfruje poświadczeń.
-- Nie commituj pliku .env, haseł ani community SNMP.
+- Panel wymaga logowania (sesja w ciasteczku HttpOnly, SameSite=Strict); bez kont uruchamia instalator chroniony jednorazowym kodem z logu.
+- Wszystkie połączenia SSH weryfikują zapisany odcisk SHA256 klucza switcha (instalator / Ustawienia panelu, dawniej `SWITCH_SSH_HOST_KEY`).
+- Panel domyślnie nasłuchuje na localhost. Przy udostępnieniu w sieci używaj wyłącznie za HTTPS (np. reverse proxy) i ogranicz dostęp do sieci zarządzającej. Bez HTTPS hasło logowania idzie siecią otwartym tekstem.
+- Nie commituj pliku .env ani katalogu data/ (hasła, community SNMP, kopie konfiguracji).
 
 ## Dodatkowe moduły
 - Diagnostyka systemu: wersja firmware, CPU, pamięć, temperatura, wentylatory, zasilacze i uptime w formie czytelnych wskaźników; nieparsowane odpowiedzi CLI nie są prezentowane użytkownikowi.
@@ -285,9 +274,9 @@ Endpoint `GET /api/events` w widoku kategorii `all` zwraca również pole `corre
 
 Panel ma osobne konta lokalne, niezależne od użytkowników SSH skonfigurowanych na przełączniku.
 
-Przy pierwszym uruchomieniu ustaw na serwerze panelu:
+Zamiast instalatora (`/setup`) pierwsze konto można też podać zmiennymi:
 - `PANEL_ADMIN_USER` — login początkowego administratora.
-- `PANEL_ADMIN_PASSWORD` — hasło początkowego administratora (minimum 12 znaków).
+- `PANEL_ADMIN_PASSWORD` — hasło początkowego administratora (minimum 8 znaków).
 - `PANEL_USERS_PATH` — opcjonalna ścieżka pliku kont; domyślnie `data/panel-users.json`.
 
 Przykład konfiguracji środowiska (nie wpisuj haseł do repozytorium):

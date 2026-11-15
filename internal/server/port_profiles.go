@@ -71,7 +71,12 @@ func portProfilesHandler(path string) http.Handler {
 			if access == 0 {
 				access = 1
 			}
-			if _, err := device.BuildPortSettingsCommands("port1.0.1", q.Mode, access, q.Allowed, q.Native, q.Speed, q.Duplex, q.PortDescription); err != nil {
+			// Profil z prędkością 10G sprawdzamy na porcie SFP+ (port 1 jest miedziany).
+			probe := "port1.0.1"
+			if q.Speed == "10000" {
+				probe = "port1.0.49"
+			}
+			if _, err := device.BuildPortSettingsCommands(probe, q.Mode, access, q.Allowed, q.Native, q.Speed, q.Duplex, q.PortDescription); err != nil {
 				http.Error(w, err.Error(), 400)
 				return
 			}

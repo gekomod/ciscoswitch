@@ -4,9 +4,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"gs948mx-manager/internal/device"
+	"gs948mx-manager/internal/settings"
+	"log"
 	"net/http"
 	"strings"
 )
+
+// updateOwnCredentials: gdy administrator zmienia na switchu hasło konta,
+// którego używa sam panel, zapisujemy nowe hasło w połączeniu panelu —
+// inaczej po ponownym połączeniu panel odciąłby się od switcha.
+func updateOwnCredentials(svc *device.Service, change func(*settings.Connection)) {
+	c := settings.CurrentConnection()
+	change(&c)
+	if err := settings.SaveConnection(c); err != nil {
+		log.Printf("Nie zaktualizowano danych połączenia panelu: %v", err)
+		return
+	}
+	cfg := device.Config{}
+	c.Apply(&cfg)
+	svc.SetConnection(cfg)
+}
 
 // registerPreviewRoutes: Podglądy zmian portów i VLAN-ów (tylko odczyt).
 func registerPreviewRoutes(apiMux *http.ServeMux, svc *device.Service, backupDir string) {
@@ -159,7 +176,16 @@ func registerDeviceSettingsRoutes(apiMux *http.ServeMux, svc *device.Service, ba
 			http.Error(w, "invalid JSON", 400)
 			return
 		}
+		own := strings.EqualFold(strings.TrimSpace(q.Username), settings.CurrentConnection().SSHUser)
+		if own && !q.Delete && q.Privilege > 0 && q.Privilege < 15 {
+			write(w, "", fmt.Errorf("konto %s jest używane przez panel i musi mieć uprawnienia 15", q.Username))
+			return
+		}
 		v, e := runWithPreChangeBackup(backupDir, svc.RunReadOnly, func() (string, error) { return svc.ConfigureSSHUser(q.Username, q.Password, q.Privilege, q.Delete) })
+		if e == nil && own && !q.Delete && q.Password != "" {
+			updateOwnCredentials(svc, func(c *settings.Connection) { c.SSHPassword = q.Password })
+			v += "\n(Panel zapisał nowe hasło SSH w swoim połączeniu.)"
+		}
 		write(w, v, e)
 	})
 	apiMux.HandleFunc("/api/snmp/trap-host", func(w http.ResponseWriter, r *http.Request) {
@@ -198,9 +224,24 @@ func registerDeviceSettingsRoutes(apiMux *http.ServeMux, svc *device.Service, ba
 			http.Error(w, "invalid JSON", 400)
 			return
 		}
+		cur := settings.CurrentConnection()
+		own := cur.SNMPVersion == "3" && strings.EqualFold(strings.TrimSpace(q.Username), cur.SNMPV3User)
+		if own && q.Delete {
+			write(w, "", fmt.Errorf("nie można usunąć użytkownika SNMPv3 używanego przez panel; najpierw zmień połączenie w Ustawieniach panelu"))
+			return
+		}
 		v, e := runWithPreChangeBackup(backupDir, svc.RunReadOnly, func() (string, error) {
 			return svc.ConfigureSNMPv3User(q.Username, q.Group, q.AuthPassword, q.PrivacyPassword, q.PrivacyProtocol, q.Delete)
 		})
+		if e == nil && own {
+			updateOwnCredentials(svc, func(c *settings.Connection) {
+				c.SNMPV3AuthPassword, c.SNMPV3PrivPassword = q.AuthPassword, q.PrivacyPassword
+			})
+			if p := device.NormalizePrivacyProtocol(q.PrivacyProtocol); p != "" {
+				_ = settings.Save(map[string]string{"SWITCH_SNMP_V3_PRIV_PROTOCOL": p})
+			}
+			v += "\n(Panel zapisał nowe hasła SNMPv3 w swoim połączeniu.)"
+		}
 		write(w, v, e)
 	})
 	apiMux.HandleFunc("/api/snmp/v3-trap-host", func(w http.ResponseWriter, r *http.Request) {

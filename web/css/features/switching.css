@@ -1,0 +1,70 @@
+/* Wygenerowane z dawnego style.css przez ui/tools/tokenize_css.py, potem utrzymywane ręcznie.
+   Kolory to wyłącznie tokeny z tokens.css; reguły działają w obu motywach. */
+
+.vlan-map-legend{display:flex;gap:16px;flex-wrap:wrap;margin:15px 0 10px;color:var(--muted);font-size:10px}
+.vlan-map-legend span{display:flex;align-items:center;gap:6px}
+.vlan-map-legend i{width:9px;height:9px;border-radius:3px}
+.vlan-tagged{background:var(--blue)}
+.vlan-untagged{background:var(--green)}
+.vlan-unknown{background:repeating-linear-gradient(135deg,var(--line-strong),var(--line-strong) 3px,var(--raised) 3px,var(--raised) 6px)}
+.vlan-selection-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 12px;font-size:11px;color:var(--muted)}
+.vlan-selection-toolbar .inline-tools{flex-wrap:wrap}
+.topology-class-badge,.topology-hint,.topology-stp-blocked,.topology-stp-forwarding{display:inline-flex;align-items:center;width:max-content;max-width:100%;padding:4px 7px;border-radius:7px;font-size:10px;font-weight:700;overflow-wrap:anywhere}
+.topology-stp-blocked{background:var(--amber-soft);color:var(--amber-fg)}
+.topology-stp-forwarding{background:var(--raised);color:var(--green-fg)}
+.topology-vlan-explorer{margin:22px 0;padding:18px 0;border-top:1px solid var(--line,var(--line))}
+.topology-vlan-explorer .topology-map-head{margin-top:0}
+.topology-vlan-map{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.topology-vlan-port{min-width:0;padding:12px;border:1px solid var(--line,var(--line));border-radius:11px;background:var(--surface-2,var(--surface))}
+.vlan-member{font-size:9px;font-weight:800;padding:4px 7px;border-radius:7px}
+.vlan-member.tagged{background:var(--blue-soft);color:var(--blue-fg)}
+.vlan-member.untagged{background:var(--raised);color:var(--green-fg)}
+.vlan-member.none{background:var(--soft);color:var(--muted)}
+.topology-vlan-devices{display:flex;flex-direction:column;gap:5px;margin-top:9px;font-size:11px;color:var(--muted)}
+.topology-vlan-devices>div{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.topology-vlan-devices code{color:var(--text)}
+@media (max-width:760px){
+.topology-vlan-map{grid-template-columns:1fr}
+.topology-vlan-explorer .topology-map-head{align-items:flex-start;flex-direction:column}
+.topology-vlan-explorer .inline-tools{width:100%}
+.topology-vlan-explorer input{min-width:0;flex:1}
+}
+.lacp-diagnostics{display:grid;gap:12px;margin-top:16px}
+.lacp-group-card{border:1px solid var(--line,var(--line));background:var(--panel-soft,var(--surface));border-radius:13px;padding:14px}
+.lacp-group-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.lacp-group-head h3{margin:0}
+.lacp-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:9px;margin:13px 0}
+.lacp-stats>div{background:var(--sunken);border:1px solid var(--line);border-radius:9px;padding:10px;min-width:0}
+.lacp-stats small,.lacp-stats b{display:block;overflow-wrap:anywhere}
+.lacp-stats small{color:var(--muted);font-size:10px;margin-bottom:5px}
+.lacp-stats b{font-size:12px}
+.vlan-membership-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 8px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+.vlan-membership-tools label{font-size:11px;color:var(--muted)}
+.vlan-membership-tools select{min-width:190px;max-width:100%}
+#vlan-membership-output{max-height:180px;margin:0 0 12px;white-space:pre-wrap;overflow:auto}
+.lacp-source{font-size:11px;color:var(--muted)}
+.lacp-group-card,.lacp-stats>div{background:var(--sunken);border-color:var(--line);color:var(--text-2)}
+.topology-vlan-port,.topology-redundancy{background:var(--sunken);border-color:var(--line)}
+.vlan-membership-tools{background:var(--sunken);border-color:var(--line)}
+.topology-vlan-devices{color:var(--muted)}
+.topology-vlan-devices code{color:var(--text-2)}
+.vlan-map-filters{display:grid;grid-template-columns:minmax(180px,1fr) minmax(180px,240px) minmax(220px,1.5fr);gap:10px;align-items:end;margin:14px 0}
+.vlan-map-filters label{display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--muted)}
+.vlan-map-filters input,.vlan-map-filters select{width:100%;min-width:0}
+.vlan-map-filters .note{margin:0;min-height:38px;display:flex;align-items:center}
+@media (max-width:720px){
+.vlan-map-filters{grid-template-columns:1fr}
+.vlan-map-filters .note{min-height:32px}
+}
+.topology-vlan-list{display:flex;flex-wrap:wrap;gap:6px}
+.topology-vlan{padding:5px 9px;border:1px solid var(--line);border-radius:7px;font-size:11px;background:var(--surface)}
+.diagnostic-acknowledged{margin-top:8px;padding:7px 9px;border-radius:7px;background:var(--surface);font-size:10px;color:var(--muted)}
+.diagnostic-acknowledged small{margin-top:4px}
+.trf-lead{margin:-4px 0 10px}
+.trf-global{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:10px}
+.trf-global .btn{min-height:36px;background:var(--surface-3);border-color:var(--line)}
+.svc-state.trf-on{color:var(--green);border-color:var(--green-line);background:var(--green-soft)}
+#storm-level{width:110px}
+#qos .mon-form{margin-top:12px}
+#qos .mon-list{margin-top:4px}
+#qos .mon-list small{color:var(--subtle)}

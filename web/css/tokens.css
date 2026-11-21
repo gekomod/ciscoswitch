@@ -1,0 +1,77 @@
+/* Tokeny projektu: jedno źródło kolorów, kroju i rytmu dla obu motywów.
+   Zasada: interfejs jest monochromatyczny jak obudowa urządzenia w szafie,
+   a kolor niesie wyłącznie znaczenie, tak jak diody na froncie switcha:
+   zielony = łącze 1G / OK, niebieski = 10G / informacja, bursztyn = 10/100 / ostrzeżenie,
+   czerwony = błąd / awaria. Motyw ciemny jest domyślny (app.js ustawia data-theme). */
+:root {
+  color-scheme: dark;
+  /* Obudowa: grafit lakieru proszkowego */
+  --bg: #141516;
+  --surface: #1b1c1e;
+  --sunken: #111213;
+  --raised: #232527;
+  --hover: #2b2d30;
+  --line: #313336;
+  --line-soft: #26282b;
+  --line-strong: #44474b;
+  /* Sitodruk na obudowie */
+  --text: #ebe9e4;
+  --text-2: #c8c6c0;
+  --muted: #9d9b95;
+  --subtle: #77756f;
+  /* Główna akcja: jasna tabliczka, nie kolorowy przycisk */
+  --primary-bg: #ebe9e4;
+  --primary-fg: #141516;
+  --primary-hover: #ffffff;
+  --focus: #8db6ff;
+  /* Diody stanu */
+  --green: #5cd08a;  --green-fg: #82e0a7;  --green-soft: rgb(92 208 138 / .12);  --green-line: rgb(92 208 138 / .38);
+  --blue: #6ea6ff;   --blue-fg: #9cc2ff;   --blue-soft: rgb(110 166 255 / .12);  --blue-line: rgb(110 166 255 / .38);
+  --amber: #f0b04a;  --amber-fg: #f5c877;  --amber-soft: rgb(240 176 74 / .12);  --amber-line: rgb(240 176 74 / .38);
+  --red: #ff6b6b;    --red-fg: #ff9a9a;    --red-soft: rgb(255 107 107 / .12);   --red-line: rgb(255 107 107 / .4);
+  --violet: #b693ff; --violet-fg: #cbb2ff; --violet-soft: rgb(182 147 255 / .12); --violet-line: rgb(182 147 255 / .38);
+  --shadow-color: rgb(0 0 0 / .45);
+  --shadow-pop: 0 18px 50px rgb(0 0 0 / .5);
+
+  /* Krój: Barlow ma rodowód tablic znamionowych i oznaczeń w stylu DIN */
+  --font-sans: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --font-head: "Barlow Semi Condensed", "Barlow", "Arial Narrow", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  /* Skala 1.25 od 14 px */
+  --fs-xs: 11.5px; --fs-sm: 12.5px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px; --fs-2xl: 25px; --fs-3xl: 34px;
+  /* Promienie według hierarchii: obudowa > panel > kontrolka */
+  --radius-lg: 10px; --radius: 6px; --radius-sm: 4px;
+  --sidebar-w: 236px;
+
+  /* Aliasy dla nazw z wcześniejszego CSS (style funkcji je wykorzystują) */
+  --surface-2: var(--sunken); --surface-3: var(--raised); --surface-soft: var(--sunken);
+  --panel-soft: var(--sunken); --soft: var(--raised); --border: var(--line);
+  --accent: var(--blue); --accent-2: var(--blue);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  /* Arkusz danych technicznych: chłodna szarość papieru, czarny druk */
+  --bg: #ededeb;
+  --surface: #ffffff;
+  --sunken: #f5f5f3;
+  --raised: #efefec;
+  --hover: #e6e6e2;
+  --line: #d9d9d4;
+  --line-soft: #e7e7e3;
+  --line-strong: #c2c2bc;
+  --text: #1b1c1e;
+  --text-2: #3a3c40;
+  --muted: #62646a;
+  --subtle: #8b8d92;
+  --primary-bg: #1b1c1e;
+  --primary-fg: #ffffff;
+  --primary-hover: #000000;
+  --focus: #2f62d6;
+  --green: #1f9a56;  --green-fg: #177a43;  --green-soft: rgb(31 154 86 / .1);   --green-line: rgb(31 154 86 / .35);
+  --blue: #2f6ee0;   --blue-fg: #2458bd;   --blue-soft: rgb(47 110 224 / .09);  --blue-line: rgb(47 110 224 / .33);
+  --amber: #c98a12;  --amber-fg: #8a5d00;  --amber-soft: rgb(201 138 18 / .11); --amber-line: rgb(201 138 18 / .38);
+  --red: #d6404a;    --red-fg: #b3313a;    --red-soft: rgb(214 64 74 / .09);    --red-line: rgb(214 64 74 / .35);
+  --violet: #7b52d6; --violet-fg: #6440b8; --violet-soft: rgb(123 82 214 / .09); --violet-line: rgb(123 82 214 / .33);
+  --shadow-color: rgb(20 22 25 / .12);
+  --shadow-pop: 0 18px 50px rgb(20 22 25 / .18);
+}

@@ -1,0 +1,271 @@
+/* Wspólne komponenty. Ładowane po stylach funkcji, więc ujednolicają wygląd całego panelu. */
+
+/* Przyciski. Główna akcja to jasna tabliczka; kolor mają tylko akcje niszczące. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: var(--text);
+  font: 500 var(--fs-sm)/1 var(--font-sans);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color .15s, border-color .15s, color .15s;
+}
+.btn:hover { background: var(--hover); }
+.btn.primary { background: var(--primary-bg); border-color: var(--primary-bg); color: var(--primary-fg); font-weight: 600; }
+.btn.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.btn.ghost { background: transparent; border-color: var(--line); color: var(--text-2); }
+.btn.ghost:hover { background: var(--raised); color: var(--text); }
+.btn.danger, .btn.danger-btn { background: transparent; border-color: var(--red-line); color: var(--red-fg); }
+.btn.danger:hover, .btn.danger-btn:hover { background: var(--red-soft); }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.btn.wide { width: 100%; margin-top: 16px; }
+
+/* Panel: płaska powierzchnia z cienką krawędzią, bez cienia. */
+.panel {
+  margin: 0 0 16px;
+  padding: 22px 24px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+}
+.panel h2 { margin: 0 0 4px; font-size: var(--fs-xl); }
+.panel h3 { font-size: var(--fs-lg); margin: 18px 0 8px; }
+.panel h4 { margin: 0 0 6px; }
+.panel p { color: var(--muted); max-width: 78ch; }
+/* Panel w panelu (np. audyt w sekcji portów) to podsekcja oddzielona linią, nie kolejna karta. */
+.panel .panel {
+  margin: 24px 0 0;
+  padding: 22px 0 0;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  border-radius: 0;
+}
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px 24px;
+  margin-bottom: 16px;
+}
+.section-head > div:first-child { flex: 1 1 320px; min-width: 0; }
+.section-head h2, .section-head h3 { margin-top: 0; }
+
+/* Pigułki stanu */
+.chip-status, .live-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--text-2);
+  font: 500 var(--fs-xs)/1 var(--font-sans);
+  white-space: nowrap;
+}
+.live-label i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px 2px 8px;
+  border-radius: 999px;
+  font: 600 var(--fs-xs)/1.4 var(--font-sans);
+}
+.state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.state.up { color: var(--green-fg); background: var(--green-soft); }
+.state.down { color: var(--red-fg); background: var(--red-soft); }
+.state.unknown { color: var(--amber-fg); background: var(--amber-soft); }
+
+/* Komunikaty. .note bywa informacją albo ostrzeżeniem, więc jest cicha: linia z boku, bez alarmującego tła. */
+.note {
+  margin: 14px 0 0;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--line-strong);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  max-width: 84ch;
+}
+.alert {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--amber-line);
+  border-radius: var(--radius);
+  background: var(--amber-soft);
+  color: var(--amber-fg);
+}
+.empty { padding: 28px 12px; text-align: center; color: var(--subtle); font-size: var(--fs-sm); }
+
+/* Tabele */
+.table-wrap { overflow: auto; border: 1px solid var(--line-soft); border-radius: var(--radius); }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+th {
+  position: sticky;
+  top: 0;
+  padding: 9px 14px;
+  background: var(--sunken);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font: 600 var(--fs-xs)/1.3 var(--font-sans);
+  text-align: left;
+}
+td { padding: 9px 14px; border-bottom: 1px solid var(--line-soft); color: var(--text-2); }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: var(--raised); }
+td b { color: var(--text); }
+.table-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.table-foot { display: flex; justify-content: space-between; gap: 12px; padding: 12px 2px 0; color: var(--subtle); font-size: var(--fs-xs); }
+
+/* Formularze */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px 16px;
+  margin: 18px 0;
+}
+.form-grid.two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.form-grid.three-col { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.form-grid label, .edge-select {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.form-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.edge-select { flex-direction: row; align-items: center; gap: 12px; margin: 12px 0; }
+.cli-row { display: flex; gap: 8px; margin-top: 16px; }
+.cli-row select { flex: 1; }
+/* Pola tekstowe w całym panelu: wspólny wygląd wygrywa z drobnymi różnicami w stylach funkcji. */
+.main :is(input:not([type=checkbox], [type=radio], [type=file], [type=range], [type=submit]), select, textarea),
+.sidebar select {
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 10px;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.main :is(textarea, select[multiple]) { padding: 8px 10px; line-height: 1.5; }
+.main :is(input, select, textarea):focus { border-color: var(--focus); box-shadow: 0 0 0 3px var(--blue-soft); }
+.main :is(input, select, textarea):disabled { opacity: .45; }
+.main .form-grid :is(input, select) { width: 100%; }
+input[type=checkbox], input[type=radio] { accent-color: var(--text); }
+input[type=file] { color: var(--muted); font-size: var(--fs-sm); }
+progress { accent-color: var(--green); width: 100%; }
+
+/* Przełącznik on/off */
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--sunken);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+.setting-row b, .setting-row small { display: block; }
+.setting-row small { margin-top: 2px; color: var(--muted); font-size: var(--fs-sm); }
+.switch { position: relative; flex: none; width: 40px; height: 22px; }
+.switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.switch span { position: absolute; inset: 0; border-radius: 999px; background: var(--line-strong); cursor: pointer; transition: background-color .2s; }
+.switch span::before {
+  content: "";
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--text);
+  transition: transform .2s;
+}
+.switch input:checked + span { background: var(--green); }
+.switch input:checked + span::before { transform: translateX(18px); background: #fff; }
+.switch input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Odpowiedzi urządzenia */
+pre {
+  margin: 14px 0 0;
+  min-height: 64px;
+  max-height: 300px;
+  overflow: auto;
+  padding: 12px 14px;
+  background: var(--sunken);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  font: 12.5px/1.6 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+details > summary { cursor: pointer; color: var(--muted); font-size: var(--fs-sm); }
+details > summary:hover { color: var(--text); }
+details[open] > summary { margin-bottom: 8px; }
+
+/* Mała karta z wartością (np. podsumowanie audytu) */
+.metric { padding: 12px 14px; background: var(--sunken); border: 1px solid var(--line-soft); border-radius: var(--radius); }
+
+/* Okno ustawień portu */
+.port-dialog {
+  width: min(720px, calc(100vw - 28px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 22px 24px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+}
+.port-dialog::backdrop { background: rgb(0 0 0 / .55); backdrop-filter: blur(2px); }
+.dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 16px; }
+.dialog-head h2 { margin: 0 0 4px; }
+.dialog-head p { color: var(--muted); }
+.dialog-close {
+  flex: none;
+  width: 32px; height: 32px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.dialog-close:hover { background: var(--raised); color: var(--text); }
+.port-dialog .port-form { margin: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (max-width: 1180px) {
+  .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .panel { padding: 16px; }
+  .form-grid, .form-grid.two-col, .form-grid.three-col, .port-dialog .port-form { grid-template-columns: 1fr; }
+  .form-actions .btn { flex: 1 1 auto; }
+  .section-head { align-items: stretch; }
+}

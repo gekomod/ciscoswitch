@@ -1,0 +1,67 @@
+/* Przegląd: nagłówek urządzenia i pasek odczytów. Bohaterem strony jest front switcha (faceplate.css). */
+.device-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 24px;
+  padding: 4px 0 18px;
+}
+.device-title h1 {
+  font: 600 clamp(30px, 3.6vw, 40px)/1 var(--font-head);
+  letter-spacing: .01em;
+}
+.device-title p { margin-top: 8px; color: var(--muted); max-width: 64ch; }
+.device-chip {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 2px 16px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+.device-chip-label { color: var(--subtle); font-size: var(--fs-xs); }
+.device-chip #host { grid-column: 1; font: 500 var(--fs-lg)/1.2 var(--font-sans); font-variant-numeric: tabular-nums; }
+.device-chip .chip-status { grid-column: 2; grid-row: 1 / span 2; justify-self: end; }
+
+/* Pasek odczytów: jedna listwa z czterema wartościami zamiast czterech kart. */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 16px 0;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+}
+.metrics .metric { padding: 14px 20px; background: none; border: 0; border-left: 1px solid var(--line-soft); border-radius: 0; }
+.metrics .metric:first-child { border-left: 0; }
+.metric-label { display: block; color: var(--muted); font-size: var(--fs-sm); }
+.metric-label small { color: var(--subtle); margin-left: 4px; }
+.metrics strong {
+  display: block;
+  margin-top: 4px;
+  font: 600 var(--fs-2xl)/1.15 var(--font-head);
+  font-variant-numeric: tabular-nums;
+}
+.metrics .metric-word, .metrics .metric-time { font-size: var(--fs-xl); }
+
+/* Siatka pulpitu: mapa portów obok ruchu i kondycji (struktura w features/dashboard.css). */
+.dashboard-grid .panel, .dashboard-side .panel { margin: 0; box-shadow: none; }
+.health-line b.good { color: var(--green-fg); }
+.health-line b.bad { color: var(--red-fg); }
+.overview-health { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--sunken); }
+.overview-health[data-state="ok"], .overview-health[data-state="good"] { border-color: var(--green-line); }
+.overview-health[data-state="warning"], .overview-health[data-state="warn"] { border-color: var(--amber-line); }
+.overview-health[data-state="danger"], .overview-health[data-state="bad"], .overview-health[data-state="critical"] { border-color: var(--red-line); }
+
+@media (max-width: 900px) {
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metrics .metric:nth-child(3) { border-left: 0; }
+  .metrics .metric:nth-child(n+3) { border-top: 1px solid var(--line-soft); }
+}
+@media (max-width: 560px) {
+  .device-header { padding-top: 20px; }
+  .device-chip { width: 100%; }
+}

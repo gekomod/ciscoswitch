@@ -29,6 +29,33 @@ Panel WWW do monitorowania i konfiguracji przełącznika Allied Telesis AT-GS948
 - Centrum diagnostyki awarii: serwer zbiera automatycznie read-only próbki znormalizowanego stanu LACP, jawnie opisanych uplinków, sąsiadów LLDP i dostępności odczytów. Pierwsza próbka jest zbierana przy starcie, kolejne według `DIAGNOSTICS_INTERVAL` (domyślnie `60s`, minimum `10s`, `0` wyłącza sampler). Historia jest zapisywana atomowo w lokalnym pliku JSON z uprawnieniami katalogu 0700 i pliku 0600; domyślna retencja wynosi 12 000 próbek (około 8,3 dnia przy interwale 60 sekund). API `POST /api/diagnostics/collect` nadal pozwala ręcznie zebrać próbkę, a `GET /api/diagnostics/history?limit=100&windowMinutes=60` zwraca historię, alarmy i zmiany z całego zachowanego okna. Trzy lub więcej zmian tego samego stanu LACP w wybranym oknie generują alarm powtarzających się zmian (flapping). Dostępne okna: 5–1440 minut. LACP Ready=0 jest alarmem krytycznym, rozbieżność członków — ostrzeżeniem, a pojedynczy jawnie opisany uplink — informacją o ryzyku topologii, nie awarii. Brak danych nie jest traktowany jako powrót do normy. Krótkie zaniki krótsze niż interwał próbkowania mogą pozostać niewykryte. Ścieżkę pliku można zmienić przez `DIAGNOSTICS_HISTORY_PATH`.
 - Historia ruchu per port jest zapisywana lokalnie w `data/monitor-history.jsonl` i odtwarzana po ponownym otwarciu panelu; retencja jest ograniczona do 60 próbek na port w odpowiedzi API, a plik ma limit 2 MiB i uprawnienia 0600.
 
+## Interfejs: komponenty i budowanie
+
+Strona panelu jest składana z komponentów [gtml](https://github.com/phillip-england/gtml). Źródła są w `ui/`, a wynik trafia do `web/index.html`, który serwuje panel (ten plik jest generowany i commitowany, więc do uruchomienia panelu ani obrazu Dockera gtml nie jest potrzebny).
+
+```
+ui/
+  routes/index.html        kolejność sekcji strony
+  components/layout/       Shell (head, skrypty), Sidebar, NavLink, Topbar, Footer
+  components/overview/     DeviceHeader, StatusStrip, DashboardGrid, WarningBanner
+  components/ports|switching|network|system|tools/   po jednym komponencie na sekcję
+  build.sh                 kompilacja do web/index.html (opcja --watch)
+web/css/
+  tokens.css               kolory, krój, promienie dla motywu ciemnego i jasnego
+  base.css, components.css, layout.css, overview.css, faceplate.css
+  features/*.css           style poszczególnych funkcji (porty, VLAN, topologia, diagnostyka…)
+web/fonts/                 Barlow i Barlow Semi Condensed (SIL OFL), lokalnie
+```
+
+Zmiana interfejsu:
+
+```bash
+go install github.com/phillip-england/gtml@latest
+./ui/build.sh            # albo ./ui/build.sh --watch podczas pracy
+```
+
+Nowa sekcja to nowy plik w `ui/components/<grupa>/NazwaSekcji.html` (jeden element główny z `id`), wpis w `ui/routes/index.html` i link w `ui/components/layout/Sidebar.html` (`<NavLink href="#id" label="Nazwa" />`).
+
 ## Front switcha
 
 Przegląd pokazuje front AT-GS948MX: 48 portów miedzianych (górny rząd nieparzyste, dolny parzyste) i 4 SFP, w kolorach według stanu (1 Gb/s, 10 Gb/s, 10/100 Mb/s, brak łącza, wyłączony). Czerwona kropka oznacza przyrost błędów w ostatnich 5 minutach. Najechanie na port pokazuje jego opis (`description`, odczytywany przez SNMP jako ifAlias). Kliknięcie portu otwiera szczegóły (opis, tryb, VLAN-y, prędkość, MTU, liczniki, wykres ruchu z historii monitoringu, a na żądanie podłączone urządzenia: adresy MAC z IP z tablicy ARP i sąsiad LLDP) i akcje panelu: ustawienia portu, ruch i historia, topologia, włączenie lub wyłączenie (porty z `PROTECTED_PORTS` są zablokowane). Pod frontem jest lista ostatnich zdarzeń z monitoringu: zmiany łączy, przyrost błędów, dostępność SNMP.

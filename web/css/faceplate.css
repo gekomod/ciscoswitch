@@ -1,0 +1,242 @@
+/* Front switcha: jedyny „głośny” element panelu. Rysowany jak urządzenie w szafie:
+   obudowa z uszami montażowymi, gniazda RJ45 z wycięciem na zatrzask, klatki SFP,
+   diody link/aktywność. Obudowa ma stałe kolory w obu motywach, bo to przedmiot, nie interfejs.
+   Kolory diod pochodzą z tokenów stanu, więc legenda i reszta panelu mówią tym samym językiem. */
+.faceplate-panel {
+  --chassis-top: #2a2c2f;
+  --chassis-bottom: #1d1f21;
+  --chassis-edge: #0b0c0d;
+  --silk: #d6d4ce;
+  --silk-dim: #8b8984;
+  --socket: #0d0e0f;
+  --cavity: #040505;
+  --led-off: #2b2d30;
+  --led-green: #5cd08a;
+  --led-blue: #6ea6ff;
+  --led-amber: #f0b04a;
+  --led-red: #ff6b6b;
+  padding: 20px 24px 18px;
+}
+
+.fp-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px 24px; margin-bottom: 14px; }
+.fp-head h2 { display: flex; align-items: center; gap: 12px; margin: 0; }
+.fp-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font: 500 var(--fs-xs)/1 var(--font-sans);
+}
+.fp-live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--subtle); }
+.fp-live[data-state="on"] { color: var(--green-fg); border-color: var(--green-line); }
+.fp-live[data-state="on"]::before { background: var(--green); animation: fp-pulse 2.4s ease-in-out infinite; }
+.fp-live[data-state="err"] { color: var(--red-fg); border-color: var(--red-line); }
+.fp-live[data-state="err"]::before { background: var(--red); }
+
+.fp-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); font-size: var(--fs-xs); }
+.fp-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.fp-key { display: inline-block; width: 10px; height: 4px; border-radius: 1px; }
+.fp-k-g { background: var(--green); }
+.fp-k-x { background: var(--blue); }
+.fp-k-f { background: var(--amber); }
+.fp-k-down { background: var(--line-strong); }
+.fp-k-off { height: 8px; width: 8px; border: 1px dashed var(--subtle); background: none; }
+.fp-key-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
+
+/* Obudowa */
+.fp-scroll { margin: 0 -4px; padding: 4px 4px 10px; overflow-x: auto; container-type: inline-size; }
+/* Rozmiar gniazda liczony z szerokości panelu: 24 kolumny RJ45 + 2 szersze SFP i stałe elementy obudowy (~360 px).
+   Poniżej 20 px gniazda przestają się zmniejszać i włącza się przewijanie. */
+.fp-device { --pw: clamp(20px, calc((100cqi - 362px) / 26.8), 34px); --ph: calc(var(--pw) * .94); --gap: 4px; }
+.fp-device {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  width: max-content;
+  padding: 14px 6px;
+  background: linear-gradient(180deg, var(--chassis-top), var(--chassis-bottom));
+  border: 1px solid var(--chassis-edge);
+  border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .07), inset 0 -1px 0 rgb(0 0 0 / .5), 0 1px 2px var(--shadow-color), 0 8px 24px var(--shadow-color);
+}
+/* Uszy montażowe ze śrubami */
+.fp-device::before, .fp-device::after {
+  content: "";
+  flex: none;
+  width: 14px;
+  background:
+    radial-gradient(circle at 50% 12px, #08090a 0 3px, rgb(255 255 255 / .08) 3.5px, transparent 4.5px),
+    radial-gradient(circle at 50% calc(100% - 12px), #08090a 0 3px, rgb(255 255 255 / .08) 3.5px, transparent 4.5px);
+}
+.fp-device::before { border-right: 1px solid rgb(0 0 0 / .45); box-shadow: 1px 0 0 rgb(255 255 255 / .04); }
+.fp-device::after { border-left: 1px solid rgb(0 0 0 / .45); box-shadow: -1px 0 0 rgb(255 255 255 / .04); }
+.fp-brand { display: flex; flex-direction: column; justify-content: space-between; padding: 2px 12px 2px 0; border-right: 1px solid rgb(255 255 255 / .07); }
+.fp-brand b { color: var(--silk); font: 600 12.5px/1.1 var(--font-head); letter-spacing: .03em; }
+.fp-brand small { color: var(--silk-dim); font: 500 11px/1 var(--font-head); letter-spacing: .04em; }
+
+/* Bloki 2×6 portów: wpuszczona listwa */
+.fp-block {
+  display: grid;
+  grid-template-columns: repeat(6, var(--pw));
+  grid-auto-rows: var(--ph);
+  gap: var(--gap);
+  padding: 6px;
+  background: #151618;
+  border-radius: 3px;
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / .7), 0 1px 0 rgb(255 255 255 / .05);
+}
+.fp-block-sfp { grid-template-columns: repeat(2, calc(var(--pw) * 1.35)); }
+.fp-sfp-block { display: flex; flex-direction: column; align-items: center; gap: 6px; padding-left: 12px; border-left: 1px solid rgb(255 255 255 / .07); }
+.fp-sfp-block small { color: var(--silk-dim); font: 500 11px/1 var(--font-head); letter-spacing: .06em; }
+
+/* Gniazdo RJ45: ramka, wnęka z wycięciem na zatrzask, dioda i numer */
+.fp-port {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  width: var(--pw);
+  height: var(--ph);
+  padding: 0 0 1px;
+  background: var(--socket);
+  border: 0;
+  border-radius: 2px;
+  color: var(--silk-dim);
+  font: 500 clamp(8.5px, calc(var(--pw) * .3), 10px)/1 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.fp-port::before {
+  content: "";
+  position: absolute;
+  top: 26%; left: 17%; right: 17%; bottom: 34%;
+  background: var(--cavity);
+  clip-path: polygon(0 0, 100% 0, 100% 72%, 68% 72%, 68% 100%, 32% 100%, 32% 72%, 0 72%);
+}
+.fp-port.fp-sfp { width: calc(var(--pw) * 1.35); }
+.fp-port.fp-sfp::before { left: 11%; right: 11%; top: 26%; bottom: 34%; clip-path: none; border: 1px solid #1f2123; }
+.fp-led {
+  position: absolute;
+  top: 3px; left: 50%;
+  width: 30%; height: 3px;
+  transform: translateX(-50%);
+  border-radius: 1px;
+  background: var(--led-off);
+}
+.fp-num { position: relative; line-height: 1; }
+.fp-port:hover { background: #17191b; }
+.fp-port:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.fp-port.is-selected { outline: 2px solid var(--silk); outline-offset: 2px; }
+
+/* Stany diody */
+.fp-g, .fp-x, .fp-f { color: var(--silk); }
+.fp-g .fp-led { background: var(--led-green); box-shadow: 0 0 6px var(--led-green); }
+.fp-x .fp-led { background: var(--led-blue); box-shadow: 0 0 6px var(--led-blue); }
+.fp-f .fp-led { background: var(--led-amber); box-shadow: 0 0 6px var(--led-amber); }
+.fp-off { opacity: .5; }
+.fp-off::after { content: ""; position: absolute; left: 7px; right: 7px; top: 15px; height: 1px; background: var(--silk-dim); transform: rotate(-30deg); }
+.fp-unknown { opacity: .35; }
+/* Aktywność: dioda miga szybciej przy większym ruchu, jak na prawdziwym switchu */
+.fp-act1 .fp-led { animation: fp-blink 1.4s steps(1) infinite; }
+.fp-act2 .fp-led { animation: fp-blink .6s steps(1) infinite; }
+.fp-act3 .fp-led { animation: fp-blink .22s steps(1) infinite; }
+.fp-err {
+  position: absolute;
+  top: -3px; right: -3px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--led-red);
+  box-shadow: 0 0 0 2px var(--chassis-top), 0 0 6px var(--led-red);
+}
+@keyframes fp-blink { 50% { opacity: .2; box-shadow: none; } }
+@keyframes fp-pulse { 50% { opacity: .35; } }
+
+.fp-hint { margin: 10px 0 0; color: var(--muted); font-size: var(--fs-sm); }
+
+/* Szczegóły wybranego portu */
+.fp-detail { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+.fp-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.fp-detail-head small { color: var(--subtle); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.fp-detail-head h3 { margin: 2px 0 0; font-size: var(--fs-xl); }
+.fp-desc { margin-top: 2px; color: var(--muted); }
+.fp-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font: 600 var(--fs-xs)/1.4 var(--font-sans);
+}
+.fp-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.fp-badge-g { color: var(--green-fg); border-color: var(--green-line); }
+.fp-badge-x { color: var(--blue-fg); border-color: var(--blue-line); }
+.fp-badge-f { color: var(--amber-fg); border-color: var(--amber-line); }
+.fp-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 20px; margin: 14px 0 0; }
+.fp-facts dt { color: var(--muted); font-size: var(--fs-xs); }
+.fp-facts dd { margin: 2px 0 0; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.fp-bad { color: var(--red-fg); }
+.fp-chart { margin-top: 16px; }
+.fp-chart-head, .fp-chart-legend { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; color: var(--muted); font-size: var(--fs-xs); }
+.fp-chart svg { display: block; width: 100%; height: 70px; margin: 6px 0; background: var(--sunken); border: 1px solid var(--line-soft); border-radius: var(--radius-sm); }
+.fp-rx, .fp-tx { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.fp-rx { stroke: var(--blue); }
+.fp-tx { stroke: var(--violet); }
+.fp-chart-legend { justify-content: flex-start; }
+.fp-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.fp-rx-key, .fp-tx-key { display: inline-block; width: 10px; height: 2px; }
+.fp-rx-key { background: var(--blue); }
+.fp-tx-key { background: var(--violet); }
+.fp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.fp-actions .fp-danger { border-color: var(--red-line); color: var(--red-fg); background: transparent; }
+.fp-note { margin: 8px 0 0; color: var(--subtle); font-size: var(--fs-sm); }
+.fp-lldp, .fp-macs { margin-top: 12px; font-size: var(--fs-sm); color: var(--text-2); }
+.fp-link { color: var(--blue-fg); }
+
+/* Ostatnie zdarzenia */
+.fp-events { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.fp-events h3 { margin: 0 0 6px; font-size: var(--fs-md); }
+.fp-event-list { margin: 0; padding: 0; list-style: none; }
+.fp-event-list li {
+  display: grid;
+  grid-template-columns: 14px 92px 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.fp-event-list li:last-child { border-bottom: 0; }
+.fp-event-list li::before { content: ""; width: 6px; height: 6px; margin-left: 2px; border-radius: 50%; background: var(--subtle); transform: translateY(-1px); }
+.fp-event-list time { color: var(--subtle); font-variant-numeric: tabular-nums; }
+.fp-ev-up::before, .fp-ev-ok::before { background: var(--green) !important; }
+.fp-ev-down::before, .fp-ev-bad::before, .fp-ev-err::before { background: var(--red) !important; }
+.fp-ev-warn::before { background: var(--amber) !important; }
+
+/* Wąski panel (telefon): bloki portów jeden pod drugim zamiast przewijania w bok. */
+@container (max-width: 620px) {
+  .fp-device {
+    --pw: clamp(24px, calc((100cqi - 48px) / 6.4), 34px);
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    width: auto;
+    padding: 12px;
+  }
+  .fp-device::before, .fp-device::after { display: none; }
+  .fp-brand { flex: 1 0 100%; flex-direction: row; align-items: baseline; padding: 0 2px 8px; border-right: 0; border-bottom: 1px solid rgb(255 255 255 / .07); }
+  .fp-sfp-block { flex-direction: row; gap: 10px; padding: 0; border-left: 0; }
+}
+
+@media (max-width: 640px) {
+  .faceplate-panel { padding: 16px; }
+  .fp-actions .btn { flex: 1 1 calc(50% - 8px); }
+}

@@ -13,6 +13,11 @@ Panel zastępuje oryginalne GUI producenta, którego plik jest niedostępny.
 - `security_audit.go`, `audit_history.go`, `diagnostics.go`, `monitor_history.go`.
 
 ## Frontend (`web/`)
+- **HTML nie edytuje się w `web/index.html`** — ten plik jest generowany. Źródła to komponenty gtml w `ui/components/` (katalogi layout, overview, ports, switching, network, system, tools) i trasa `ui/routes/index.html`. Po zmianie: `./ui/build.sh` (wymaga `go install github.com/phillip-england/gtml@latest`). Wygenerowany `web/index.html` jest commitowany, więc serwer i Docker nie potrzebują gtml.
+- gtml: slot bez atrybutu `tag` jest po cichu usuwany. Slot strony ma `tag="main"`, bo `activatePage` ukrywa/pokazuje bezpośrednie dzieci `<main>` — każda sekcja musi zostać osobnym bezpośrednim dzieckiem. Komponent = jeden element główny, nazwa PascalCase. Klamry `{}` w treści HTML są wyrażeniami gtml.
+- Style tylko w `web/css/` (nie używamy scoped CSS gtml: elementy tworzone przez JS nie dostałyby atrybutu zakresu). Kolejność ładowania: fonts, tokens, base, features/*, components, layout, overview, faceplate.
+- Kolory wyłącznie przez tokeny z `web/css/tokens.css` (motyw ciemny domyślny, jasny pod `:root[data-theme="light"]`). Nie dodawać reguł z prefiksem `[data-theme="light"]` dla układu — tak powstało 708 reguł działających tylko w jasnym motywie. Kolor oznacza stan (zielony 1G/OK, niebieski 10G/info, bursztyn 10/100/ostrzeżenie, czerwony błąd); główny przycisk `.btn.primary` jest neutralny.
+- Fonty Barlow są lokalnie w `web/fonts/` (OFL), panel działa bez internetu.
 - `loading.js` — przechwytuje `fetch` do `/api/` po kliknięciu: pasek postępu, przycisk zajęty, komunikaty. Ładowany przed `app.js`.
 - `faceplate.js` — front switcha na przeglądzie; korzysta z `latestPorts`, zdarzenia `ports:updated` (wysyłanego w `load()`), `openPortDialog`, `openPortDiagnostics`, `activatePage`.
 - Menu: grupy Przegląd, Porty, Przełączanie, Sieć, System, Narzędzia (makieta: artefakt „Panel AT-GS948MX”).

@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- Strona panelu. Kolejność komponentów = kolejność sekcji w <main>.
+     Nawigacja (app.js) ukrywa i pokazuje bezpośrednie dzieci <main>, dlatego slot musi mieć tag="main". -->
+<Shell>
+  <slot name="main" tag="main" class="main">
+    <Topbar />
+    <DeviceHeader />
+    <WarningBanner />
+    <StatusStrip />
+    <DashboardGrid />
+    <TrafficAnalysis />
+    <PortQuality />
+    <PortHistory />
+    <ErrorHistory />
+    <Ports />
+    <VlanMap />
+    <Topology />
+    <VlanManager />
+    <PortDialog />
+    <LacpStp />
+    <DhcpAndDiagnostics />
+    <ConfigManager />
+    <SystemHealth />
+    <SwitchLogs />
+    <TimeNtp />
+    <Mirroring />
+    <TrafficProtection />
+    <NetworkSecurity />
+    <CompatReport />
+    <PanelSettings />
+    <Qos />
+    <Notifications />
+    <Files />
+    <Services />
+    <Ssh />
+    <PanelUsers />
+    <Snmp />
+    <Routing />
+    <DhcpServer />
+    <AuditLog />
+    <Footer />
+  </slot>
+</Shell>

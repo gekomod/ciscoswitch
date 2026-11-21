@@ -34,6 +34,8 @@
     '<div class="fp-detail" id="fp-detail" hidden></div>' +
     '<div class="fp-events"><h3>Ostatnie zdarzenia</h3><div id="fp-events"><p class="fp-note">Wczytuję…</p></div></div>';
   anchor.insertAdjacentElement('afterend', section);
+  // app.js ukrywa sekcje innych stron przed wstawieniem frontu; front startuje więc ze stanem zgodnym z bieżącą stroną.
+  section.hidden = !['', '#', '#overview'].includes(location.hash);
 
   const device = section.querySelector('#fp-device');
   const detail = section.querySelector('#fp-detail');

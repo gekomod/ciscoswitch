@@ -1,0 +1,70 @@
+/* Wygenerowane z dawnego style.css przez ui/tools/tokenize_css.py, potem utrzymywane ręcznie.
+   Kolory to wyłącznie tokeny z tokens.css; reguły działają w obu motywach. */
+
+.is-loading{position:relative;cursor:progress}
+.load-toasts{position:fixed;right:18px;bottom:18px;z-index:1001;display:flex;flex-direction:column;gap:8px;max-width:min(380px,calc(100vw - 36px));pointer-events:none}
+.load-toast{padding:10px 14px;border-radius:10px;font-size:12px;line-height:1.45;border:1px solid var(--line);background:var(--surface-2);color:var(--text);box-shadow:var(--shadow);transition:opacity .35s,transform .35s}
+.load-toast-ok{border-left:3px solid var(--green)}
+.load-toast-slow{border-left:3px solid var(--amber)}
+.load-toast-error{border-left:3px solid var(--red)}
+.load-toast.is-leaving{opacity:0;transform:translateY(6px)}
+.mon-filters{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+.mon-filters label,.mon-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.mon-filters input{min-width:240px}
+.mon-table{width:100%;border-collapse:collapse;font-size:12px}
+.mon-table th{text-align:left;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+.mon-table td{padding:8px 10px;border-bottom:1px solid var(--line-soft);vertical-align:top;overflow-wrap:anywhere}
+.mon-nowrap{white-space:nowrap;color:var(--muted)}
+.log-sev{font-size:11px;font-weight:600;color:var(--muted)}
+.log-l0 .log-sev,.log-l1 .log-sev,.log-l2 .log-sev,.log-l3 .log-sev{color:var(--red)}
+.log-l4 .log-sev{color:var(--amber)}
+.log-l5 .log-sev{color:var(--accent)}
+.mon-note{color:var(--muted);font-size:12px;margin:8px 0 0}
+.mon-error{color:var(--red);font-size:12px;margin:0}
+.mon-list{list-style:none;margin:0;padding:0;border:1px solid var(--line-soft);border-radius:12px;overflow:hidden}
+.mon-list li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--line-soft)}
+.mon-list li:last-child{border-bottom:0}
+.mon-list .btn{min-height:36px;font-size:12px;background:var(--surface-3);border-color:var(--line)}
+.mon-form{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.mon-form label{min-width:170px}
+#traffic-protection .mon-form{margin-top:12px}
+#traffic-protection .mon-list{margin-top:4px}
+.compat-list li>span{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px}
+.compat-list small{flex-basis:100%;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.compat-list code{font-size:12px;color:var(--muted)}
+.compat-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;border:1px solid var(--line)}
+.compat-ok .compat-badge{color:var(--green);border-color:var(--green-line)}
+.compat-warning .compat-badge{color:var(--amber);border-color:var(--amber-line)}
+.compat-error .compat-badge{color:var(--red);border-color:var(--red-line)}
+.compat-text{width:100%;box-sizing:border-box;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--sunken);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;resize:vertical}
+.compat-text{background:var(--surface);color:var(--text-2);border-color:var(--line-strong)}
+.set-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.set-field{display:flex;flex-direction:column;gap:6px;padding:14px;border:1px solid var(--line-soft);border-radius:12px;background:var(--surface)}
+.set-field label{color:var(--muted);font-size:10px;font-weight:650}
+.set-field input,.set-field select{background:var(--sunken);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:11px;outline:none;min-height:40px;box-sizing:border-box;width:100%}
+.set-field input:focus,.set-field select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--blue-soft)}
+.set-field input::placeholder{color:var(--subtle)}
+.set-field small{color:var(--subtle);font-size:11px;line-height:1.45}
+.set-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:2px}
+.set-src{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.set-src-panel{color:var(--accent);border-color:var(--blue-line)}
+.set-src-env{color:var(--amber);border-color:var(--amber-line)}
+.set-reset{background:none;border:0;padding:0;color:var(--accent);font:inherit;font-size:11px;cursor:pointer;text-decoration:underline}
+.set-field input,.set-field select{background:var(--surface);color:var(--text-2);border-color:var(--line-strong)}
+.set-field label{color:var(--muted)}
+:where(.main,dialog) :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),textarea){background:var(--sunken);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:12px;min-height:40px;box-sizing:border-box;max-width:100%;outline:none}
+:where(.main,dialog) :where(input,textarea):focus-visible{border-color:var(--accent);box-shadow:0 0 0 3px var(--blue-soft)}
+:where(.main,dialog) :where(input,textarea)::placeholder{color:var(--subtle)}
+:where(.main,dialog) input[type="file"]{max-width:100%;color:var(--muted);font-size:12px}
+:where(.main,dialog) :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),textarea){background:var(--surface);color:var(--text-2);border-color:var(--line-strong)}
+.set-grid{grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr))}
+.mon-filters input{min-width:min(240px,100%)}
+.mon-form label{min-width:min(170px,100%)}
+.mon-form label input,.mon-form label select{width:100%}
+.mon-list li{flex-wrap:wrap}
+.mon-list li>span{min-width:0;overflow-wrap:anywhere}
+@media (max-width:640px){
+.mon-form{flex-direction:column;align-items:stretch}
+.mon-form label{min-width:0}
+}
+.set-field b{font-size:13px}

@@ -1,0 +1,53 @@
+/* Podstawa: reset, typografia, fokus. Kolory wyłącznie z tokens.css. */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 var(--fs-md)/1.5 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3, h4, h5 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text);
+}
+h1 { font-size: var(--fs-3xl); }
+h2 { font-size: var(--fs-xl); }
+h3 { font-size: var(--fs-lg); }
+h4 { font-size: var(--fs-md); }
+h5 { font-size: var(--fs-sm); }
+p { margin: 0; }
+a { color: var(--blue-fg); text-underline-offset: 3px; }
+strong, b { font-weight: 600; }
+small { font-size: var(--fs-xs); }
+button, input, select, textarea { font: inherit; color: inherit; }
+code, kbd, samp { font-family: var(--font-mono); font-size: .92em; }
+kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+::selection { background: var(--blue-soft); }
+::placeholder { color: var(--subtle); opacity: 1; }
+/* Atrybut hidden jest źródłem prawdy dla nawigacji (app.js); żadna reguła display go nie nadpisze. */
+[hidden], .hidden { display: none !important; }
+.muted { color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
